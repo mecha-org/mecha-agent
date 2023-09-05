@@ -12,7 +12,6 @@ use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AuthResponse {
-    pub client_id: String,
     pub username: String,
     pub password: String,
 }
@@ -89,7 +88,6 @@ impl MessagingAuthService {
         };
 
         let auth_response = AuthResponse {
-            client_id: "".to_string(), //todo: handle this
             username: username,
             password: password,
         };
