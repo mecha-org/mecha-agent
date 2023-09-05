@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+package provisioning;
+
+service ProvisioningHandler {
+  rpc generateProvisioningCode (Empty) returns (ProvisioningCodeResponse);
+  rpc manifestRequest (ProvisioningCode) returns (RequestManifestResponse);
+}
+
+message Empty {}
+message ProvisioningCode {
+  string code = 1;
+}
+
+message ProvisioningCodeResponse {
+  string value = 1;
+}
+message RequestManifestResponse {
+  bool success = 1;
+}
+message SubError {
+  string field = 1;
+  string message = 2;
+}

@@ -1,0 +1,24 @@
+version: 2.1
+server:
+  url: 0.0.0.0
+  port: 3001
+  tls: false
+provisioning: 
+  server_base_url: http://localhost:3000
+  openssl:
+    version: 1.1
+    engine: edge
+  keys:
+    device:
+      privatekey: 
+      cert: 
+    server:
+      cert: 
+    intermediate:
+      cert: 
+    root:
+      cert: 
+messaging_auth:
+  signed_key:
+    privatekey: 
+    

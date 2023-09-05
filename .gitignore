@@ -1,0 +1,10 @@
+**/target/
+
+**/.DS_Store
+settings.yml
+.env
+**/private_key.pem
+**/public_key.pem
+./networking/**/tmp/
+debug/
+target/
