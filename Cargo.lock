@@ -816,16 +816,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
 
 [[package]]
-name = "loki-api"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f56d36f573486ba7f462b62cbae597fef7d5d93665e7047956b457531b8a1ced"
-dependencies = [
- "prost 0.11.9",
- "prost-types 0.11.9",
-]
-
-[[package]]
 name = "match_cfg"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1836,10 +1826,6 @@ dependencies = [
  "init-tracing-opentelemetry",
  "messaging_auth",
  "opentelemetry 0.20.0",
- "opentelemetry-http 0.8.0",
- "opentelemetry-semantic-conventions",
- "opentelemetry_api 0.19.0",
- "opentelemetry_sdk 0.19.0",
  "prost 0.11.9",
  "prost-types 0.7.0",
  "protobuf",
@@ -1855,9 +1841,6 @@ dependencies = [
  "tonic-build",
  "tower-http",
  "tracing",
- "tracing-appender",
- "tracing-loki",
- "tracing-opentelemetry 0.19.0",
  "tracing-opentelemetry-instrumentation-sdk 0.12.0",
  "tracing-subscriber",
  "url",
@@ -1920,12 +1903,6 @@ name = "smallvec"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62bb4feee49fdd9f707ef802e22365a35de4b7b299de4763d44bfea899442ff9"
-
-[[package]]
-name = "snap"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e9f0ab6ef7eb7353d9119c170a436d1bf248eea575ac42d19d12f4e34130831"
 
 [[package]]
 name = "socket2"
@@ -2274,17 +2251,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-appender"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09d48f71a791638519505cefafe162606f706c25592e4bde4d97600c0195312e"
-dependencies = [
- "crossbeam-channel",
- "time",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "tracing-attributes"
 version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2324,27 +2290,6 @@ dependencies = [
  "lazy_static",
  "log",
  "tracing-core",
-]
-
-[[package]]
-name = "tracing-loki"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49bbc87d08020d7c2a9f4bb0b7d10da5381d3867f8ae57fcc54621b34567e963"
-dependencies = [
- "loki-api",
- "reqwest",
- "serde",
- "serde_json",
- "snap",
- "tokio",
- "tokio-stream",
- "tracing",
- "tracing-core",
- "tracing-log",
- "tracing-serde",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
