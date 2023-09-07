@@ -1,0 +1,31 @@
+version: 2.1
+server:
+  url: 0.0.0.0
+  port: 3001
+  tls: false
+  routes:
+    health: /health
+    provision_request: /provision/me
+    manifestation_request: /provision/manifestation
+provisioning: 
+  openssl:
+    version: 1.1
+    engine: trustm
+  keys:
+    device:
+      privatekey: 
+      cert: 
+    server:
+      cert: 
+    intermediate:
+      cert: 
+    root:
+      cert: 
+telemetry:
+  enabled: false
+  collect:
+    system: true
+    user: true
+  otel_collector:
+    bin: 
+    conf: 

@@ -1,0 +1,3 @@
+[workspace]
+members = ["server", "provisioning", "telemetry", "messaging"]
+default-members = ["server"]

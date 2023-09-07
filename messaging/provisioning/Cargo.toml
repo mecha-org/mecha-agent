@@ -1,0 +1,15 @@
+[package]
+name = "provisioning"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde_json = "1.0.33"
+serde = { version  = "1.0.159", features = ["derive"]}
+openssl = "0.10.56"
+anyhow = { version= "1.0.71", features = ["backtrace"]}
+rand = "0.8.5"
+reqwest = "0.11.19"
+tonic = "0.9.2"

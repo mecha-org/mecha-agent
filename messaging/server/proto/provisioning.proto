@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+package provisioning;
+
+service ProvisioningHandler {
+  rpc generateProvisioningCode (Empty) returns (ProvisioningCodeResponse);
+  rpc manifestHandler (Empty) returns (ProvisioningCodeResponse);
+}
+
+message Empty {}
+
+
+message ProvisioningCodeResponse {
+  string value = 1;
+}
+
+message SubError {
+  string field = 1;
+  string message = 2;
+}
+
+
+
+
