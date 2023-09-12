@@ -103,7 +103,7 @@ impl Provisioning {
                 Some(StatusCode::BAD_REQUEST) => bail!(ProvisioningError::new(
                     ProvisioningErrorCodes::ManifestLookupBadRequestError,
                     format!("manifest find endpoint url returned bad request - {}", e),
-                    true // Not reporting bad request errors
+                    false // Not reporting bad request errors
                 )),
                 Some(StatusCode::NOT_FOUND) => bail!(ProvisioningError::new(
                     ProvisioningErrorCodes::ManifestLookupNotFoundError,
@@ -288,7 +288,7 @@ impl Provisioning {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "provision_me", "init",);
 
-        // 1. Lookup the manifest, if lookup fails with not found then continue the loop
+        // 1. Lookup the manifest, if lookup fails with not found then return error
         let manifest = match self.lookup_manifest(code).await {
             Ok(m) => {
                 tracing::info!(

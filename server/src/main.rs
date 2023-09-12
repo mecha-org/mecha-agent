@@ -23,11 +23,12 @@ use crate::services::provisioning::ProvisioningServiceHandler;
 use crate::settings::AgentSettings;
 
 pub async fn init_server() -> Result<(), String> {
+    // TODO: pass settings from main()
     let server_settings = match settings::read_settings_yml() {
         Ok(v) => v.server,
         Err(_e) =>  AgentSettings::default().server
     };
-    let addr = format!("{}:{}", server_settings.url.unwrap(), server_settings.port)
+    let addr = format!("{}:{}", server_settings.url.unwrap_or(String::from("127.0.0.1")), server_settings.port)
         .parse()
         .unwrap();
     let provisioning_service = ProvisioningServiceHandler::default();
@@ -53,7 +54,7 @@ async fn main() -> Result<()> {
 
     // Setting up the Sentry Reporter
     // Enable the sentry exception reporting if enabled in settings and a DSN path is specified
-    if settings.sentry.enabled && !settings.sentry.dsn.is_some() {
+    if settings.sentry.enabled && settings.sentry.dsn.is_some() {
         let sentry_path = settings.sentry.dsn.unwrap();
     
         let _guard = sentry::init((
@@ -66,6 +67,7 @@ async fn main() -> Result<()> {
         ));
     }
 
+    // TODO: logging to an output file
     // start the tracing service
     let subscriber = tracing_subscriber::registry()
         .with(sentry_tracing::layer().event_filter(|_| EventFilter::Ignore))

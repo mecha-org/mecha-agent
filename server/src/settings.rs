@@ -122,8 +122,11 @@ pub fn read_settings_path_from_args() -> Option<String> {
 /// 
 /// **Important**: Ensure all fields are present in the yml due to strict parsing
 pub fn read_settings_yml() -> Result<AgentSettings> {
-    let mut file_path = PathBuf::from(std::env::var("AGENT_SETTINGS_PATH")
+    // Add schema validator for yml
+    let mut file_path = PathBuf::from(std::env::var("MECHA_AGENT_SETTINGS_PATH")
         .unwrap_or(String::from("~/.mecha/agent/settings.yml"))); // Get path of the library
+
+    // TODO: handle semver version support
 
     // read from args
     let file_path_in_args = read_settings_path_from_args();
@@ -140,6 +143,7 @@ pub fn read_settings_yml() -> Result<AgentSettings> {
     let settings_file_handle = match File::open(file_path) {
         Ok(file) => file,
         Err(e) => {
+            // TODO: add capture
             bail!(SettingsError::new(
                 SettingsErrorCodes::ReadError,
                 format!("error read the settings.yml in the path - {}", e.to_string()),
