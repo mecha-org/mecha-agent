@@ -1,0 +1,24 @@
+version: 1
+sentry:
+  enabled: true
+  dsn:
+server:
+  url: 0.0.0.0
+  port: 3001
+  tls: false
+provisioning: 
+  server_url: http://localhost:3000
+  openssl:
+    version: 1.1
+    engine:
+  paths:
+    device:
+      private_key: ~/.mecha/agent/.keys/device.key
+      csr: ~/.mecha/agent/certs/device.csr
+      cert: ~/.mecha/agent/certs/device.pem
+    server:
+      cert: ~/.mecha/agent/certs/server.pem
+    intermediate:
+      cert: ~/.mecha/agent/certs/intermediate.pem
+    root:
+      cert: ~/.mecha/agent/certs/root.pem

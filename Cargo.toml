@@ -1,0 +1,14 @@
+[workspace]
+default-members = ["server"]
+members = ["server", "provisioning"]
+resolver = "2"
+
+[workspace.package]
+version = "1.0.0"
+authors = ["Minesh Purohit <mineshp@mechasystems.com", "Shoaib Merchant <shoaibm@mechasystems.com>"]
+description = "Mecha Agent on the device for provisioning, messaging and more"
+documentation = "https://docs.mecha.so"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/mecha-org/mecha-agent"
+homepage = "https://mecha.so"
