@@ -28,8 +28,8 @@ impl MessagingService {
         }
     }
 
-    pub fn sendMessage(&self, content: String) {
-        let msg = mqtt::Message::new("/telemetry/usr/metrics", content, 0);
+    pub fn sendMessage(&self, topic: String, content: String) {
+        let msg = mqtt::Message::new(topic, content, 0);
         println!("produce");
         let tok = &self.client.publish(msg);
         if let Err(e) = tok {

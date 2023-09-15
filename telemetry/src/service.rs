@@ -84,7 +84,8 @@ impl TelemetryService {
     pub fn user_metrics(&self, content: String) -> Result<String, TelemetryErrorResponseCode> {
         if self.settings.collect.user {
             println!("User data");
-            self.messaging_service.sendMessage(content);
+            self.messaging_service
+                .sendMessage("/telemetry/metrics".to_string(), content);
             Ok("Success".to_string())
         } else {
             return Err(TelemetryErrorResponseCode {
@@ -96,7 +97,61 @@ impl TelemetryService {
     pub fn system_metrics(&self, content: String) -> Result<String, TelemetryErrorResponseCode> {
         if self.settings.collect.system {
             println!("system data");
-            self.messaging_service.sendMessage(content);
+            self.messaging_service
+                .sendMessage("/telemetry/metrics".to_string(), content);
+            Ok("Success".to_string())
+        } else {
+            return Err(TelemetryErrorResponseCode {
+                code: Code::InvalidArgument,
+                message: format!("Error Manifest not Found"),
+            });
+        }
+    }
+
+    pub fn user_logs(&self, content: String) -> Result<String, TelemetryErrorResponseCode> {
+        if self.settings.collect.user {
+            println!("User data");
+            self.messaging_service
+                .sendMessage("/telemetry/logs".to_string(), content);
+            Ok("Success".to_string())
+        } else {
+            return Err(TelemetryErrorResponseCode {
+                code: Code::InvalidArgument,
+                message: format!("Error Manifest not Found"),
+            });
+        }
+    }
+    pub fn system_logs(&self, content: String) -> Result<String, TelemetryErrorResponseCode> {
+        if self.settings.collect.system {
+            self.messaging_service
+                .sendMessage("/telemetry/logs".to_string(), content);
+            Ok("Success".to_string())
+        } else {
+            return Err(TelemetryErrorResponseCode {
+                code: Code::InvalidArgument,
+                message: format!("Error Manifest not Found"),
+            });
+        }
+    }
+
+    pub fn user_trace(&self, content: String) -> Result<String, TelemetryErrorResponseCode> {
+        if self.settings.collect.user {
+            println!("User data");
+            self.messaging_service
+                .sendMessage("/telemetry/trace".to_string(), content);
+            Ok("Success".to_string())
+        } else {
+            return Err(TelemetryErrorResponseCode {
+                code: Code::InvalidArgument,
+                message: format!("Error Manifest not Found"),
+            });
+        }
+    }
+    pub fn system_trace(&self, content: String) -> Result<String, TelemetryErrorResponseCode> {
+        if self.settings.collect.system {
+            println!("system data");
+            self.messaging_service
+                .sendMessage("/telemetry/trace".to_string(), content);
             Ok("Success".to_string())
         } else {
             return Err(TelemetryErrorResponseCode {
