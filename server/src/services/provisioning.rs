@@ -1,8 +1,8 @@
 use provisioning::service::Provisioning;
+use settings::{AgentSettings, read_settings_yml};
 use tonic::{Request, Status, Response};
 use anyhow::Result;
 use crate::agent::{provisioning_service_server::ProvisioningService, Empty, ProvisioningCodeRequest, ProvisioningStatusResponse, ProvisioningCodeResponse};
-use crate:: settings::{read_settings_yml, AgentSettings};
 
 #[derive(Debug, Default)]
 pub struct ProvisioningServiceHandler {}

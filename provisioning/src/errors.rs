@@ -11,8 +11,6 @@ pub enum ProvisioningErrorCodes {
     ManifestLookupNotFoundError,
     ManifestLookupBadRequestError,
     ManifestParseResponseError,
-    CryptoGeneratePrivateKeyError,
-    CryptoGenerateCSRError,
     CSRSignReadFileError,
     CSRSignUnknownError,
     CSRSignServerError,
@@ -25,20 +23,18 @@ pub enum ProvisioningErrorCodes {
 impl fmt::Display for ProvisioningErrorCodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ProvisioningErrorCodes::ManifestLookupUnknownError => write!(f, "ManifestLookupUnknownError"),
-            ProvisioningErrorCodes::ManifestLookupServerError => write!(f, "ManifestLookupServerError"),
-            ProvisioningErrorCodes::ManifestLookupNotFoundError => write!(f, "ManifestLookupNotFoundError"),
-            ProvisioningErrorCodes::ManifestLookupBadRequestError => write!(f, "ManifestLookupBadRequestError"),
-            ProvisioningErrorCodes::ManifestParseResponseError => write!(f, "ManifestParseResponseError"),
-            ProvisioningErrorCodes::CryptoGeneratePrivateKeyError => write!(f, "CryptoGeneratePrivateKeyError"),
-            ProvisioningErrorCodes::CryptoGenerateCSRError => write!(f, "CryptoGenerateCSRError"),
-            ProvisioningErrorCodes::CSRSignReadFileError => write!(f, "CSRSignReadFileError"),
-            ProvisioningErrorCodes::CSRSignUnknownError => write!(f, "CSRSignUnknownError"),
-            ProvisioningErrorCodes::CSRSignServerError => write!(f, "CSRSignServerError"),
-            ProvisioningErrorCodes::CSRSignNotFoundError => write!(f, "CSRSignNotFoundError"),
-            ProvisioningErrorCodes::CSRSignBadRequestError => write!(f, "CSRSignBadRequestError"),
-            ProvisioningErrorCodes::CSRSignResponseParseError => write!(f, "CSRSignResponseParseError"),
-            ProvisioningErrorCodes::CertificateWriteError => write!(f, "CertificateWriteError"),
+            ProvisioningErrorCodes::ManifestLookupUnknownError => write!(f, "ProvisioningErrorCodes: ManifestLookupUnknownError"),
+            ProvisioningErrorCodes::ManifestLookupServerError => write!(f, "ProvisioningErrorCodes: ManifestLookupServerError"),
+            ProvisioningErrorCodes::ManifestLookupNotFoundError => write!(f, "ProvisioningErrorCodes: ManifestLookupNotFoundError"),
+            ProvisioningErrorCodes::ManifestLookupBadRequestError => write!(f, "ProvisioningErrorCodes: ManifestLookupBadRequestError"),
+            ProvisioningErrorCodes::ManifestParseResponseError => write!(f, "ProvisioningErrorCodes: ManifestParseResponseError"),
+            ProvisioningErrorCodes::CSRSignReadFileError => write!(f, "ProvisioningErrorCodes: CSRSignReadFileError"),
+            ProvisioningErrorCodes::CSRSignUnknownError => write!(f, "ProvisioningErrorCodes: CSRSignUnknownError"),
+            ProvisioningErrorCodes::CSRSignServerError => write!(f, "ProvisioningErrorCodes: CSRSignServerError"),
+            ProvisioningErrorCodes::CSRSignNotFoundError => write!(f, "ProvisioningErrorCodes: CSRSignNotFoundError"),
+            ProvisioningErrorCodes::CSRSignBadRequestError => write!(f, "ProvisioningErrorCodes: CSRSignBadRequestError"),
+            ProvisioningErrorCodes::CSRSignResponseParseError => write!(f, "ProvisioningErrorCodes: CSRSignResponseParseError"),
+            ProvisioningErrorCodes::CertificateWriteError => write!(f, "ProvisioningErrorCodes: CertificateWriteError"),
         }
     }
 }
@@ -51,7 +47,7 @@ pub struct ProvisioningError {
 
 impl std::fmt::Display for ProvisioningError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(code: {:?}, message: {})", self.code, self.message)
+        write!(f, "ProvisioningErrorCodes:(code: {:?}, message: {})", self.code, self.message)
     }
 }
 
@@ -59,12 +55,12 @@ impl ProvisioningError {
     pub fn new(code: ProvisioningErrorCodes, message: String, capture_error: bool) -> Self {
         let trace_id = find_current_trace_id();
         error!(
-            target = "server",
+            target = "provisioning",
             "error: (code: {:?}, message: {})", code, message
         );
         if capture_error {
             let error = &anyhow::anyhow!(code).context(format!(
-                "error: (code: {:?}, messages: {} trace:{:?})",
+                "error: (code: {:?}, message: {} trace:{:?})",
                 code, message, trace_id
             ));
             capture_anyhow(error);

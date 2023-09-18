@@ -5,13 +5,14 @@ use init_tracing_opentelemetry::tracing_subscriber_ext::build_otel_layer;
 use init_tracing_opentelemetry::tracing_subscriber_ext::{
     build_logger_text, build_loglevel_filter_layer,
 };
+use messaging::service::{Messaging, MessagingScope};
 use sentry_tracing::{self, EventFilter};
+use settings::AgentSettings;
 use tracing::info;
 // use std::thread;
 use tonic::transport::Server;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 
-pub mod settings;
 pub mod services;
 
 pub mod agent {
@@ -20,9 +21,8 @@ pub mod agent {
 
 use crate::agent::provisioning_service_server::ProvisioningServiceServer;
 use crate::services::provisioning::ProvisioningServiceHandler;
-use crate::settings::AgentSettings;
 
-pub async fn init_server() -> Result<(), String> {
+pub async fn init_grpc_server() -> Result<(), String> {
     // TODO: pass settings from main()
     let server_settings = match settings::read_settings_yml() {
         Ok(v) => v.server,
@@ -33,8 +33,9 @@ pub async fn init_server() -> Result<(), String> {
         .unwrap();
     let provisioning_service = ProvisioningServiceHandler::default();
 
+
     info!(
-        task = "init_server",
+        task = "init_grpc_server",
         result = "success",
         "agent server listening on {} [grpc]", addr);
 
@@ -82,7 +83,10 @@ async fn main() -> Result<()> {
         "tracing set up",
     );
 
-    match init_server().await {
+    let messaging = Messaging::new(MessagingScope::System);
+    messaging.connect().await;
+
+    match init_grpc_server().await {
         Ok(_) => (),
         Err(e) => bail!(e),
     };

@@ -1,6 +1,6 @@
 [workspace]
 default-members = ["server"]
-members = ["server", "provisioning"]
+members = ["server", "provisioning", "messaging", "identity", "commons/crypto", "commons/settings"]
 resolver = "2"
 
 [workspace.package]

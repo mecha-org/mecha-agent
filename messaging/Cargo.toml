@@ -1,5 +1,5 @@
 [package]
-name = "provisioning"
+name = "messaging"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -12,6 +12,7 @@ homepage.workspace = true
 [dependencies]
 crypto = { path = "../commons/crypto" }
 settings = { path = "../commons/settings" }
+nats_client = { path = "../commons/nats_client" }
 anyhow = { version = "1.0.71", features = ["backtrace"]}
 mkdirp = "1.0.0"
 openssl = "0.10.56"

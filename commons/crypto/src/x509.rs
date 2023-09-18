@@ -2,20 +2,21 @@ use std::{process::Command, fmt};
 use anyhow::{bail, Result};
 use serde::{Serialize, Deserialize};
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
-
-use crate::errors::{ProvisioningError, ProvisioningErrorCodes};
+use crate::errors::{CryptoError, CryptoErrorCodes};
 
 /**
  * Open SSL Commands Reference
  * 
  * [Default]
  * ECDSA:
- * openssl ecparam -name secp521r1 -genkey -noout -out key.pem
- * openssl req -new -sha256 -key key.pem -out req.pem
+ * Generate Key: openssl ecparam -name secp521r1 -genkey -noout -out key.pem
+ * Generate CSR: openssl req -new -sha256 -key key.pem -out req.pem
+ * Sign: openssl dgst -sha256  -sign private.pem /path/to/data
+ * Verify: openssl dgst -ecdsa-with-SHA1 -verify public.pem -signature /path/to/signature /path/to/data
  * 
  * RSA:
- * openssl genrsa -out key.pem 2048
- * openssl req -new -sha256 -key key.pem -out req.pem
+ * Generate Key: openssl genrsa -out key.pem 2048
+ * Generate CSR: openssl req -new -sha256 -key key.pem -out req.pem
  * 
  * [TrustM]
  * TBD
@@ -66,8 +67,8 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
         PrivateKeySize::EcP256 => String::from("secp256r1"),
         PrivateKeySize::EcP384 => String::from("secp384r1"),
         PrivateKeySize::EcP521 => String::from("secp521r1"),
-        // k => bail!(ProvisioningError::new(
-        //     ProvisioningErrorCodes::CryptoGeneratePrivateKeyError,
+        // k => bail!(CryptoError::new(
+        //     CryptoErrorCodes::CryptoGeneratePrivateKeyError,
         //     format!("key size not supported for elliptical curve key - {}", k),
         //     true
         // ))
@@ -86,8 +87,8 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
 
     let output = match output_result {
         Ok(v) => v,
-        Err(e) => bail!(ProvisioningError::new(
-            ProvisioningErrorCodes::CryptoGeneratePrivateKeyError,
+        Err(e) => bail!(CryptoError::new(
+            CryptoErrorCodes::GeneratePrivateKeyError,
             format!("openssl private key generate command failed - {}", e),
             true
         ))
@@ -95,8 +96,8 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        bail!(ProvisioningError::new(
-            ProvisioningErrorCodes::CryptoGeneratePrivateKeyError,
+        bail!(CryptoError::new(
+            CryptoErrorCodes::GeneratePrivateKeyError,
             format!("openssl error in generating private key, stderr - {}", stderr),
             true
         ))
@@ -141,8 +142,8 @@ pub fn generate_csr(file_path: &str, private_key_path: &str, common_name: &str) 
 
     let output = match output_result {
         Ok(v) => v,
-        Err(e) => bail!(ProvisioningError::new(
-            ProvisioningErrorCodes::CryptoGenerateCSRError,
+        Err(e) => bail!(CryptoError::new(
+            CryptoErrorCodes::GenerateCSRError,
             format!("openssl csr generate command failed - {}", e),
             true
         ))
@@ -165,10 +166,14 @@ pub fn generate_csr(file_path: &str, private_key_path: &str, common_name: &str) 
         Ok(true)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        bail!(ProvisioningError::new(
-            ProvisioningErrorCodes::CryptoGenerateCSRError,
+        bail!(CryptoError::new(
+            CryptoErrorCodes::GenerateCSRError,
             format!("openssl error in generating csr, stderr - {}", stderr),
             true
         ))
     }
+}
+
+pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<u8>> {
+    Ok(vec![])
 }

@@ -9,10 +9,11 @@ homepage.workspace = true
 
 [dependencies]
 provisioning = { path = "../provisioning" }
+messaging = { path = "../messaging" }
+settings = { path = "../commons/settings" }
 axum = "0.6.17"
 axum-macros = "0.3.8"
 tokio = { version = "1.27.0", features = ["full"] }
-serde_yaml = "0.9.21"
 serde = { version  = "1.0.159", features = ["derive"]}
 futures = "0.3.28"
 serde_json = "1.0.33"
