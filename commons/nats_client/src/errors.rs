@@ -7,14 +7,24 @@ use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 pub enum NatsClientErrorCodes {
     #[default]
     UnknownError,
-    ClientUninitialized,
+    ClientConnectError,
+    ClientUninitializedError,
+    ClientNotConnectedError,
+    ClientDisconnectedError,
+    PublishError,
+    SubscribeError
 }
 
 impl fmt::Display for NatsClientErrorCodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             NatsClientErrorCodes::UnknownError => write!(f, "NatsClientErrorCodes: UnknownError"),
-            NatsClientErrorCodes::ClientUninitialized => write!(f, "NatsClientErrorCodes: ClientUninitialized"),
+            NatsClientErrorCodes::ClientConnectError => write!(f, "NatsClientErrorCodes: ClientConnectError"),
+            NatsClientErrorCodes::ClientUninitializedError => write!(f, "NatsClientErrorCodes: ClientUninitializedError"),
+            NatsClientErrorCodes::ClientNotConnectedError => write!(f, "NatsClientErrorCodes: ClientNotConnectedError"),
+            NatsClientErrorCodes::ClientDisconnectedError => write!(f, "NatsClientErrorCodes: ClientDisconnectedError"),
+            NatsClientErrorCodes::PublishError => write!(f, "NatsClientErrorCodes: PublishError"),
+            NatsClientErrorCodes::SubscribeError => write!(f, "NatsClientErrorCodes: SubscribeError"),
         }
     }
 }

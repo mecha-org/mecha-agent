@@ -1,5 +1,6 @@
 use std::sync::Arc;
-use bytes::Bytes;
+pub use async_nats::Subscriber;
+pub use bytes::Bytes;
 use anyhow::{bail, Result};
 use nkeys::KeyPair;
 use tracing::info;
@@ -9,6 +10,7 @@ use crate::{errors::{NatsClientError, NatsClientErrorCodes}, jwt::create_dummy_j
 pub mod errors;
 pub mod jwt;
 
+#[derive(Clone)]
 pub struct NatsClient {
     pub address: String,
     pub user_public_key: String,
@@ -46,8 +48,8 @@ impl NatsClient {
         .await {
             Ok(c) => Some(c),
             Err(e) => bail!(NatsClientError::new(
-                NatsClientErrorCodes::UnknownError,
-                format!("nats client unknown error - {}", e),
+                NatsClientErrorCodes::ClientConnectError,
+                format!("nats client connection error - {:?} - {}", e.kind(), e.to_string()),
                 true
             )),
         };
@@ -57,17 +59,73 @@ impl NatsClient {
         Ok(true)
     }
 
-    // pub async fn publish(&self, subject: &str, data: Bytes) -> Result<Bool> {
-    //     let client = match self.client {
-    //         Some(_) => todo!(),
-    //         None => bail!(NatsClientError::new(
-    //             NatsClientErrorCodes::ClientUninitialized,
-    //             format!("nats client uninitialized"),
-    //             true
-    //         )),
-    //     };
-    //     self.client.publish(subject.clone(), data.clone()).await?;
-    //     Ok(true)
-    // }
+    fn get_connected_client(&self) -> Result<&async_nats::Client> {
+        let client = match &self.client {
+            Some(c) => c,
+            None => bail!(NatsClientError::new(
+                NatsClientErrorCodes::ClientUninitializedError,
+                format!("nats client uninitialized"),
+                true
+            )),
+        };
+        match client.connection_state() {
+            async_nats::connection::State::Connected => (),
+            async_nats::connection::State::Pending => bail!(NatsClientError::new(
+                NatsClientErrorCodes::ClientNotConnectedError,
+                format!("nats client is not connected, not ready to send or receive messages"),
+                true
+            )),
+            async_nats::connection::State::Disconnected => bail!(NatsClientError::new(
+                NatsClientErrorCodes::ClientDisconnectedError,
+                format!("nats client state is disconnected, reconnect to continue sending, receiving messages"),
+                true
+            )),
+        };
+
+        Ok(client)
+    }
+
+    pub async fn publish(&self, subject: &str, data: Bytes) -> Result<bool> {
+        let trace_id = find_current_trace_id();
+        tracing::trace!(trace_id, target = "nats_client", task = "publish", "init");
+
+        let client = match self.get_connected_client() {
+            Ok(c) => c,
+            Err(e) => bail!(e),
+        };
+
+        tracing::trace!(trace_id, target = "nats_client", task = "publish", "nats client is in connected status");
+
+        match client.publish(String::from(subject), data.clone()).await {
+            Ok(v) => v,
+            Err(e) => bail!(NatsClientError::new(
+                NatsClientErrorCodes::PublishError,
+                format!("error publishing message to sub - {}, error - {}", subject, e),
+                true
+            ))
+        }
+        Ok(true)
+    }
+
+    pub async fn subscribe(&self, subject: &str) -> Result<Subscriber> {
+        let trace_id = find_current_trace_id();
+        tracing::trace!(trace_id, target = "nats_client", task = "publish", "init");
+
+        let client = match self.get_connected_client() {
+            Ok(c) => c,
+            Err(e) => bail!(e),
+        };
+
+        let subscriber = match client.subscribe(String::from(subject)).await {
+            Ok(s) => s,
+            Err(e) => bail!(NatsClientError::new(
+                NatsClientErrorCodes::SubscribeError,
+                format!("error subscriber to sub - {}, error - {}", subject, e),
+                true
+            )),
+        };
+
+        Ok(subscriber)
+    }
 
 }
