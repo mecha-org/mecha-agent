@@ -62,7 +62,8 @@ async fn init_system_messaging_client() -> Result<Option<Messaging>> {
     };
 
     // return none if system messaging is disabled
-    if messaging_settings.system.enabled {
+    if !messaging_settings.system.enabled {
+        info!(target="init_system_messaging_client", "system messaging client is disabled");
         return Ok(None);
     }
 
@@ -138,12 +139,12 @@ async fn main() -> Result<()> {
     );
 
     // start the agent services
-    match init_grpc_server().await {
+    match init_system_messaging_client().await {
         Ok(_) => (),
         Err(e) => bail!(e),
     };
 
-    match init_system_messaging_client().await {
+    match init_grpc_server().await {
         Ok(_) => (),
         Err(e) => bail!(e),
     };
