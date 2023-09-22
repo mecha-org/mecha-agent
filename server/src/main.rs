@@ -70,11 +70,7 @@ async fn init_system_messaging_client() -> Result<Option<Messaging>> {
     let mut messaging_client = Messaging::new(MessagingScope::System, true);
     let _ = match messaging_client.connect().await {
         Ok(s) => s,
-        Err(e) => bail!(AgentServerError::new(
-            AgentServerErrorCodes::InitMessagingClientError,
-            format!("error initializing messaging client - {}", e),
-            true
-        )),
+        Err(_) => false, // TODO: dont stop the agent but add re-connection with exponential backoff
     };
 
     // subscribe
@@ -87,15 +83,16 @@ async fn init_system_messaging_client() -> Result<Option<Messaging>> {
             println!("Awaiting messages on foo");
             while let Some(message) = subscriber.next().await {
                 println!("Received message {message:?}");
+                println!("Received message header {:?}", message.headers);
             }
             Ok::<(), anyhow::Error>(())
         }
     });
 
-    // publish message
-    thread::sleep(time::Duration::from_secs(5));
-    let is_published = messaging_client.publish("foo", Bytes::from("bar1")).await?;
-    println!("Message published - {}", is_published);
+    // // publish message
+    // thread::sleep(time::Duration::from_secs(5));
+    // let is_published = messaging_client.publish("foo", Bytes::from("bar1")).await?;
+    // println!("Message published - {}", is_published);
 
     Ok(Some(messaging_client))
 }
