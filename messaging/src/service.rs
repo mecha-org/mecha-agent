@@ -1,18 +1,24 @@
 use anyhow::{bail, Result};
-use nats_client::{NatsClient, Subscriber, Bytes};
-use serde::{Serialize, Deserialize};
-use settings::AgentSettings;
-use crypto::x509::sign_with_private_key;
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 use crypto::base64::b64_encode;
+use crypto::x509::{get_subject_name, sign_with_private_key};
+use nats_client::{Bytes, NatsClient, Subscriber};
+use reqwest::StatusCode;
+use serde::{Deserialize, Serialize};
+use settings::AgentSettings;
+use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 use crate::errors::{MessagingError, MessagingErrorCodes};
 
-#[derive(Clone)]
-pub struct Messaging {
-    scope: MessagingScope,
-    settings: AgentSettings,
-    nats_client: Option<NatsClient>,
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MessagingServerResponseGeneric<T> {
+    pub success: bool,
+    pub status: String,
+    pub status_code: i16,
+    pub message: Option<String>,
+    pub error_code: Option<String>,
+    pub sub_errors: Option<String>,
+    pub payload: T,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -41,6 +47,22 @@ pub enum MessagingAuthTokenType {
     Device,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GetAuthTokenRequest {
+    id: String,
+    #[serde(rename = "type")]
+    _type: MessagingAuthTokenType,
+    scope: MessagingScope,
+    nonce: String,
+    signed_nonce: String,
+    public_key: String,
+}
+#[derive(Clone)]
+pub struct Messaging {
+    scope: MessagingScope,
+    settings: AgentSettings,
+    nats_client: Option<NatsClient>,
+}
 
 impl Messaging {
     pub fn new(scope: MessagingScope, initialize_client: bool) -> Self {
@@ -82,14 +104,18 @@ impl Messaging {
             ))
         }
 
-        let nats_client = self.nats_client.as_ref().unwrap();
-
-        let auth_token = match self.authenticate(&nats_client.user_public_key.clone()) {
+        let auth_token = match self.authenticate().await {
             Ok(t) => t,
             Err(e) => bail!(e),
         };
 
-        match self.nats_client.as_mut().unwrap().connect(&auth_token).await {
+        match self
+            .nats_client
+            .as_mut()
+            .unwrap()
+            .connect(&auth_token)
+            .await
+        {
             Ok(c) => c,
             Err(e) => bail!(e),
         };
@@ -103,12 +129,16 @@ impl Messaging {
      * 2. Signs the nonce using the Device Key
      * 3. Requests the token from the server
      */
-    fn authenticate(&self, user_public_key: &str) -> Result<String> {
+    async fn authenticate(&self) -> Result<String> {
         // Step 1: Get Device ID
-        let device_id = String::from("deviceId");
+        //TODO: Path Check
+        let device_id = match get_subject_name("device.pem") {
+            Ok(s) => s,
+            Err(e) => bail!(e),
+        };
 
         // Step 2: Get Nonce from Server
-        let nonce = match self.get_auth_nonce() {
+        let nonce = match self.get_auth_nonce().await {
             Ok(n) => n,
             Err(e) => bail!(e),
         };
@@ -120,20 +150,21 @@ impl Messaging {
         };
 
         // Step 4: Get NATS nkey public key
-        // let nats_client_public_key = &self.nats_client.unwrap().user_public_key;
-
-        let token = match self.get_auth_token(
-            self.scope.clone(),
-            &device_id,
-            &nonce,
-            &nonce_sign,
-        ) {
+        let nats_client_public_key = &self.nats_client.as_ref().unwrap().user_public_key;
+        let token = match self
+            .get_auth_token(
+                self.scope.clone(),
+                &device_id,
+                &nonce,
+                &nonce_sign,
+                &nats_client_public_key,
+            )
+            .await
+        {
             Ok(t) => t,
             Err(e) => bail!(e),
         };
-
-        // Ok(token)
-        Ok(String::from(String::from("eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJzdWIiOiJVQUc0NldLWlNNUDY2VjRHSkhFMk1GT0ZQSlRNM1hURzVVR082TFdEVEo0SDJRWURNT1RSWkROTCIsIm5hbWUiOiJ1c2VyXzIiLCJpYXQiOjE2OTQ4MDY0NTYsImlzcyI6IkFDM0FCWVRZRVZTMjM2MlhFNjVVNFZPREZESTQ1V0tHT0tPNUY3VjdaV0JMUkwyWEZOQUxUTzZOIiwiZXhwIjoxMDAwMDAwMDAwMCwibmF0cyI6eyJwdWIiOnsiYWxsb3ciOlsiZm9vIl0sImRlbnkiOltdfSwic3ViIjp7ImFsbG93IjpbImZvbyJdLCJkZW55IjpbXX0sInN1YnMiOi0xLCJkYXRhIjotMSwicGF5bG9hZCI6LTEsImlzc3Vlcl9hY2NvdW50IjoiQUFNNTRIVzRKTElWVTJPU0hNMzRVT1RRVEtENjVMNTIyVEFSMzZITkNQUzdBS1NHVDJFQ0Q0QVIiLCJ0eXBlIjoidXNlciIsInZlcnNpb24iOjJ9fQ.74rE4mtIsXGV19Di0eCrKM-MMpVnPs8EZFCkIPUImOqQpZ0QZU4ox-Em3NFUSYLzNRpL46GqAKrPyoE29xb6Dg")))
+        Ok(token)
     }
 
     fn sign_nonce(&self, nonce: &str) -> Result<String> {
@@ -147,24 +178,143 @@ impl Messaging {
         Ok(encoded_signed_nonce)
     }
 
-    fn get_auth_nonce(&self) -> Result<String> {
+    async fn get_auth_nonce(&self) -> Result<String> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "request_nonce", "init");
+        let url = format!(
+            "{}{}",
+            &self.settings.messaging.service_urls.base_url,
+            &self.settings.messaging.service_urls.get_nonce
+        );
+        println!("url: {}", url);
+        let client = reqwest::Client::new();
+        let nonce_result = client
+            .get(url)
+            .header("CONTENT_TYPE", "application/json")
+            .send()
+            .await;
 
-        // TODO
-        // Send API call to /messaging/auth/nonce
-        // The nonce api will generate an encrypted nonce with AES
-        
-        // Handle the errors from API and also internal errors
+        let nonce_response = match nonce_result {
+            Ok(nonce) => nonce,
+            Err(e) => match e.status() {
+                Some(StatusCode::INTERNAL_SERVER_ERROR) => bail!(MessagingError::new(
+                    MessagingErrorCodes::UnknownError,
+                    format!("get auth nonce returned server error - {}", e),
+                    true
+                )),
+                Some(StatusCode::BAD_REQUEST) => bail!(MessagingError::new(
+                    MessagingErrorCodes::GetAuthNonceBadRequestError,
+                    format!("get auth nonce returned bad request - {}", e),
+                    true // Not reporting bad request errors
+                )),
+                Some(StatusCode::NOT_FOUND) => bail!(MessagingError::new(
+                    MessagingErrorCodes::GetAuthNonceNotFoundError,
+                    format!("get auth nonce not found - {}", e),
+                    false // Not reporting not found errors
+                )),
+                Some(_) => bail!(MessagingError::new(
+                    MessagingErrorCodes::UnknownError,
+                    format!("get auth nonce returned unknown error - {}", e),
+                    true
+                )),
 
-        Ok(String::from("Z3Tt80mW1hz67TVDeIUG1odkE41Oq8yU"))
+                None => bail!(MessagingError::new(
+                    MessagingErrorCodes::UnknownError,
+                    format!("get auth nonce returned unknown error - {}", e),
+                    true
+                )),
+            },
+        };
+
+        // parse the manifest lookup result
+        let manifest_response = match nonce_response
+            .json::<MessagingServerResponseGeneric<String>>()
+            .await
+        {
+            Ok(m) => m,
+            Err(e) => bail!(MessagingError::new(
+                MessagingErrorCodes::AuthNonceResponseParseError,
+                format!("error parsing lookup manifest response - {}", e),
+                true
+            )),
+        };
+
+        Ok(manifest_response.payload)
     }
 
-    fn get_auth_token(&self, scope: MessagingScope, id: &str, nonce: &str, signed_nonce: &str) -> Result<String> {
-        // TODO
-        // Send id, nonce and signed_nonce, public_key to the server
+    async fn get_auth_token(
+        &self,
+        scope: MessagingScope,
+        id: &str,
+        nonce: &str,
+        signed_nonce: &str,
+        nats_user_public_key: &str,
+    ) -> Result<String> {
+        let request_body = GetAuthTokenRequest {
+            id: id.to_string(),
+            _type: MessagingAuthTokenType::Device,
+            scope: scope,
+            nonce: nonce.to_string(),
+            signed_nonce: signed_nonce.to_string(),
+            public_key: nats_user_public_key.to_string(),
+        };
 
-        Ok(String::from("eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJzdWIiOiJVQU5NWVRHUFFNRFFSWDZHWUxNUUdUSlNCSk9ESE9WWkw0Q1pDS1RRWDRITTI3WElBM1dORzRKUCIsIm5hbWUiOiJ1c2VyXzIiLCJpYXQiOjE2OTQ4MDY0NTYsImlzcyI6IkFDM0FCWVRZRVZTMjM2MlhFNjVVNFZPREZESTQ1V0tHT0tPNUY3VjdaV0JMUkwyWEZOQUxUTzZOIiwiZXhwIjoxMDAwMDAwMDAwMCwibmF0cyI6eyJwdWIiOnsiYWxsb3ciOlsiZm9vIl0sImRlbnkiOltdfSwic3ViIjp7ImFsbG93IjpbImZvbyJdLCJkZW55IjpbXX0sInN1YnMiOi0xLCJkYXRhIjotMSwicGF5bG9hZCI6LTEsImlzc3Vlcl9hY2NvdW50IjoiQUFNNTRIVzRKTElWVTJPU0hNMzRVT1RRVEtENjVMNTIyVEFSMzZITkNQUzdBS1NHVDJFQ0Q0QVIiLCJ0eXBlIjoidXNlciIsInZlcnNpb24iOjJ9fQ.YkY1fvK-F5Ku-QFLs2Jl0MYpBLp5D00zGzswOHmF4AYVcH3tQ9SR4kr-QxxUIxRfLiGlxbnijYbe7ljeSzjBCg"))
+        let url = format!(
+            "{}{}",
+            &self.settings.messaging.service_urls.base_url,
+            &self.settings.messaging.service_urls.issue_auth_token
+        );
+        let client = reqwest::Client::new();
+        let get_auth_token_response = client
+            .post(url)
+            .header("CONTENT_TYPE", "application/json")
+            .json(&request_body)
+            .send()
+            .await;
+
+        let auth_token_response = match get_auth_token_response {
+            Ok(token) => token,
+            Err(e) => match e.status() {
+                Some(StatusCode::INTERNAL_SERVER_ERROR) => bail!(MessagingError::new(
+                    MessagingErrorCodes::UnknownError,
+                    format!("get auth nonce returned server error - {}", e),
+                    true
+                )),
+                Some(StatusCode::BAD_REQUEST) => bail!(MessagingError::new(
+                    MessagingErrorCodes::GetAuthNonceBadRequestError,
+                    format!("get auth nonce returned bad request - {}", e),
+                    true // Not reporting bad request errors
+                )),
+                Some(StatusCode::NOT_FOUND) => bail!(MessagingError::new(
+                    MessagingErrorCodes::GetAuthNonceNotFoundError,
+                    format!("get auth nonce not found - {}", e),
+                    false // Not reporting not found errors
+                )),
+                Some(_) => bail!(MessagingError::new(
+                    MessagingErrorCodes::UnknownError,
+                    format!("get auth nonce returned unknown error - {}", e),
+                    true
+                )),
+
+                None => bail!(MessagingError::new(
+                    MessagingErrorCodes::UnknownError,
+                    format!("get auth nonce returned unknown error - {}", e),
+                    true
+                )),
+            },
+        };
+        // parse the auth token result
+        match auth_token_response
+            .json::<MessagingServerResponseGeneric<String>>()
+            .await
+        {
+            Ok(m) => return Ok(m.payload),
+            Err(e) => bail!(MessagingError::new(
+                MessagingErrorCodes::AuthTokenResponseParseError,
+                format!("error while parsing auth token response - {}", e),
+                true
+            )),
+        };
     }
 
     pub async fn publish(&self, subject: &str, data: Bytes) -> Result<bool> {

@@ -1,14 +1,13 @@
-use std::sync::Arc;
+use crate::errors::{NatsClientError, NatsClientErrorCodes};
+use anyhow::{bail, Result};
 pub use async_nats::Subscriber;
 pub use bytes::Bytes;
-use anyhow::{bail, Result};
 use nkeys::KeyPair;
+use std::sync::Arc;
 use tracing::info;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
-use crate::{errors::{NatsClientError, NatsClientErrorCodes}, jwt::create_dummy_jwt};
 
 pub mod errors;
-pub mod jwt;
 
 #[derive(Clone)]
 pub struct NatsClient {
@@ -33,28 +32,40 @@ impl NatsClient {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, target = "nats_client", task = "connect", "init");
 
-        info!(target = "nats_client",  task = "connect", "connecting to nats");
+        info!(
+            target = "nats_client",
+            task = "connect",
+            "connecting to nats"
+        );
 
         // connect to nats
         let key_pair = self.user_key_pair.clone();
-        let dummy_jwt = create_dummy_jwt(&key_pair).unwrap();
 
         self.client = match async_nats::ConnectOptions::new()
-        .jwt(String::from(dummy_jwt), move |nonce| {
-            let signing_key = KeyPair::from_seed(&key_pair.seed().unwrap()).unwrap();
-            async move { signing_key.sign(&nonce).map_err(async_nats::AuthError::new) }
-        })
-        .connect(&self.address)
-        .await {
+            .jwt(String::from(token), move |nonce| {
+                let signing_key = KeyPair::from_seed(&key_pair.seed().unwrap()).unwrap();
+                async move { signing_key.sign(&nonce).map_err(async_nats::AuthError::new) }
+            })
+            .connect(&self.address)
+            .await
+        {
             Ok(c) => Some(c),
             Err(e) => bail!(NatsClientError::new(
                 NatsClientErrorCodes::ClientConnectError,
-                format!("nats client connection error - {:?} - {}", e.kind(), e.to_string()),
+                format!(
+                    "nats client connection error - {:?} - {}",
+                    e.kind(),
+                    e.to_string()
+                ),
                 true
             )),
         };
 
-        info!(target = "nats_client",  task = "connect", "nats client connected");
+        info!(
+            target = "nats_client",
+            task = "connect",
+            "nats client connected"
+        );
 
         Ok(true)
     }
@@ -94,15 +105,23 @@ impl NatsClient {
             Err(e) => bail!(e),
         };
 
-        tracing::trace!(trace_id, target = "nats_client", task = "publish", "nats client is in connected status");
+        tracing::trace!(
+            trace_id,
+            target = "nats_client",
+            task = "publish",
+            "nats client is in connected status"
+        );
 
         match client.publish(String::from(subject), data.clone()).await {
             Ok(v) => v,
             Err(e) => bail!(NatsClientError::new(
                 NatsClientErrorCodes::PublishError,
-                format!("error publishing message to sub - {}, error - {}", subject, e),
+                format!(
+                    "error publishing message to sub - {}, error - {}",
+                    subject, e
+                ),
                 true
-            ))
+            )),
         }
         Ok(true)
     }
@@ -127,5 +146,4 @@ impl NatsClient {
 
         Ok(subscriber)
     }
-
 }

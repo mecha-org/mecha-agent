@@ -1,20 +1,20 @@
-use std::{thread, time};
 use anyhow::{bail, Result};
 use futures::StreamExt;
 use init_tracing_opentelemetry::tracing_subscriber_ext::build_otel_layer;
 use init_tracing_opentelemetry::tracing_subscriber_ext::{
     build_logger_text, build_loglevel_filter_layer,
 };
-use messaging::Bytes;
 use messaging::service::{Messaging, MessagingScope};
+use messaging::Bytes;
 use sentry_tracing::{self, EventFilter};
 use settings::AgentSettings;
-use tracing::info;
+use std::{thread, time};
 use tonic::transport::Server;
+use tracing::info;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 
-pub mod services;
 pub mod errors;
+pub mod services;
 
 pub mod agent {
     tonic::include_proto!("provisioning");
@@ -28,42 +28,51 @@ async fn init_grpc_server() -> Result<()> {
     // TODO: pass settings from main()
     let server_settings = match settings::read_settings_yml() {
         Ok(v) => v.server,
-        Err(e) =>  AgentSettings::default().server,
+        Err(e) => AgentSettings::default().server,
     };
-    let addr = format!("{}:{}", server_settings.url.unwrap_or(String::from("127.0.0.1")), server_settings.port)
-        .parse()
-        .unwrap();
+    let addr = format!(
+        "{}:{}",
+        server_settings.url.unwrap_or(String::from("127.0.0.1")),
+        server_settings.port
+    )
+    .parse()
+    .unwrap();
     let provisioning_service = ProvisioningServiceHandler::default();
-
 
     info!(
         task = "init_grpc_server",
         result = "success",
-        "agent server listening on {} [grpc]", addr);
+        "agent server listening on {} [grpc]",
+        addr
+    );
 
     match Server::builder()
         .add_service(ProvisioningServiceServer::new(provisioning_service))
         .serve(addr)
-        .await {
-            Ok(s) => s,
-            Err(e) => bail!(AgentServerError::new(
-                AgentServerErrorCodes::InitGRPCServerError,
-                format!("error initializing grpc server - {}", e),
-                true
-            )),
-        };
+        .await
+    {
+        Ok(s) => s,
+        Err(e) => bail!(AgentServerError::new(
+            AgentServerErrorCodes::InitGRPCServerError,
+            format!("error initializing grpc server - {}", e),
+            true
+        )),
+    };
     Ok(())
 }
 
 async fn init_system_messaging_client() -> Result<Option<Messaging>> {
     let messaging_settings = match settings::read_settings_yml() {
         Ok(v) => v.messaging,
-        Err(e) =>  AgentSettings::default().messaging,
+        Err(_e) => AgentSettings::default().messaging,
     };
 
     // return none if system messaging is disabled
     if !messaging_settings.system.enabled {
-        info!(target="init_system_messaging_client", "system messaging client is disabled");
+        info!(
+            target = "init_system_messaging_client",
+            "system messaging client is disabled"
+        );
         return Ok(None);
     }
 
@@ -100,7 +109,6 @@ async fn init_system_messaging_client() -> Result<Option<Messaging>> {
     Ok(Some(messaging_client))
 }
 
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let settings = match settings::read_settings_yml() {
@@ -112,7 +120,7 @@ async fn main() -> Result<()> {
     // enable the sentry exception reporting if enabled in settings and a DSN path is specified
     if settings.sentry.enabled && settings.sentry.dsn.is_some() {
         let sentry_path = settings.sentry.dsn.unwrap();
-    
+
         let _guard = sentry::init((
             sentry_path,
             sentry::ClientOptions {
