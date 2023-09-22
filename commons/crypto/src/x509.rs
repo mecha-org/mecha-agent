@@ -126,8 +126,6 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
 }
 
 pub fn generate_csr(file_path: &str, private_key_path: &str, common_name: &str) -> Result<bool> {
-    println!("file path : {}", file_path);
-
     let trace_id = find_current_trace_id();
     tracing::trace!(trace_id, task = "generate_csr", "init",);
 

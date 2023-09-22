@@ -186,7 +186,6 @@ impl Messaging {
             &self.settings.messaging.service_urls.base_url,
             &self.settings.messaging.service_urls.get_nonce
         );
-        println!("url: {}", url);
         let client = reqwest::Client::new();
         let nonce_result = client
             .get(url)
