@@ -132,7 +132,7 @@ impl Messaging {
     async fn authenticate(&self) -> Result<String> {
         // Step 1: Get Device ID
         //TODO: Path Check
-        let device_id = match get_subject_name("device.pem") {
+        let device_id = match get_subject_name(&self.settings.provisioning.paths.device.cert) {
             Ok(s) => s,
             Err(e) => bail!(e),
         };
