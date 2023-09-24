@@ -11,6 +11,7 @@ homepage.workspace = true
 provisioning = { path = "../provisioning" }
 messaging = { path = "../messaging" }
 settings = { path = "../commons/settings" }
+telemetry = { path = "../telemetry" }
 axum = "0.6.17"
 axum-macros = "0.3.8"
 tokio = { version = "1.27.0", features = ["full"] }

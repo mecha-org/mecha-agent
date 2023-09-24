@@ -3,9 +3,10 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, error};
 use anyhow::{bail, Result};
 
-use crate::{provisioning::ProvisioningSettings, messaging::MessagingSettings};
+use crate::{provisioning::ProvisioningSettings, messaging::MessagingSettings, telemetry::TelemetrySettings};
 pub mod provisioning;
 pub mod messaging;
+pub mod telemetry;
 
 
 /// Agent Settings - Struct corresponding to the settings.yml schema
@@ -15,6 +16,7 @@ pub struct AgentSettings {
     pub server: ServerSettings,
     pub provisioning: ProvisioningSettings,
     pub messaging: MessagingSettings,
+    pub telemetry: TelemetrySettings
 }
 
 impl Default for AgentSettings {
@@ -24,6 +26,7 @@ impl Default for AgentSettings {
             server: ServerSettings::default(),
             provisioning: ProvisioningSettings::default(),
             messaging: MessagingSettings::default(),
+            telemetry: TelemetrySettings::default()
         }
     }
 }
