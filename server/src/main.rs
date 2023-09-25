@@ -91,7 +91,9 @@ async fn init_system_messaging_client() -> Result<Option<Messaging>> {
         let messaging_client = messaging_client.clone();
         async move {
             // subscribe to messages
-            let mut subscriber = messaging_client.subscribe("foo".into()).await?;
+            let mut subscriber = messaging_client
+                .subscribe("sys.commands.hello_mecha".into())
+                .await?;
 
             println!("Awaiting messages on foo");
             while let Some(message) = subscriber.next().await {
@@ -103,7 +105,9 @@ async fn init_system_messaging_client() -> Result<Option<Messaging>> {
 
     // publish message
     thread::sleep(time::Duration::from_secs(5));
-    let is_published = messaging_client.publish("foo", Bytes::from("bar1")).await?;
+    let is_published = messaging_client
+        .publish("sys.commands.hello_mecha", Bytes::from("bar1"))
+        .await?;
     println!("Message published - {}", is_published);
 
     Ok(Some(messaging_client))
