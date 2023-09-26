@@ -1,5 +1,5 @@
 [package]
-name = "provisioning"
+name = "identity"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -10,7 +10,6 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-crypto = { path = "../commons/crypto" }
 settings = { path = "../commons/settings" }
 anyhow = { version = "1.0.71", features = ["backtrace"]}
 mkdirp = "1.0.0"

@@ -2,14 +2,19 @@ use std::{env, fs::File, path::PathBuf, fmt};
 use serde::{Deserialize, Serialize};
 use tracing::{info, error};
 use anyhow::{bail, Result};
-use provisioning::ProvisioningSettings;
+
+use crate::{provisioning::ProvisioningSettings, messaging::MessagingSettings};
+pub mod provisioning;
+pub mod messaging;
+
 
 /// Agent Settings - Struct corresponding to the settings.yml schema
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AgentSettings {
     pub sentry: SentrySettings,
     pub server: ServerSettings,
     pub provisioning: ProvisioningSettings,
+    pub messaging: MessagingSettings,
 }
 
 impl Default for AgentSettings {
@@ -18,12 +23,13 @@ impl Default for AgentSettings {
             sentry: SentrySettings::default(),
             server: ServerSettings::default(),
             provisioning: ProvisioningSettings::default(),
+            messaging: MessagingSettings::default(),
         }
     }
 }
 
 /// SentrySettings - Settings parameter for configuring the sentry client
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SentrySettings {
     pub enabled: bool,
     pub dsn: Option<String>,
@@ -39,7 +45,7 @@ impl Default for SentrySettings {
 }
 
 /// ServerSettings - Settings parameter for configuring the agent's grpc server settings
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ServerSettings {
     pub url: Option<String>,
     pub port: i16,
@@ -70,9 +76,9 @@ pub enum SettingsErrorCodes {
 impl fmt::Display for SettingsErrorCodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SettingsErrorCodes::UnknownError => write!(f, "UnknownError"),
-            SettingsErrorCodes::ReadError => write!(f, "ReadError"),
-            SettingsErrorCodes::ParseError => write!(f, "ParseError"),
+            SettingsErrorCodes::UnknownError => write!(f, "SettingsErrorCodes: UnknownError"),
+            SettingsErrorCodes::ReadError => write!(f, "SettingsErrorCodes: ReadError"),
+            SettingsErrorCodes::ParseError => write!(f, "SettingsErrorCodes: ParseError"),
         }
     }
 }

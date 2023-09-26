@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct ProvisioningSettings {
     pub server_url: String,
     pub paths: CertificatePaths,
@@ -26,12 +26,12 @@ impl Default for ProvisioningSettings {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct OpenSslSettings {
     pub engine: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct CertificatePaths {
     pub device: DeviceCertificate,
     pub server: ServerCertificate,
@@ -39,24 +39,24 @@ pub struct CertificatePaths {
     pub root: RootCertificate,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct DeviceCertificate {
     pub private_key: String,
     pub csr: String,
     pub cert: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct ServerCertificate {
     pub cert: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct IntermediateCertificate {
     pub cert: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct RootCertificate {
     pub cert: String,
 }

@@ -22,3 +22,8 @@ provisioning:
       cert: ~/.mecha/agent/certs/intermediate.pem
     root:
       cert: ~/.mecha/agent/certs/root.pem
+messaging:
+  tvm_url: http://localhost:3000
+  nats_url: 127.0.0.1:4222
+
+  

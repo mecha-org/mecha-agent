@@ -1,7 +1,7 @@
 [workspace]
 default-members = ["server"]
-members = ["server", "provisioning"]
-resolver = "2"
+members = ["server", "provisioning", "messaging", "identity", "commons/crypto", "commons/settings"]
+
 
 [workspace.package]
 version = "1.0.0"

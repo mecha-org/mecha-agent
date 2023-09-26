@@ -1,16 +1,16 @@
-use crate::crypto::generate_csr;
-use crate::crypto::generate_ec_private_key;
-use crate::crypto::PrivateKeyAlgorithm;
-use crate::crypto::PrivateKeySize;
 use crate::errors::ProvisioningError;
 use crate::errors::ProvisioningErrorCodes;
-use crate::ProvisioningSettings;
 use crate::utils::safe_write_to_path;
 use anyhow::{bail, Result};
+use crypto::x509::generate_csr;
+use crypto::x509::generate_ec_private_key;
+use crypto::x509::PrivateKeyAlgorithm;
+use crypto::x509::PrivateKeySize;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use reqwest::Client as RequestClient;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use settings::provisioning::ProvisioningSettings;
 use std::fs;
 use std::path::PathBuf;
 use std::str;
@@ -41,6 +41,7 @@ pub struct ProvisioningManifest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SignCSRRequest {
     pub csr: String,
+    pub device_id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -81,7 +82,7 @@ impl Provisioning {
     async fn lookup_manifest(&self, code: &str) -> Result<ProvisioningManifest> {
         let trace_id = find_current_trace_id();
         let url = format!(
-            "{}/provisioning/manifest/find?code={}",
+            "{}/v1/provisioning/manifest/find?code={}",
             &self.settings.server_url, code
         );
         tracing::debug!(
@@ -139,7 +140,12 @@ impl Provisioning {
         Ok(manifest_response.payload)
     }
 
-    async fn sign_csr(&self, csr_path: &str, cert_signing_url: &str) -> Result<SignedCertificates> {
+    async fn sign_csr(
+        &self,
+        csr_path: &str,
+        device_id: &str,
+        cert_signing_url: &str,
+    ) -> Result<SignedCertificates> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "sign_csr", "init");
 
@@ -153,7 +159,10 @@ impl Provisioning {
         };
 
         //construct payload for signing the csr
-        let sign_csr_request_body = SignCSRRequest { csr: csr_pem };
+        let sign_csr_request_body = SignCSRRequest {
+            csr: csr_pem,
+            device_id: device_id.to_owned(),
+        };
 
         tracing::info!(
             trace_id,
@@ -203,7 +212,6 @@ impl Provisioning {
                 )),
             },
         };
-
         let result: ProvisioningServerResponseGeneric<SignedCertificates> =
             match serde_json::from_str(&csr_string) {
                 Ok(v) => v,
@@ -222,24 +230,27 @@ impl Provisioning {
         &self,
         root_cert: &[u8],
         intermediate_cert: &[u8],
-        cert: &[u8]
+        cert: &[u8],
     ) -> Result<bool> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "write_certificates_to_path", "init");
 
-        let certificate_paths =&self.settings.paths;
+        let certificate_paths = &self.settings.paths;
 
         // save the device certificate
         match safe_write_to_path(&certificate_paths.device.cert, cert) {
             Ok(_) => tracing::info!(
                 trace_id,
                 task = "write_file",
-                "device certificate saved in path - {}", 
+                "device certificate saved in path - {}",
                 &certificate_paths.device.cert
             ),
             Err(e) => bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::CertificateWriteError,
-                format!("error saving device certificate in path - {} - {}", &certificate_paths.device.cert, e),
+                format!(
+                    "error saving device certificate in path - {} - {}",
+                    &certificate_paths.device.cert, e
+                ),
                 true
             )),
         }
@@ -249,12 +260,15 @@ impl Provisioning {
             Ok(_) => tracing::info!(
                 trace_id,
                 task = "write_file",
-                "intermediate certificate saved in path - {}", 
+                "intermediate certificate saved in path - {}",
                 &certificate_paths.intermediate.cert
             ),
             Err(e) => bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::CertificateWriteError,
-                format!("error saving intermediate certificate in path - {} - {}", &certificate_paths.intermediate.cert, e),
+                format!(
+                    "error saving intermediate certificate in path - {} - {}",
+                    &certificate_paths.intermediate.cert, e
+                ),
                 true
             )),
         }
@@ -264,12 +278,15 @@ impl Provisioning {
             Ok(_) => tracing::info!(
                 trace_id,
                 task = "write_file",
-                "root certificate saved in path - {}", 
+                "root certificate saved in path - {}",
                 &certificate_paths.root.cert
             ),
             Err(e) => bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::CertificateWriteError,
-                format!("error saving root certificate in path - {} - {}", &certificate_paths.root.cert, e),
+                format!(
+                    "error saving root certificate in path - {} - {}",
+                    &certificate_paths.root.cert, e
+                ),
                 true
             )),
         }
@@ -339,7 +356,11 @@ impl Provisioning {
 
         // 4. Sign the CSR using the cert signing url
         let signed_certificates = match self
-            .sign_csr(&self.settings.paths.device.csr, &manifest.cert_signing_url)
+            .sign_csr(
+                &self.settings.paths.device.csr,
+                &manifest.device_id,
+                &manifest.cert_signing_url,
+            )
             .await
         {
             Ok(s) => s,
