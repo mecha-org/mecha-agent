@@ -62,11 +62,6 @@ impl TelemetryService {
                 .await
             {
                 Ok(_) => {
-                    tracing::info!(
-                        trace_id,
-                        task = "user_metrics",
-                        "User Metrics sent successfully"
-                    );
                     return Ok("Success".to_string());
                 }
                 Err(e) => {
@@ -90,11 +85,6 @@ impl TelemetryService {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "user_logs", "init");
         if self.settings.collect.user {
-            tracing::info!(
-                trace_id,
-                task = "messaging_init",
-                "Messaging publish logs"
-            );
             match self
                 .messaging_client
                 .publish("telemetry.logs", content)
