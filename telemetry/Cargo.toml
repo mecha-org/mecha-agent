@@ -11,6 +11,7 @@ homepage.workspace = true
 
 [dependencies]
 settings = { path = "../commons/settings" }
+messaging = { path = "../messaging" }
 anyhow = { version = "1.0.71", features = ["backtrace"]}
 serde_json = "1.0.33"
 serde = { version  = "1.0.159", features = ["derive"]}

@@ -5,7 +5,6 @@ use init_tracing_opentelemetry::tracing_subscriber_ext::build_otel_layer;
 use init_tracing_opentelemetry::tracing_subscriber_ext::{
     build_logger_text, build_loglevel_filter_layer,
 };
-use messaging::Bytes;
 use messaging::service::{Messaging, MessagingScope};
 use sentry_tracing::{self, EventFilter};
 use settings::AgentSettings;
@@ -130,24 +129,17 @@ async fn init_telemtry() -> Result<Option<TelemetryService>> {
         Err(_e) =>  AgentSettings::default().telemetry,
     };
 
-    // return none if system messaging is disabled
     if !telemetry_settings.enabled {
         info!(target="init_telemetry_otel_collector_service", "Telemetry collection is disabled");
         return Ok(None);
     }
 
-    let mut telemetry_service = TelemetryService::new(telemetry_settings);
+    let telemetry_service = TelemetryService::new(telemetry_settings).await;
 
-    // subscribe
     tokio::task::spawn({
         let telemetry_service = telemetry_service.clone();
         async move {
-            // subscribe to messages
-            let _ = match telemetry_service.init() {
-                Ok(res) => res,
-                Err(_e) => "Failed to start otel-collector".to_string()
-            };
-            
+            telemetry_service.start_telemetry().await;
             Ok::<(), anyhow::Error>(())
         }
     });
@@ -157,6 +149,7 @@ async fn init_telemtry() -> Result<Option<TelemetryService>> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    
     let settings = match settings::read_settings_yml() {
         Ok(settings) => settings,
         Err(_) => AgentSettings::default(),
@@ -193,10 +186,10 @@ async fn main() -> Result<()> {
     );
 
     // start the agent services
-    match init_system_messaging_client().await {
-        Ok(_) => (),
-        Err(e) => bail!(e),
-    };
+    // match init_system_messaging_client().await {
+    //     Ok(_) => (),
+    //     Err(e) => bail!(e),
+    // };
 
     match init_telemtry().await {
         Ok(_) => (),

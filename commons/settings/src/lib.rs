@@ -2,7 +2,7 @@ use std::{env, fs::File, path::PathBuf, fmt};
 use serde::{Deserialize, Serialize};
 use tracing::{info, error};
 use anyhow::{bail, Result};
-
+use dotenv::dotenv;
 use crate::{provisioning::ProvisioningSettings, messaging::MessagingSettings, telemetry::TelemetrySettings};
 pub mod provisioning;
 pub mod messaging;
@@ -131,6 +131,7 @@ pub fn read_settings_path_from_args() -> Option<String> {
 /// 
 /// **Important**: Ensure all fields are present in the yml due to strict parsing
 pub fn read_settings_yml() -> Result<AgentSettings> {
+    dotenv().ok();
     // Add schema validator for yml
     let mut file_path = PathBuf::from(std::env::var("MECHA_AGENT_SETTINGS_PATH")
         .unwrap_or(String::from("~/.mecha/agent/settings.yml"))); // Get path of the library

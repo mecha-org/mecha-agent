@@ -18,13 +18,13 @@ use crate::trace::{
     ExportTraceServiceRequest, ExportTraceServiceResponse,
 };
 
-fn new_telemetry_service() -> TelemetryService {
+async fn  new_telemetry_service() -> TelemetryService {
     let settings: AgentSettings = match read_settings_yml() {
         Ok(settings) => settings,
         Err(_) => AgentSettings::default(),
     };
 
-    TelemetryService::new(settings.telemetry)
+    TelemetryService::new(settings.telemetry).await
 }
 
 
@@ -45,7 +45,7 @@ impl MetricsService for TelemetryMetricsHandler {
         &self,
         request: Request<ExportMetricsServiceRequest>,
     ) -> Result<Response<ExportMetricsServiceResponse>, Status> {
-        let telemetry_service = new_telemetry_service();
+        let telemetry_service = new_telemetry_service().await;
         let binding = request.metadata().clone();
         let metrics_type = binding.get("user").unwrap().to_str().unwrap();
         let metrics = request.into_inner().clone().resource_metrics;
@@ -59,7 +59,7 @@ impl MetricsService for TelemetryMetricsHandler {
                 return Err(Status::new(Code::Aborted, format!("{}", e),))
             }
         };
-        let _ = match telemetry_service.user_metrics(content){
+        let _ = match telemetry_service.user_metrics(content.into()).await{
             Ok(res) => res,
             Err(e) =>{
                 return Err(Status::new(Code::Unknown, format!("Failed to send metrics{}", e),))
@@ -96,7 +96,7 @@ impl LogsService for TelemetryLogsHandler {
         &self,
         request: Request<ExportLogsServiceRequest>,
     ) -> Result<Response<ExportLogsServiceResponse>, Status> {
-        let telemetry_service = new_telemetry_service();
+        let telemetry_service = new_telemetry_service().await;
         let binding = request.metadata().clone();
         let logs_type = binding.get("user").unwrap().to_str().unwrap();
         let logs = request.into_inner().clone().resource_logs;
@@ -110,7 +110,7 @@ impl LogsService for TelemetryLogsHandler {
                 return Err(Status::new(Code::Aborted, format!("{}", e),))
             }
         };
-        let _ = match telemetry_service.user_logs(content){
+        let _ = match telemetry_service.user_logs(content.into()).await{
             Ok(res) => res,
             Err(e) =>{
                 return Err(Status::new(Code::Unknown, format!("Failed to send logs{}", e),))
@@ -136,7 +136,7 @@ impl TraceService for TelemetryTraceHandler {
         &self,
         request: Request<ExportTraceServiceRequest>,
     ) -> Result<Response<ExportTraceServiceResponse>, Status> {
-        let telemetry_service = new_telemetry_service();
+        let telemetry_service = new_telemetry_service().await;
         let binding = request.metadata().clone();
         let trace_type = binding.get("user").unwrap().to_str().unwrap();
         let trace = request.into_inner().clone().resource_spans;
@@ -150,7 +150,7 @@ impl TraceService for TelemetryTraceHandler {
                 return Err(Status::new(Code::Aborted, format!("{}", e),))
             }
         };
-        let _ = match telemetry_service.user_trace(content){
+        let _ = match telemetry_service.user_trace(content.into()).await{
             Ok(res) => res,
             Err(e) =>{
                 return Err(Status::new(Code::Unknown, format!("Failed to send Trace{}", e),))

@@ -49,7 +49,7 @@ fn generate_user_jwt(user_public_key: &str, account_public_key: &str, account_si
         nats: NatsClaim {
             _pub: NatsSubjectList {
                 deny: vec![],
-                allow: vec!["foo".to_string()]
+                allow: vec!["foo".to_string(), "telemetry.*".to_string()]
             },
             sub: NatsSubjectList {
                 deny: vec![],

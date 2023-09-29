@@ -2212,6 +2212,7 @@ name = "settings"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "dotenv",
  "mkdirp",
  "openssl",
  "rand",
@@ -2370,6 +2371,7 @@ dependencies = [
  "anyhow",
  "axum",
  "dotenv",
+ "messaging",
  "rand",
  "reqwest",
  "sentry-anyhow",
