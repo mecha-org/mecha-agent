@@ -1,4 +1,3 @@
-use std::{thread, time};
 use anyhow::{bail, Result};
 use futures::StreamExt;
 use init_tracing_opentelemetry::tracing_subscriber_ext::build_otel_layer;
@@ -6,15 +5,17 @@ use init_tracing_opentelemetry::tracing_subscriber_ext::{
     build_logger_text, build_loglevel_filter_layer,
 };
 use messaging::service::{Messaging, MessagingScope};
+use messaging::Bytes;
 use sentry_tracing::{self, EventFilter};
 use settings::AgentSettings;
 use telemetry::service::TelemetryService;
 use tracing::info;
+use std::{thread, time};
 use tonic::transport::Server;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 
-pub mod services;
 pub mod errors;
+pub mod services;
 
 pub mod agent {
     tonic::include_proto!("provisioning");
@@ -47,20 +48,25 @@ async fn init_grpc_server() -> Result<()> {
         Ok(v) => v.server,
         Err(_e) =>  AgentSettings::default().server,
     };
-    let addr = format!("{}:{}", server_settings.url.unwrap_or(String::from("127.0.0.1")), server_settings.port)
-        .parse()
-        .unwrap();
+    let addr = format!(
+        "{}:{}",
+        server_settings.url.unwrap_or(String::from("127.0.0.1")),
+        server_settings.port
+    )
+    .parse()
+    .unwrap();
     let provisioning_service = ProvisioningServiceHandler::default();
     let trace_service = TelemetryTraceHandler::default();
     let log_service = TelemetryLogsHandler::default();
     let metrics_service = TelemetryMetricsHandler::default();
 
 
-
     info!(
         task = "init_grpc_server",
         result = "success",
-        "agent server listening on {} [grpc]", addr);
+        "agent server listening on {} [grpc]",
+        addr
+    );
 
     match Server::builder()
         .add_service(ProvisioningServiceServer::new(provisioning_service))
@@ -68,26 +74,30 @@ async fn init_grpc_server() -> Result<()> {
         .add_service(LogsServiceServer::new(log_service))
         .add_service(TraceServiceServer::new(trace_service))
         .serve(addr)
-        .await {
-            Ok(s) => s,
-            Err(e) => bail!(AgentServerError::new(
-                AgentServerErrorCodes::InitGRPCServerError,
-                format!("error initializing grpc server - {}", e),
-                true
-            )),
-        };
+        .await
+    {
+        Ok(s) => s,
+        Err(e) => bail!(AgentServerError::new(
+            AgentServerErrorCodes::InitGRPCServerError,
+            format!("error initializing grpc server - {}", e),
+            true
+        )),
+    };
     Ok(())
 }
 
 async fn init_system_messaging_client() -> Result<Option<Messaging>> {
     let messaging_settings = match settings::read_settings_yml() {
         Ok(v) => v.messaging,
-        Err(e) =>  AgentSettings::default().messaging,
+        Err(_e) => AgentSettings::default().messaging,
     };
 
     // return none if system messaging is disabled
     if !messaging_settings.system.enabled {
-        info!(target="init_system_messaging_client", "system messaging client is disabled");
+        info!(
+            target = "init_system_messaging_client",
+            "system messaging client is disabled"
+        );
         return Ok(None);
     }
 
@@ -102,7 +112,9 @@ async fn init_system_messaging_client() -> Result<Option<Messaging>> {
         let messaging_client = messaging_client.clone();
         async move {
             // subscribe to messages
-            let mut subscriber = messaging_client.subscribe("foo".into()).await?;
+            let mut subscriber = messaging_client
+                .subscribe("sys.commands.hello_mecha".into())
+                .await?;
 
             println!("Awaiting messages on foo");
             while let Some(message) = subscriber.next().await {
@@ -113,12 +125,12 @@ async fn init_system_messaging_client() -> Result<Option<Messaging>> {
         }
     });
 
- 
-
-    // // publish message
-    // thread::sleep(time::Duration::from_secs(5));
-    // let is_published = messaging_client.publish("foo", Bytes::from("bar1")).await?;
-    // println!("Message published - {}", is_published);
+    // publish message
+    thread::sleep(time::Duration::from_secs(5));
+    let is_published = messaging_client
+        .publish("sys.commands.hello_mecha", Bytes::from("bar1"))
+        .await?;
+    println!("Message published - {}", is_published);
 
     Ok(Some(messaging_client))
 }
@@ -131,7 +143,6 @@ async fn init_telemtry() -> Result<Option<TelemetryService>> {
 
     if !telemetry_settings.enabled {
         info!(target="init_telemetry_otel_collector_service", "Telemetry collection is disabled");
-        return Ok(None);
     }
 
     let telemetry_service = TelemetryService::new(telemetry_settings).await;
@@ -154,12 +165,10 @@ async fn main() -> Result<()> {
         Ok(settings) => settings,
         Err(_) => AgentSettings::default(),
     };
-
-    // setup sentry reporting
     // enable the sentry exception reporting if enabled in settings and a DSN path is specified
     if settings.sentry.enabled && settings.sentry.dsn.is_some() {
         let sentry_path = settings.sentry.dsn.unwrap();
-    
+
         let _guard = sentry::init((
             sentry_path,
             sentry::ClientOptions {

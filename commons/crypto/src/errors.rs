@@ -7,6 +7,12 @@ use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 pub enum CryptoErrorCodes {
     GenerateCSRError,
     GeneratePrivateKeyError,
+    OpenPrivateKeyError,
+    ReadPrivateKeyError,
+    LoadSignerError,
+    UpdateSignerError,
+    PemDeserializeError,
+    ExtractSubjectNameError,
     #[default]
     UnknownError,
 }
@@ -16,7 +22,13 @@ impl fmt::Display for CryptoErrorCodes {
         match self {
             CryptoErrorCodes::GenerateCSRError => write!(f, "CryptoErrorCodes: GenerateCSRError"),
             CryptoErrorCodes::GeneratePrivateKeyError => write!(f, "CryptoErrorCodes: GeneratePrivateKeyError"),
+            CryptoErrorCodes::OpenPrivateKeyError => write!(f, "CryptoErrorCodes: OpenPrivateKeyError"),
+            CryptoErrorCodes::ReadPrivateKeyError => write!(f, "CryptoErrorCodes: ReadPrivateKeyError"),
+            CryptoErrorCodes::LoadSignerError => write!(f, "CryptoErrorCodes: LoadSignerError"),
+            CryptoErrorCodes::UpdateSignerError => write!(f, "CryptoErrorCodes: UpdateSignerError"),
+            CryptoErrorCodes::PemDeserializeError => write!(f, "CryptoErrorCodes: PemDeserializeError"),
             CryptoErrorCodes::UnknownError => write!(f, "CryptoErrorCodes: UnknownError"),
+            CryptoErrorCodes::ExtractSubjectNameError => write!(f, "CryptoErrorCodes: ExtractSubjectNameError"),
         }
     }
 }

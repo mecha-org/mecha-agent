@@ -8,6 +8,12 @@ pub enum MessagingErrorCodes {
     #[default]
     UnknownError,
     NatsClientNotInitialized,
+    GetAuthNonceUnknownError,
+    GetAuthNonceServerError,
+    GetAuthNonceNotFoundError,
+    GetAuthNonceBadRequestError,
+    AuthNonceResponseParseError,
+    AuthTokenResponseParseError,
 }
 
 impl fmt::Display for MessagingErrorCodes {
@@ -15,6 +21,12 @@ impl fmt::Display for MessagingErrorCodes {
         match self {
             MessagingErrorCodes::UnknownError => write!(f, "MessagingErrorCodes: UnknownError"),
             MessagingErrorCodes::NatsClientNotInitialized => write!(f, "MessagingErrorCodes: NatsClientNotInitialized"),
+            MessagingErrorCodes::GetAuthNonceUnknownError => write!(f, "MessagingErrorCodes: GetAuthNonceUnknownError"),
+            MessagingErrorCodes::GetAuthNonceServerError => write!(f, "MessagingErrorCodes: GetAuthNonceServerError"),
+            MessagingErrorCodes::GetAuthNonceNotFoundError => write!(f, "MessagingErrorCodes: GetAuthNonceNotFoundError"),
+            MessagingErrorCodes::GetAuthNonceBadRequestError => write!(f, "MessagingErrorCodes: GetAuthNonceBadRequestError"),
+            MessagingErrorCodes::AuthNonceResponseParseError => write!(f, "MessagingErrorCodes: AuthNonceResponseParseError"),
+            MessagingErrorCodes::AuthTokenResponseParseError => write!(f, "MessagingErrorCodes: AuthTokenResponseParseError"),
         }
     }
 }

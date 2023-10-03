@@ -1,30 +1,31 @@
-use std::{process::Command, fmt};
-use anyhow::{bail, Result};
-use serde::{Serialize, Deserialize};
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 use crate::errors::{CryptoError, CryptoErrorCodes};
+use anyhow::{bail, Result};
+use openssl::{pkey::PKey, sign::Signer, x509::X509};
+use serde::{Deserialize, Serialize};
+use std::{fmt, fs::File, io::Read, process::Command};
+use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 /**
  * Open SSL Commands Reference
- * 
+ *
  * [Default]
  * ECDSA:
  * Generate Key: openssl ecparam -name secp521r1 -genkey -noout -out key.pem
  * Generate CSR: openssl req -new -sha256 -key key.pem -out req.pem
  * Sign: openssl dgst -sha256  -sign private.pem /path/to/data
  * Verify: openssl dgst -ecdsa-with-SHA1 -verify public.pem -signature /path/to/signature /path/to/data
- * 
+ *
  * RSA:
  * Generate Key: openssl genrsa -out key.pem 2048
  * Generate CSR: openssl req -new -sha256 -key key.pem -out req.pem
- * 
+ *
  * [TrustM]
  * TBD
- * 
+ *
  */
 
 // Certificate Attributes
- #[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CertificateAttributes {
     pub country: Option<String>,
     pub state: Option<String>,
@@ -73,7 +74,7 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
         //     true
         // ))
     };
-    
+
     // Command: openssl ecparam -name secp521r1 -genkey -noout -out key.pem
     let output_result = Command::new("openssl")
         .arg("ecparam")
@@ -91,14 +92,17 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
             CryptoErrorCodes::GeneratePrivateKeyError,
             format!("openssl private key generate command failed - {}", e),
             true
-        ))
+        )),
     };
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         bail!(CryptoError::new(
             CryptoErrorCodes::GeneratePrivateKeyError,
-            format!("openssl error in generating private key, stderr - {}", stderr),
+            format!(
+                "openssl error in generating private key, stderr - {}",
+                stderr
+            ),
             true
         ))
     }
@@ -120,7 +124,6 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
     // TODO: Update permissions of keypath to 400
     Ok(true)
 }
-
 
 pub fn generate_csr(file_path: &str, private_key_path: &str, common_name: &str) -> Result<bool> {
     let trace_id = find_current_trace_id();
@@ -146,7 +149,7 @@ pub fn generate_csr(file_path: &str, private_key_path: &str, common_name: &str) 
             CryptoErrorCodes::GenerateCSRError,
             format!("openssl csr generate command failed - {}", e),
             true
-        ))
+        )),
     };
 
     if output.status.success() {
@@ -175,5 +178,128 @@ pub fn generate_csr(file_path: &str, private_key_path: &str, common_name: &str) 
 }
 
 pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<u8>> {
-    Ok(vec![])
+    // Load the private key from a file
+    let mut private_key_buf = Vec::new();
+    let mut file = match File::open(private_key_path) {
+        Ok(v) => v,
+        Err(e) => bail!(CryptoError::new(
+            CryptoErrorCodes::ReadPrivateKeyError,
+            format!("failed to open private key file - {}", e),
+            true
+        )),
+    };
+
+    match file.read_to_end(&mut private_key_buf) {
+        Ok(v) => v,
+        Err(e) => bail!(CryptoError::new(
+            CryptoErrorCodes::ReadPrivateKeyError,
+            format!("failed to read private key file - {}", e),
+            true
+        )),
+    };
+
+    let private_key = match PKey::private_key_from_pem(&private_key_buf) {
+        Ok(v) => v,
+        Err(e) => bail!(CryptoError::new(
+            CryptoErrorCodes::OpenPrivateKeyError,
+            format!("failed to open private key - {}", e),
+            true
+        )),
+    };
+
+    // Sign the message using the private key
+    let mut signer = match Signer::new(openssl::hash::MessageDigest::sha256(), &private_key) {
+        Ok(v) => v,
+        Err(e) => bail!(CryptoError::new(
+            CryptoErrorCodes::LoadSignerError,
+            format!("failed to load openssl signer - {}", e),
+            true
+        )),
+    };
+    match signer.update(data) {
+        Ok(v) => v,
+        Err(e) => bail!(CryptoError::new(
+            CryptoErrorCodes::UpdateSignerError,
+            format!("failed to update openssl signer - {}", e),
+            true
+        )),
+    };
+    match signer.sign_to_vec() {
+        Ok(v) => {
+            tracing::info!("signature completed: {:?}", v);
+            return Ok(v);
+        }
+        Err(e) => bail!(CryptoError::new(
+            CryptoErrorCodes::UpdateSignerError,
+            format!("failed to sign data - {}", e),
+            true
+        )),
+    };
+}
+
+pub fn get_subject_name(public_key_path: &str) -> Result<String> {
+    let trace_id = find_current_trace_id();
+    tracing::trace!(trace_id, task = "get_subject_name", "init");
+    let mut public_key_buf = Vec::new();
+    let mut file = match File::open(public_key_path) {
+        Ok(v) => v,
+        Err(e) => {
+            bail!(CryptoError::new(
+                CryptoErrorCodes::ReadPrivateKeyError,
+                format!("failed to open private key file - {}", e),
+                true
+            ))
+        }
+    };
+
+    match file.read_to_end(&mut public_key_buf) {
+        Ok(v) => v,
+        Err(e) => bail!(CryptoError::new(
+            CryptoErrorCodes::ReadPrivateKeyError,
+            format!("failed to read private key file - {}", e),
+            true
+        )),
+    };
+    let cert = match X509::from_pem(public_key_buf.as_slice()) {
+        Ok(cert) => cert,
+        Err(err) => {
+            tracing::error!(
+                trace_id,
+                task = "issue_token",
+                "error deserializing pem -{}",
+                err
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::PemDeserializeError,
+                format!("error deserializing pem",),
+                true
+            ))
+        }
+    };
+
+    let sub_entries = match cert.subject_name().entries().next() {
+        Some(sub) => sub,
+        None => {
+            bail!(CryptoError::new(
+                CryptoErrorCodes::ExtractSubjectNameError,
+                format!("error in getting subject name entries",),
+                true
+            ))
+        }
+    };
+
+    match String::from_utf8(sub_entries.data().as_slice().to_vec()) {
+        Ok(str) => {
+            tracing::info!("extracted subject name from pem file");
+            return Ok(str);
+        }
+        Err(err) => {
+            tracing::error!("error extracting subject name: {:?}", err);
+            bail!(CryptoError::new(
+                CryptoErrorCodes::ExtractSubjectNameError,
+                format!("error extracting subject name",),
+                true
+            ))
+        }
+    };
 }
