@@ -1,12 +1,11 @@
-use std::{env, fs::File, path::PathBuf, fmt};
-use serde::{Deserialize, Serialize};
-use tracing::{info, error};
 use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
+use std::{env, fmt, fs::File, path::PathBuf};
+use tracing::{error, info};
 
-use crate::{provisioning::ProvisioningSettings, messaging::MessagingSettings};
-pub mod provisioning;
+use crate::{messaging::MessagingSettings, provisioning::ProvisioningSettings};
 pub mod messaging;
-
+pub mod provisioning;
 
 /// Agent Settings - Struct corresponding to the settings.yml schema
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -39,7 +38,7 @@ impl Default for SentrySettings {
     fn default() -> Self {
         Self {
             enabled: false,
-            dsn: None
+            dsn: None,
         }
     }
 }
@@ -63,7 +62,7 @@ impl Default for ServerSettings {
 }
 
 /// # Agent Error Codes
-/// 
+///
 /// Implements standard errors for the agent
 #[derive(Debug, Default, Clone, Copy)]
 pub enum SettingsErrorCodes {
@@ -84,7 +83,7 @@ impl fmt::Display for SettingsErrorCodes {
 }
 
 /// # SettingsError
-/// 
+///
 /// Implements a standard error type for all agent related errors
 /// includes the error code (`SettingsErrorCodes`) and a message
 #[derive(Debug, Default)]
@@ -109,9 +108,8 @@ impl std::fmt::Display for SettingsError {
     }
 }
 
-
 /// # Reads Settings path from arg
-/// 
+///
 /// Reads the `-s` or `--settings` argument for the path
 pub fn read_settings_path_from_args() -> Option<String> {
     let args: Vec<String> = env::args().collect();
@@ -122,15 +120,17 @@ pub fn read_settings_path_from_args() -> Option<String> {
     None
 }
 
-/// # Reads Settings YML 
-/// 
+/// # Reads Settings YML
+///
 /// Reads the `settings.yml` and parsers to AgentSettings
-/// 
+///
 /// **Important**: Ensure all fields are present in the yml due to strict parsing
 pub fn read_settings_yml() -> Result<AgentSettings> {
     // Add schema validator for yml
-    let mut file_path = PathBuf::from(std::env::var("MECHA_AGENT_SETTINGS_PATH")
-        .unwrap_or(String::from("~/.mecha/agent/settings.yml"))); // Get path of the library
+    let mut file_path = PathBuf::from(
+        std::env::var("MECHA_AGENT_SETTINGS_PATH")
+            .unwrap_or(String::from("~/.mecha/agent/settings.yml")),
+    ); // Get path of the library
 
     // TODO: handle semver version support
 
@@ -152,7 +152,10 @@ pub fn read_settings_yml() -> Result<AgentSettings> {
             // TODO: add capture
             bail!(SettingsError::new(
                 SettingsErrorCodes::ReadError,
-                format!("error read the settings.yml in the path - {}", e.to_string()),
+                format!(
+                    "error read the settings.yml in the path - {}",
+                    e.to_string()
+                ),
             ));
         }
     };
