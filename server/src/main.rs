@@ -5,7 +5,7 @@ use init_tracing_opentelemetry::tracing_subscriber_ext::build_otel_layer;
 use init_tracing_opentelemetry::tracing_subscriber_ext::{
     build_logger_text, build_loglevel_filter_layer,
 };
-use messaging::service::{Messaging, MessagingScope};
+use provisioning::service::Provisioning;
 use sentry_tracing::{self, EventFilter};
 use settings::AgentSettings;
 use tonic::transport::Server;
@@ -60,6 +60,23 @@ async fn init_grpc_server() -> Result<()> {
     Ok(())
 }
 
+async fn init_provisioning_service() -> Result<bool> {
+    println!("init_provisioning_service");
+    let agent_settings = match settings::read_settings_yml() {
+        Ok(v) => v,
+        Err(_e) => AgentSettings::default(),
+    };
+
+    // initiate heartbeat client
+    let provisioning_service = Provisioning::new(agent_settings.provisioning.clone());
+    let code_result = provisioning_service.generate_code();
+    match code_result {
+        Ok(code) => println!("code: {}", code),
+        Err(e) => bail!(e),
+    };
+
+    Ok(true)
+}
 async fn init_heartbeat_client() -> Result<bool> {
     println!("init_heartbeat_client");
     let agent_settings = match settings::read_settings_yml() {
@@ -130,7 +147,10 @@ async fn main() -> Result<()> {
 
     //step2: if not complete, start GRPC and the provisioning service
     if !is_provisioned {
-        //start the provisioning service only
+        match init_provisioning_service().await {
+            Ok(_) => (),
+            Err(e) => bail!(e),
+        };
     } else {
         //step3: if complete, start the heartbeat service
         match init_heartbeat_client().await {
