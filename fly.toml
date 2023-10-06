@@ -1,0 +1,28 @@
+# fly.toml app configuration file generated for mecha-agent-sandbox on 2023-10-03T11:04:38+04:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = "mecha-agent-sandbox"
+primary_region = "dfw"
+kill_signal = "SIGINT"
+kill_timeout = "5s"
+
+[experimental]
+  auto_rollback = true
+
+[build]
+
+[env]
+  PRIMARY_REGION = "dfw"
+
+# GRPC
+[[services]]
+  internal_port = 3001
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["tls"]
+    port = "443"
+    [services.ports.tls_options]
+    alpn = ["h2"]

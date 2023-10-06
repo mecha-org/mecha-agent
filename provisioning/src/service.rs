@@ -66,7 +66,7 @@ impl Provisioning {
 
         let code: String = thread_rng()
             .sample_iter(&Alphanumeric)
-            .take(8)
+            .take(6)
             .map(char::from)
             .collect();
 

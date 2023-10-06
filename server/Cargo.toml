@@ -10,8 +10,13 @@ homepage.workspace = true
 [dependencies]
 provisioning = { path = "../provisioning" }
 messaging = { path = "../messaging" }
+heartbeat = { path = "../heartbeat" }
 settings = { path = "../commons/settings" }
+<<<<<<< HEAD
 telemetry = { path = "../telemetry" }
+=======
+identity = { path = "../identity" }
+>>>>>>> fbd1b84f77bc5a5180ec7b70b7232f39a077ac30
 axum = "0.6.17"
 axum-macros = "0.3.8"
 tokio = { version = "1.27.0", features = ["full"] }
