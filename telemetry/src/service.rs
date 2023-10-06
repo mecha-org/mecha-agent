@@ -46,7 +46,6 @@ impl TelemetryService {
         }
     }
 
-
     pub async fn start_telemetry(self) {
         // let _ = self.clone().messaging_init().await;
         let _ = self.clone().telemetry_init();
@@ -58,16 +57,17 @@ impl TelemetryService {
         if self.settings.collect.user {
             match self
                 .messaging_client
-                .publish("telemetry.metrics", content)
+                .publish("devices.12.telemetry.metrics", content)
                 .await
             {
                 Ok(_) => {
+                    println!("successfully sent metrics");
                     return Ok("Success".to_string());
                 }
                 Err(e) => {
                     bail!(TelemetryError::new(
                         TelemetryErrorCodes::MessageSentFailed,
-                        format!("Failed to send message - {}", e),
+                        format!("Failed to send message metrics - {}", e),
                         true
                     ))
                 }
@@ -85,13 +85,10 @@ impl TelemetryService {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "user_logs", "init");
         if self.settings.collect.user {
-            match self
-                .messaging_client
-                .publish("telemetry.logs", content)
-                .await
-            {
+            match self.messaging_client.publish("device1", content).await {
                 Ok(_) => {
                     tracing::info!(trace_id, task = "user_logs", "User logs sent successfully");
+                    println!("successfully sent logs");
                     return Ok("Success".to_string());
                 }
                 Err(e) => {
@@ -111,13 +108,13 @@ impl TelemetryService {
         }
     }
 
-    pub async fn user_trace( self, content: Bytes) -> Result<String> {
+    pub async fn user_trace(self, content: Bytes) -> Result<String> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "user_trace", "init");
         if self.settings.collect.user {
             match self
                 .messaging_client
-                .publish("telemetry.trace", content)
+                .publish("devices.12.telemetry.trace", content)
                 .await
             {
                 Ok(_) => {
@@ -146,12 +143,13 @@ impl TelemetryService {
             Err(e) => AgentSettings::default().messaging,
         };
 
-        let mut   messaging_client: Messaging = Messaging::new(MessagingScope::System, messaging_settings.system.enabled);
-        let _  = match messaging_client.connect().await {
+        let mut messaging_client: Messaging =
+            Messaging::new(MessagingScope::System, messaging_settings.system.enabled);
+        let e = match messaging_client.connect().await {
             Ok(s) => Ok(s),
-            Err(e) => Err(false)
-             // TODO: dont stop the agent but add re-connection with exponential backoff
+            Err(e) => Err(false), // TODO: dont stop the agent but add re-connection with exponential backoff
         };
+        println!("client{:?}", e);
         Self {
             settings: settings,
             messaging_client: messaging_client,

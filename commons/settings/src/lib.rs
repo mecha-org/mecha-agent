@@ -3,17 +3,12 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use dotenv::dotenv;
-pub mod messaging;
-pub mod provisioning;
-pub mod telemetry;
-
 use serde::{Deserialize, Serialize};
 use std::{env, fmt, fs::File, path::PathBuf};
 use tracing::{error, info};
-
-use crate::{messaging::MessagingSettings, provisioning::ProvisioningSettings};
 pub mod messaging;
 pub mod provisioning;
+pub mod telemetry;
 
 /// Agent Settings - Struct corresponding to the settings.yml schema
 #[derive(Debug, Deserialize, Serialize, Clone)]
