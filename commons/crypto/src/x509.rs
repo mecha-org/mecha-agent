@@ -2,7 +2,13 @@ use crate::errors::{CryptoError, CryptoErrorCodes};
 use anyhow::{bail, Result};
 use openssl::{pkey::PKey, sign::Signer, x509::X509};
 use serde::{Deserialize, Serialize};
-use std::{fmt, fs::File, io::Read, process::Command};
+use std::{
+    fmt,
+    fs::File,
+    io::Read,
+    path::{Path, PathBuf},
+    process::Command,
+};
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 /**
@@ -74,6 +80,19 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
         //     true
         // ))
     };
+
+    // Check if the directory of file_path exists, and create it if it doesn't.
+    let parent_directory = match Path::new(&file_path).parent() {
+        Some(v) => v,
+        None => bail!(CryptoError::new(
+            CryptoErrorCodes::FilePathError,
+            format!("invalid file path - {}", file_path),
+            true
+        )),
+    };
+    if !parent_directory.exists() {
+        let _res = safe_create_dir(&file_path);
+    }
 
     // Command: openssl ecparam -name secp521r1 -genkey -noout -out key.pem
     let output_result = Command::new("openssl")
@@ -302,4 +321,24 @@ pub fn get_subject_name(public_key_path: &str) -> Result<String> {
             ))
         }
     };
+}
+fn safe_create_dir(path: &str) -> Result<bool> {
+    let trace_id = find_current_trace_id();
+    tracing::info!(trace_id, task = "safe_create_dir", "init",);
+    let path = Path::new(&path);
+
+    // Extract the file name (the last component of the path)
+    if let Some(file_name) = path.file_name() {
+        if let Some(_file_name_str) = file_name.to_str() {
+            let mut dir_to_crate = PathBuf::from(path);
+            //Last component will be pooled out
+            dir_to_crate.pop();
+            match mkdirp::mkdirp(&dir_to_crate) {
+                Ok(p) => p,
+                Err(err) => bail!(err),
+            };
+        }
+    }
+    tracing::info!(trace_id, task = "safe_create_dir", "file path created",);
+    Ok(true)
 }
