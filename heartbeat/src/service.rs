@@ -64,9 +64,9 @@ impl Heatbeat {
                 let mut interval = tokio::time::interval(Duration::from_secs(120));
                 loop {
                     interval.tick().await; // This should go first.
-                    let data_to_publish = chrono::Utc::now().to_rfc3339();
+                    let current_utc_time = chrono::Utc::now().to_rfc3339();
                     let publish_payload = HeartbeatPublishPayload {
-                        time: data_to_publish,
+                        time: current_utc_time,
                         device_id: subject_name.to_string(),
                     };
 
