@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::{bail, Result};
 use heartbeat::service::Heatbeat;
 use identity::service::Identity;
@@ -78,13 +80,11 @@ async fn init_provisioning_service() -> Result<bool> {
     Ok(true)
 }
 async fn init_heartbeat_client() -> Result<bool> {
-    println!("init_heartbeat_client");
     let agent_settings = match settings::read_settings_yml() {
         Ok(v) => v,
         Err(_e) => AgentSettings::default(),
     };
 
-    println!("agent_settings: completed");
     // return none if system messaging is disabled
     if !agent_settings.messaging.system.enabled {
         info!(
@@ -140,7 +140,7 @@ async fn main() -> Result<()> {
 
     //step1: check if provisioning is complete
     let identity_client = Identity::new(settings.clone());
-    let is_provisioned = match identity_client.is_device_provisioned() {
+    let mut is_provisioned = match identity_client.is_device_provisioned() {
         Ok(v) => v,
         Err(e) => bail!(e),
     };
@@ -151,13 +151,25 @@ async fn main() -> Result<()> {
             Ok(_) => (),
             Err(e) => bail!(e),
         };
-    } else {
-        //step3: if complete, start the heartbeat service
-        match init_heartbeat_client().await {
-            Ok(_) => (),
-            Err(e) => bail!(e),
-        };
     }
+    let _result = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(120));
+        while !is_provisioned {
+            interval.tick().await; // This should go first.
+            is_provisioned = match identity_client.is_device_provisioned() {
+                Ok(v) => v,
+                Err(e) => bail!(e),
+            };
+            if is_provisioned {
+                match init_heartbeat_client().await {
+                    Ok(_) => (),
+                    Err(e) => bail!(e),
+                };
+            }
+        }
+        Ok(())
+    });
+
     //init the GRPC server
     match init_grpc_server().await {
         Ok(_) => (),
