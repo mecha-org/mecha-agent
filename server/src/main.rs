@@ -5,10 +5,11 @@ use init_tracing_opentelemetry::tracing_subscriber_ext::build_otel_layer;
 use init_tracing_opentelemetry::tracing_subscriber_ext::{
     build_logger_text, build_loglevel_filter_layer,
 };
+use messaging::service::{Messaging, MessagingScope};
 use provisioning::service::Provisioning;
 use sentry_tracing::{self, EventFilter};
 use settings::AgentSettings;
-use std::{thread, time};
+use telemetry::errors::{TelemetryError, TelemetryErrorCodes};
 use telemetry::service::TelemetryService;
 use tonic::transport::Server;
 use tracing::info;
@@ -46,21 +47,40 @@ use crate::services::telemetry::{
 
 async fn init_grpc_server() -> Result<()> {
     // TODO: pass settings from main()
-    let server_settings = match settings::read_settings_yml() {
-        Ok(v) => v.server,
-        Err(_e) => AgentSettings::default().server,
+    let settings = match settings::read_settings_yml() {
+        Ok(v) => v,
+        Err(_e) => AgentSettings::default(),
     };
+
+    //initiate messaging service and publish a message
+    let mut messaging_client =
+        Messaging::new(MessagingScope::System, settings.messaging.system.enabled);
+    let _ = match messaging_client.connect().await {
+        Ok(s) => s,
+        Err(e) => bail!(TelemetryError::new(
+            TelemetryErrorCodes::InitMessagingClientError,
+            format!("error initializing messaging client - {}", e),
+            true
+        )),
+    };
+
     let addr = format!(
         "{}:{}",
-        server_settings.url.unwrap_or(String::from("127.0.0.1")),
-        server_settings.port
+        settings.server.url.unwrap_or(String::from("127.0.0.1")),
+        settings.server.port
     )
     .parse()
     .unwrap();
     let provisioning_service = ProvisioningServiceHandler::default();
-    let trace_service = TelemetryTraceHandler::default();
-    let log_service = TelemetryLogsHandler::default();
-    let metrics_service = TelemetryMetricsHandler::default();
+    let trace_service = TelemetryTraceHandler {
+        messaging_client: messaging_client.clone(),
+    };
+    let log_service = TelemetryLogsHandler {
+        messaging_client: messaging_client.clone(),
+    };
+    let metrics_service = TelemetryMetricsHandler {
+        messaging_client: messaging_client.clone(),
+    };
 
     info!(
         task = "init_grpc_server",
@@ -128,7 +148,7 @@ async fn init_heartbeat_client() -> Result<bool> {
     Ok(true)
 }
 
-async fn init_telemtry() -> Result<Option<TelemetryService>> {
+async fn init_telemtry() {
     let telemetry_settings = match settings::read_settings_yml() {
         Ok(v) => v.telemetry,
         Err(_e) => AgentSettings::default().telemetry,
@@ -141,16 +161,7 @@ async fn init_telemtry() -> Result<Option<TelemetryService>> {
         );
     }
 
-    let telemetry_service = TelemetryService::new(telemetry_settings).await;
-
-    tokio::task::spawn({
-        let telemetry_service = telemetry_service.clone();
-        async move {
-            telemetry_service.start_telemetry().await;
-            Ok::<(), anyhow::Error>(())
-        }
-    });
-    Ok(Some(telemetry_service))
+    let _ = TelemetryService::telemetry_init(telemetry_settings);
 }
 
 #[tokio::main]
@@ -210,10 +221,7 @@ async fn main() -> Result<()> {
     }
 
     // `init the telemetryService
-    match init_telemtry().await {
-        Ok(_) => (),
-        Err(e) => bail!(e),
-    };
+    init_telemtry().await;
     //init the GRPC server
     match init_grpc_server().await {
         Ok(_) => (),

@@ -24,17 +24,16 @@ pub struct TelemetryResponseGeneric<T> {
 #[derive(Clone)]
 pub struct TelemetryService {
     pub settings: TelemetrySettings,
-    pub messaging_client: Messaging,
 }
 
 impl TelemetryService {
-    pub fn telemetry_init(self) -> Result<String> {
+    pub fn telemetry_init(settings: TelemetrySettings) -> Result<String> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "Telemetry", "init");
-        if self.settings.enabled {
-            let _ = Command::new(self.settings.otel_collector.bin)
+        if settings.enabled {
+            let _ = Command::new(settings.otel_collector.bin)
                 .arg("--config")
-                .arg(self.settings.otel_collector.conf)
+                .arg(settings.otel_collector.conf)
                 .spawn();
             Ok("success".to_string())
         } else {
@@ -46,17 +45,11 @@ impl TelemetryService {
         }
     }
 
-    pub async fn start_telemetry(self) {
-        // let _ = self.clone().messaging_init().await;
-        let _ = self.clone().telemetry_init();
-    }
-
-    pub async fn user_metrics(self, content: Bytes) -> Result<String> {
+    pub async fn user_metrics(self, content: Bytes, messaging_client: Messaging) -> Result<String> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "user_metrics", "init");
         if self.settings.collect.user {
-            match self
-                .messaging_client
+            match messaging_client
                 .publish("devices.12.telemetry.metrics", content)
                 .await
             {
@@ -81,11 +74,14 @@ impl TelemetryService {
         }
     }
 
-    pub async fn user_logs(self, content: Bytes) -> Result<String> {
+    pub async fn user_logs(self, content: Bytes, messaging_client: Messaging) -> Result<String> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "user_logs", "init");
         if self.settings.collect.user {
-            match self.messaging_client.publish("device1", content).await {
+            match messaging_client
+                .publish("device.1234.telemetry.logs", content)
+                .await
+            {
                 Ok(_) => {
                     tracing::info!(trace_id, task = "user_logs", "User logs sent successfully");
                     println!("successfully sent logs");
@@ -108,12 +104,11 @@ impl TelemetryService {
         }
     }
 
-    pub async fn user_trace(self, content: Bytes) -> Result<String> {
+    pub async fn user_trace(self, content: Bytes, messaging_client: Messaging) -> Result<String> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "user_trace", "init");
         if self.settings.collect.user {
-            match self
-                .messaging_client
+            match messaging_client
                 .publish("devices.12.telemetry.trace", content)
                 .await
             {
@@ -138,21 +133,6 @@ impl TelemetryService {
     }
 
     pub async fn new(settings: TelemetrySettings) -> Self {
-        let messaging_settings = match settings::read_settings_yml() {
-            Ok(v) => v.messaging,
-            Err(e) => AgentSettings::default().messaging,
-        };
-
-        let mut messaging_client: Messaging =
-            Messaging::new(MessagingScope::System, messaging_settings.system.enabled);
-        let e = match messaging_client.connect().await {
-            Ok(s) => Ok(s),
-            Err(e) => Err(false), // TODO: dont stop the agent but add re-connection with exponential backoff
-        };
-        println!("client{:?}", e);
-        Self {
-            settings: settings,
-            messaging_client: messaging_client,
-        }
+        Self { settings: settings }
     }
 }

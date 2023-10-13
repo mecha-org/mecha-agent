@@ -1,5 +1,5 @@
-use std::fmt;
 use sentry_anyhow::capture_anyhow;
+use std::fmt;
 use tracing::error;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
@@ -8,14 +8,21 @@ pub enum TelemetryErrorCodes {
     #[default]
     DataCollectionDisabled,
     MessageSentFailed,
-    
+    InitMessagingClientError,
 }
 
 impl fmt::Display for TelemetryErrorCodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TelemetryErrorCodes::DataCollectionDisabled => write!(f, "TelemetryErrorCodes: DataCollectionDisabled"),
-            TelemetryErrorCodes::MessageSentFailed => write!(f, "TelemetryErrorCodes: MessageSentFailed"),
+            TelemetryErrorCodes::DataCollectionDisabled => {
+                write!(f, "TelemetryErrorCodes: DataCollectionDisabled")
+            }
+            TelemetryErrorCodes::MessageSentFailed => {
+                write!(f, "TelemetryErrorCodes: MessageSentFailed")
+            }
+            TelemetryErrorCodes::InitMessagingClientError => {
+                write!(f, "TelemetryErrorCodes: InitMessagingClientError")
+            }
         }
     }
 }
@@ -28,7 +35,11 @@ pub struct TelemetryError {
 
 impl std::fmt::Display for TelemetryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TelemetryErrorCodes:(code: {:?}, message: {})", self.code, self.message)
+        write!(
+            f,
+            "TelemetryErrorCodes:(code: {:?}, message: {})",
+            self.code, self.message
+        )
     }
 }
 
@@ -49,4 +60,3 @@ impl TelemetryError {
         Self { code, message }
     }
 }
-
