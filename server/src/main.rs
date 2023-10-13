@@ -151,6 +151,11 @@ async fn main() -> Result<()> {
             Ok(_) => (),
             Err(e) => bail!(e),
         };
+    } else {
+        match init_heartbeat_client().await {
+            Ok(_) => (),
+            Err(e) => bail!(e),
+        };
     }
     let _result = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(120));
