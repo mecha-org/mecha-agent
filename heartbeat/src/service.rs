@@ -58,7 +58,7 @@ impl Heatbeat {
         // generate sha256 digest of subject name
         let topic_to_suscribe = format!("device.{}.heartbeat", digest(subject_name.to_string()));
 
-        // subscribe to the system topic every 2 minutes
+        // subscribe to the system topic every 1 minutes
         let result: tokio::task::JoinHandle<std::result::Result<bool, anyhow::Error>> =
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(60));
