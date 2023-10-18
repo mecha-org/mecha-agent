@@ -61,7 +61,7 @@ impl Heatbeat {
         // subscribe to the system topic every 2 minutes
         let result: tokio::task::JoinHandle<std::result::Result<bool, anyhow::Error>> =
             tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(120));
+                let mut interval = tokio::time::interval(Duration::from_secs(60));
                 loop {
                     interval.tick().await; // This should go first.
                     let current_utc_time = chrono::Utc::now();
