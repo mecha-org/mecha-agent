@@ -4,44 +4,46 @@ use tracing::error;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 #[derive(Debug, Default, Clone, Copy)]
-pub enum HeatbeatErrorCodes {
+pub enum KeyValueStoreErrorCodes {
     #[default]
     UnknownError,
-    InitMessagingClientError,
+    DbInitializationError,
 }
 
-impl fmt::Display for HeatbeatErrorCodes {
+impl fmt::Display for KeyValueStoreErrorCodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            HeatbeatErrorCodes::UnknownError => write!(f, "HeatbeatErrorCodes: UnknownError"),
-            HeatbeatErrorCodes::InitMessagingClientError => {
-                write!(f, "HeatbeatErrorCodes: InitMessagingClientError")
+            KeyValueStoreErrorCodes::UnknownError => {
+                write!(f, "KeyValueStoreErrorCodes: UnknownError")
+            }
+            KeyValueStoreErrorCodes::DbInitializationError => {
+                write!(f, "KeyValueStoreErrorCodes: DbInitializationError")
             }
         }
     }
 }
 
 #[derive(Debug)]
-pub struct HeatbeatError {
-    pub code: HeatbeatErrorCodes,
+pub struct KeyValueStoreError {
+    pub code: KeyValueStoreErrorCodes,
     pub message: String,
 }
 
-impl std::fmt::Display for HeatbeatError {
+impl std::fmt::Display for KeyValueStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "HeatbeatErrorCodes:(code: {:?}, message: {})",
+            "KeyValueStoreErrorCodes:(code: {:?}, message: {})",
             self.code, self.message
         )
     }
 }
 
-impl HeatbeatError {
-    pub fn new(code: HeatbeatErrorCodes, message: String, capture_error: bool) -> Self {
+impl KeyValueStoreError {
+    pub fn new(code: KeyValueStoreErrorCodes, message: String, capture_error: bool) -> Self {
         let trace_id = find_current_trace_id();
         error!(
-            target = "heartbeat",
+            target = "key_value_store",
             "error: (code: {:?}, message: {})", code, message
         );
         if capture_error {

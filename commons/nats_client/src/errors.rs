@@ -1,5 +1,5 @@
-use std::fmt;
 use sentry_anyhow::capture_anyhow;
+use std::fmt;
 use tracing::error;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
@@ -12,19 +12,33 @@ pub enum NatsClientErrorCodes {
     ClientNotConnectedError,
     ClientDisconnectedError,
     PublishError,
-    SubscribeError
+    SubscribeError,
+    GetStreamError,
 }
 
 impl fmt::Display for NatsClientErrorCodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             NatsClientErrorCodes::UnknownError => write!(f, "NatsClientErrorCodes: UnknownError"),
-            NatsClientErrorCodes::ClientConnectError => write!(f, "NatsClientErrorCodes: ClientConnectError"),
-            NatsClientErrorCodes::ClientUninitializedError => write!(f, "NatsClientErrorCodes: ClientUninitializedError"),
-            NatsClientErrorCodes::ClientNotConnectedError => write!(f, "NatsClientErrorCodes: ClientNotConnectedError"),
-            NatsClientErrorCodes::ClientDisconnectedError => write!(f, "NatsClientErrorCodes: ClientDisconnectedError"),
+            NatsClientErrorCodes::ClientConnectError => {
+                write!(f, "NatsClientErrorCodes: ClientConnectError")
+            }
+            NatsClientErrorCodes::ClientUninitializedError => {
+                write!(f, "NatsClientErrorCodes: ClientUninitializedError")
+            }
+            NatsClientErrorCodes::ClientNotConnectedError => {
+                write!(f, "NatsClientErrorCodes: ClientNotConnectedError")
+            }
+            NatsClientErrorCodes::ClientDisconnectedError => {
+                write!(f, "NatsClientErrorCodes: ClientDisconnectedError")
+            }
             NatsClientErrorCodes::PublishError => write!(f, "NatsClientErrorCodes: PublishError"),
-            NatsClientErrorCodes::SubscribeError => write!(f, "NatsClientErrorCodes: SubscribeError"),
+            NatsClientErrorCodes::SubscribeError => {
+                write!(f, "NatsClientErrorCodes: SubscribeError")
+            }
+            NatsClientErrorCodes::GetStreamError => {
+                write!(f, "NatsClientErrorCodes: GetStreamError")
+            }
         }
     }
 }
@@ -37,7 +51,11 @@ pub struct NatsClientError {
 
 impl std::fmt::Display for NatsClientError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "NatsClientErrorCodes:(code: {:?}, message: {})", self.code, self.message)
+        write!(
+            f,
+            "NatsClientErrorCodes:(code: {:?}, message: {})",
+            self.code, self.message
+        )
     }
 }
 

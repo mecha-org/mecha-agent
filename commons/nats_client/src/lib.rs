@@ -28,7 +28,7 @@ impl NatsClient {
         }
     }
 
-    pub async fn connect(&mut self, token: &str) -> Result<bool> {
+    pub async fn connect(&mut self, token: &str, inbox_prefix: &str) -> Result<bool> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, target = "nats_client", task = "connect", "init");
 
@@ -40,12 +40,12 @@ impl NatsClient {
 
         // connect to nats
         let key_pair = self.user_key_pair.clone();
-
         self.client = match async_nats::ConnectOptions::new()
             .jwt(String::from(token), move |nonce| {
                 let signing_key = KeyPair::from_seed(&key_pair.seed().unwrap()).unwrap();
                 async move { signing_key.sign(&nonce).map_err(async_nats::AuthError::new) }
             })
+            .custom_inbox_prefix(inbox_prefix)
             .connect(&self.address)
             .await
         {
@@ -70,7 +70,7 @@ impl NatsClient {
         Ok(true)
     }
 
-    fn get_connected_client(&self) -> Result<&async_nats::Client> {
+    pub fn get_connected_client(&self) -> Result<&async_nats::Client> {
         let client = match &self.client {
             Some(c) => c,
             None => bail!(NatsClientError::new(

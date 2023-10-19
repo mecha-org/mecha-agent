@@ -4,6 +4,7 @@ use std::{env, fmt, fs::File, path::PathBuf};
 use tracing::{error, info};
 
 use crate::{messaging::MessagingSettings, provisioning::ProvisioningSettings};
+pub mod device_settings;
 pub mod messaging;
 pub mod provisioning;
 
