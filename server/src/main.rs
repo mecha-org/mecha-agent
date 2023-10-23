@@ -175,7 +175,7 @@ async fn main() -> Result<()> {
         };
     }
     let _result = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(120));
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
         while !is_provisioned {
             interval.tick().await; // This should go first.
             is_provisioned = match identity_client.is_device_provisioned() {
