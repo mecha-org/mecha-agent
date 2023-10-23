@@ -5,7 +5,7 @@ import "google/protobuf/struct.proto";
 package device_settings;
 
 service DeviceSettingService {
-  rpc get_settings (GetSettingRequest) returns (DeviceSettingResponse);
+  rpc get_device_settings (GetSettingRequest) returns (DeviceSettingResponse);
 }
 
 message DeviceSettingResponse {

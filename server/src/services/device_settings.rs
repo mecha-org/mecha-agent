@@ -20,7 +20,7 @@ fn new_device_setting_service() -> DeviceSettings {
 
 #[tonic::async_trait]
 impl DeviceSettingService for DeviceSettingServiceHandler {
-    async fn get_settings(
+    async fn get_device_settings(
         &self,
         request: Request<GetSettingRequest>,
     ) -> Result<Response<DeviceSettingResponse>, Status> {
