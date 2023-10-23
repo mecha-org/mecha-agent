@@ -19,3 +19,4 @@ sentry = { version = "0.31.0",features = ["backtrace", "anyhow"] }
 sentry-anyhow = { version= "0.31.1", features = ["backtrace"]}
 tracing = "0.1"
 tracing-opentelemetry-instrumentation-sdk = "0.12.0"
+mkdirp = "1.0.0"

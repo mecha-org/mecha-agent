@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use device_settings::DeviceSettings;
 use serde::{Deserialize, Serialize};
 use std::{env, fmt, fs::File, path::PathBuf};
 use tracing::{error, info};
@@ -15,6 +16,7 @@ pub struct AgentSettings {
     pub server: ServerSettings,
     pub provisioning: ProvisioningSettings,
     pub messaging: MessagingSettings,
+    pub device_settings: DeviceSettings,
 }
 
 impl Default for AgentSettings {
@@ -24,6 +26,7 @@ impl Default for AgentSettings {
             server: ServerSettings::default(),
             provisioning: ProvisioningSettings::default(),
             messaging: MessagingSettings::default(),
+            device_settings: DeviceSettings::default(),
         }
     }
 }

@@ -28,3 +28,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-opentelemetry-instrumentation-sdk = "0.12.0"
 tokio = { version = "1.27.0", features = ["full"] }
 futures = "0.3.28"
+hyper_serde = "0.13.2"

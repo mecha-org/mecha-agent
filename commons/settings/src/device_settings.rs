@@ -2,6 +2,12 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct DeviceSettings {
+    pub storage: StorageSettings,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct StorageSettings {
+    #[serde(rename = "type")]
     pub r#type: String,
     pub file_path: String,
 }
@@ -9,8 +15,10 @@ pub struct DeviceSettings {
 impl Default for DeviceSettings {
     fn default() -> Self {
         Self {
-            r#type: String::from("file"),
-            file_path: String::from("~/.mecha/agent/storage/key_value_store"),
+            storage: StorageSettings {
+                r#type: "file".to_string(),
+                file_path: "/tmp".to_string(),
+            },
         }
     }
 }

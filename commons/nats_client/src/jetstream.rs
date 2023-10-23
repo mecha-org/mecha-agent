@@ -32,17 +32,10 @@ impl JetStreamClient {
     }
     pub async fn create_consumer(
         &self,
-        stream: String,
+        stream: Stream,
         consumer: Option<String>,
-        subject: String,
     ) -> Result<Consumer<Config>> {
-        // Create a JetStream instance
-        let jetstream = match self.get_stream(stream).await {
-            Ok(s) => s,
-            Err(e) => bail!(e),
-        };
-
-        let consumer = match jetstream
+        let consumer = match stream
             .get_or_create_consumer(
                 "consumer",
                 async_nats::jetstream::consumer::pull::Config {
@@ -53,7 +46,11 @@ impl JetStreamClient {
             .await
         {
             Ok(s) => s,
-            Err(e) => bail!(e),
+            Err(e) => bail!(NatsClientError::new(
+                NatsClientErrorCodes::CreateConsumerError,
+                format!("Error creating consumer - {}", e),
+                true
+            )),
         };
         Ok(consumer)
     }

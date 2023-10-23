@@ -14,6 +14,7 @@ pub enum NatsClientErrorCodes {
     PublishError,
     SubscribeError,
     GetStreamError,
+    CreateConsumerError,
 }
 
 impl fmt::Display for NatsClientErrorCodes {
@@ -38,6 +39,9 @@ impl fmt::Display for NatsClientErrorCodes {
             }
             NatsClientErrorCodes::GetStreamError => {
                 write!(f, "NatsClientErrorCodes: GetStreamError")
+            }
+            NatsClientErrorCodes::CreateConsumerError => {
+                write!(f, "NatsClientErrorCodes: CreateConsumerError")
             }
         }
     }

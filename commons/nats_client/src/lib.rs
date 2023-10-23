@@ -8,6 +8,7 @@ use tracing::info;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 pub mod errors;
+pub mod jetstream;
 
 #[derive(Clone)]
 pub struct NatsClient {
@@ -38,7 +39,7 @@ impl NatsClient {
             "connecting to nats"
         );
 
-        // connect to nats
+        // Connect to nats
         let key_pair = self.user_key_pair.clone();
         self.client = match async_nats::ConnectOptions::new()
             .jwt(String::from(token), move |nonce| {

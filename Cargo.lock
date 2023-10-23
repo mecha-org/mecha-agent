@@ -76,7 +76,7 @@ dependencies = [
  "serde_nanos",
  "serde_repr",
  "thiserror",
- "time",
+ "time 0.3.28",
  "tokio",
  "tokio-retry",
  "tokio-rustls",
@@ -322,6 +322,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28c122c3980598d243d63d9a704629a2d748d101f278052ff068be5a4423ab6f"
 
 [[package]]
+name = "cookie"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3cd91cf61412820176e137621345ee43b3f4423e589e7ae4e50d601d93e35ef8"
+dependencies = [
+ "time 0.3.28",
+ "version_check",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -500,6 +510,7 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "futures",
+ "hyper_serde",
  "key_value_store",
  "messaging",
  "nats_client",
@@ -781,7 +792,7 @@ checksum = "be4136b2a15dd319360be1c07d9933517ccf0be8f16bf62a3bee4f0d618df427"
 dependencies = [
  "cfg-if",
  "libc",
- "wasi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
 ]
 
 [[package]]
@@ -820,6 +831,30 @@ name = "hashbrown"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
+
+[[package]]
+name = "headers"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06683b93020a07e3dbcf5f8c0f6d40080d725bea7936fc01ad345c01b97dc270"
+dependencies = [
+ "base64 0.21.4",
+ "bytes",
+ "headers-core",
+ "http",
+ "httpdate",
+ "mime",
+ "sha1",
+]
+
+[[package]]
+name = "headers-core"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
+dependencies = [
+ "http",
+]
 
 [[package]]
 name = "heartbeat"
@@ -971,6 +1006,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper_serde"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bf2f19b673699cefa20a2e22c6d5bcefa3af7e60b8fe9cf63d0f1f21a23b6e1"
+dependencies = [
+ "cookie",
+ "headers",
+ "http",
+ "hyper",
+ "mime",
+ "serde",
+ "serde_bytes",
+ "time 0.1.45",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1112,6 +1163,7 @@ name = "key_value_store"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "mkdirp",
  "sentry",
  "sentry-anyhow",
  "sentry-tracing",
@@ -1184,6 +1236,7 @@ dependencies = [
  "axum-macros",
  "axum-tracing-opentelemetry",
  "bincode",
+ "device_settings",
  "dotenv",
  "futures",
  "heartbeat",
@@ -1275,7 +1328,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "927a765cd3fc26206e66b296465fa9d3e5ab003e651c1b3c060e7956d96b19d2"
 dependencies = [
  "libc",
- "wasi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys",
 ]
 
@@ -2321,7 +2374,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "time",
+ "time 0.3.28",
  "url",
  "uuid",
 ]
@@ -2333,6 +2386,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf9e0fcba69a370eed61bcf2b728575f726b50b55cba78064753d708ddc7549e"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab33ec92f677585af6d88c65593ae2375adde54efdbf16d597f2cbc7a6d368ff"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -2431,6 +2493,17 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry-instrumentation-sdk 0.12.0",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "sha1"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3bf829a2d51ab4a5ddf1352d8470c140cadc8301b2ae1789db023f01cedd6ba"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "digest",
 ]
 
 [[package]]
@@ -2638,6 +2711,17 @@ checksum = "3fdd6f064ccff2d6567adcb3873ca630700f00b5ad3f060c25b5dcfd9a4ce152"
 dependencies = [
  "cfg-if",
  "once_cell",
+]
+
+[[package]]
+name = "time"
+version = "0.1.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b797afad3f312d1c66a56d11d0316f916356d11bd158fbc6ca6389ff6bf805a"
+dependencies = [
+ "libc",
+ "wasi 0.10.0+wasi-snapshot-preview1",
+ "winapi",
 ]
 
 [[package]]
@@ -3187,6 +3271,12 @@ checksum = "bfa7760aed19e106de2c7c0b581b509f2f25d3dacaf737cb82ac61bc6d760b0e"
 dependencies = [
  "try-lock",
 ]
+
+[[package]]
+name = "wasi"
+version = "0.10.0+wasi-snapshot-preview1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
 
 [[package]]
 name = "wasi"

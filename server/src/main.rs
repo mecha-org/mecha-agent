@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{bail, Result};
+use device_settings::services::DeviceSettings;
 use heartbeat::service::Heatbeat;
 use identity::service::Identity;
 use init_tracing_opentelemetry::tracing_subscriber_ext::build_otel_layer;
@@ -79,7 +80,7 @@ async fn init_provisioning_service() -> Result<bool> {
 
     Ok(true)
 }
-async fn init_heartbeat_client() -> Result<bool> {
+async fn init_heartbeat_service() -> Result<bool> {
     let agent_settings = match settings::read_settings_yml() {
         Ok(v) => v,
         Err(_e) => AgentSettings::default(),
@@ -88,7 +89,7 @@ async fn init_heartbeat_client() -> Result<bool> {
     // return none if system messaging is disabled
     if !agent_settings.messaging.system.enabled {
         info!(
-            target = "init_heartbeat_client",
+            target = "init_heartbeat_service",
             "system messaging client is disabled"
         );
         return Ok(false);
@@ -101,6 +102,18 @@ async fn init_heartbeat_client() -> Result<bool> {
     Ok(true)
 }
 
+async fn init_device_settings_service() -> Result<bool> {
+    let agent_settings = match settings::read_settings_yml() {
+        Ok(v) => v,
+        Err(_e) => AgentSettings::default(),
+    };
+
+    // initiate heartbeat client
+    let device_settings_service = DeviceSettings::new(agent_settings.clone());
+    let _ = device_settings_service.start().await;
+
+    Ok(true)
+}
 #[tokio::main]
 async fn main() -> Result<()> {
     let settings = match settings::read_settings_yml() {
@@ -152,7 +165,11 @@ async fn main() -> Result<()> {
             Err(e) => bail!(e),
         };
     } else {
-        match init_heartbeat_client().await {
+        match init_heartbeat_service().await {
+            Ok(_) => (),
+            Err(e) => bail!(e),
+        };
+        match init_device_settings_service().await {
             Ok(_) => (),
             Err(e) => bail!(e),
         };
@@ -166,7 +183,11 @@ async fn main() -> Result<()> {
                 Err(e) => bail!(e),
             };
             if is_provisioned {
-                match init_heartbeat_client().await {
+                match init_heartbeat_service().await {
+                    Ok(_) => (),
+                    Err(e) => bail!(e),
+                };
+                match init_device_settings_service().await {
                     Ok(_) => (),
                     Err(e) => bail!(e),
                 };
