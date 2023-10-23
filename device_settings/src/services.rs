@@ -77,7 +77,6 @@ impl DeviceSettings {
             Err(e) => bail!(e),
         };
 
-        // self.settings.device_settings.storage.file_path.clone()
         let key_value_store =
             match KevValueStoreClient::new(self.settings.device_settings.storage.file_path.clone())
             {
@@ -98,6 +97,7 @@ impl DeviceSettings {
                 true
             )),
         };
+        println!("puller waiting for messages");
         while let Some(Ok(message)) = messages.next().await {
             // Process mesaage
             let add_task_payload: AddTaskRequestPayload =
@@ -165,6 +165,24 @@ impl DeviceSettings {
             "message delivery acknowledged"
         );
         Ok(true)
+    }
+    pub async fn get_settings(&self, key: String) -> Result<String> {
+        println!("key to get settings :{:?}", key);
+        let key_value_store =
+            match KevValueStoreClient::new(self.settings.device_settings.storage.file_path.clone())
+            {
+                Ok(s) => s,
+                Err(e) => bail!(e),
+            };
+        let result = match key_value_store.get(&key) {
+            Ok(s) => s,
+            Err(err) => bail!(err),
+        };
+
+        match result {
+            Some(s) => Ok(s),
+            None => Ok(String::new()),
+        }
     }
 }
 

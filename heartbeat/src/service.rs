@@ -80,10 +80,7 @@ impl Heatbeat {
                         )
                         .await
                     {
-                        Ok(s) => {
-                            println!("published message to topic: {}", topic_to_suscribe);
-                            s
-                        }
+                        Ok(s) => s,
                         Err(e) => bail!(e),
                     };
                 }
