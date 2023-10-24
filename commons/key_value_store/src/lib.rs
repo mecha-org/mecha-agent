@@ -11,7 +11,7 @@ use tracing::info;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 use crate::errors::{KeyValueStoreError, KeyValueStoreErrorCodes};
-static DATABASE_STORE_FIILE_PATH: &str = "~/.mecha/agent/storage/key_value_store";
+static DATABASE_STORE_FIILE_PATH: &str = "~/.mecha/agent/db/settings.bin";
 // Singleton database connection
 lazy_static! {
 
