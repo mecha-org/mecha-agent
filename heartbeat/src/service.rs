@@ -56,7 +56,7 @@ impl Heatbeat {
         };
 
         // generate sha256 digest of subject name
-        let topic_to_suscribe = format!("device.{}.heartbeat", digest(subject_name.to_string()));
+        let topic_to_publish = format!("device.{}.heartbeat", digest(subject_name.to_string()));
 
         // subscribe to the system topic every 1 minutes
         let result: tokio::task::JoinHandle<std::result::Result<bool, anyhow::Error>> =
@@ -75,13 +75,28 @@ impl Heatbeat {
                     let payload_payload_json = json!(publish_payload);
                     let _ = match messaging_client
                         .publish(
-                            &topic_to_suscribe,
+                            &topic_to_publish,
                             Bytes::from(payload_payload_json.to_string()),
                         )
                         .await
                     {
-                        Ok(s) => s,
-                        Err(e) => bail!(e),
+                        Ok(s) => {
+                            tracing::info!(
+                                task = "start",
+                                trace_id = trace_id,
+                                "heartbeat message published"
+                            );
+                            s
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                task = "start",
+                                trace_id = trace_id,
+                                "failed to publish heartbeat message - {}",
+                                e
+                            );
+                            bail!(e)
+                        }
                     };
                 }
             });

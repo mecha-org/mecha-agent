@@ -5,6 +5,7 @@ use nats_client::{Bytes, NatsClient, Subscriber};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use settings::AgentSettings;
+use sha256::digest;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 use crate::errors::{MessagingError, MessagingErrorCodes};
@@ -109,11 +110,17 @@ impl Messaging {
             Err(e) => bail!(e),
         };
 
+        let device_id = match get_subject_name(&self.settings.provisioning.paths.device.cert) {
+            Ok(s) => s,
+            Err(e) => bail!(e),
+        };
+        let inbox_prefix = format!("inbox.{}", digest(device_id));
+
         match self
             .nats_client
             .as_mut()
             .unwrap()
-            .connect(&auth_token)
+            .connect(&auth_token, &inbox_prefix)
             .await
         {
             Ok(c) => c,
@@ -129,7 +136,7 @@ impl Messaging {
      * 2. Signs the nonce using the Device Key
      * 3. Requests the token from the server
      */
-    async fn authenticate(&self) -> Result<String> {
+    pub async fn authenticate(&self) -> Result<String> {
         // Step 1: Get Device ID
         //TODO: Path Check
         let device_id = match get_subject_name(&self.settings.provisioning.paths.device.cert) {
@@ -356,5 +363,22 @@ impl Messaging {
         };
 
         Ok(subscriber)
+    }
+
+    pub async fn get_nats_client(&self) -> Result<&NatsClient> {
+        let trace_id = find_current_trace_id();
+        tracing::trace!(trace_id, task = "connect", "init");
+
+        if self.nats_client.is_none() {
+            bail!(MessagingError::new(
+                MessagingErrorCodes::NatsClientNotInitialized,
+                format!("messaging service initialized without nats client"),
+                true
+            ))
+        }
+
+        let nats_client = self.nats_client.as_ref().unwrap();
+
+        Ok(nats_client)
     }
 }

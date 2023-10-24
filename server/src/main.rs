@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{bail, Result};
+use device_settings::services::DeviceSettings;
 use heartbeat::service::Heatbeat;
 use identity::service::Identity;
 use init_tracing_opentelemetry::tracing_subscriber_ext::build_otel_layer;
@@ -19,10 +20,12 @@ pub mod services;
 
 pub mod agent {
     tonic::include_proto!("provisioning");
+    tonic::include_proto!("device_settings");
 }
-
+use crate::agent::device_setting_service_server::DeviceSettingServiceServer;
 use crate::agent::provisioning_service_server::ProvisioningServiceServer;
 use crate::errors::{AgentServerError, AgentServerErrorCodes};
+use crate::services::device_settings::DeviceSettingServiceHandler;
 use crate::services::provisioning::ProvisioningServiceHandler;
 
 async fn init_grpc_server() -> Result<()> {
@@ -39,6 +42,7 @@ async fn init_grpc_server() -> Result<()> {
     .parse()
     .unwrap();
     let provisioning_service = ProvisioningServiceHandler::default();
+    let device_settings_service = DeviceSettingServiceHandler::default();
 
     info!(
         task = "init_grpc_server",
@@ -49,6 +53,7 @@ async fn init_grpc_server() -> Result<()> {
 
     match Server::builder()
         .add_service(ProvisioningServiceServer::new(provisioning_service))
+        .add_service(DeviceSettingServiceServer::new(device_settings_service))
         .serve(addr)
         .await
     {
@@ -79,7 +84,7 @@ async fn init_provisioning_service() -> Result<bool> {
 
     Ok(true)
 }
-async fn init_heartbeat_client() -> Result<bool> {
+async fn init_heartbeat_service() -> Result<bool> {
     let agent_settings = match settings::read_settings_yml() {
         Ok(v) => v,
         Err(_e) => AgentSettings::default(),
@@ -88,7 +93,7 @@ async fn init_heartbeat_client() -> Result<bool> {
     // return none if system messaging is disabled
     if !agent_settings.messaging.system.enabled {
         info!(
-            target = "init_heartbeat_client",
+            target = "init_heartbeat_service",
             "system messaging client is disabled"
         );
         return Ok(false);
@@ -101,6 +106,18 @@ async fn init_heartbeat_client() -> Result<bool> {
     Ok(true)
 }
 
+async fn init_device_settings_service() -> Result<bool> {
+    let agent_settings = match settings::read_settings_yml() {
+        Ok(v) => v,
+        Err(_e) => AgentSettings::default(),
+    };
+
+    // initiate heartbeat client
+    let device_settings_service = DeviceSettings::new(agent_settings.clone());
+    let _ = device_settings_service.start().await;
+
+    Ok(true)
+}
 #[tokio::main]
 async fn main() -> Result<()> {
     let settings = match settings::read_settings_yml() {
@@ -138,13 +155,33 @@ async fn main() -> Result<()> {
         "tracing set up",
     );
 
+    // Start the gRPC server in its own task
+    let start_grpc = tokio::spawn(async move {
+        if let Err(e) = init_grpc_server().await {
+            eprintln!("Error initializing GRPC server: {:?}", e);
+        } else {
+            println!("GRPC server started successfully!");
+        }
+    });
+
+    let start_services = tokio::spawn(async move {
+        if let Err(e) = start_services(settings).await {
+            eprintln!("Error initializing services: {:?}", e);
+        } else {
+            println!("Services started successfully!");
+        }
+    });
+    tokio::join!(start_grpc, start_services);
+    Ok(())
+}
+
+async fn start_services(settings: AgentSettings) -> Result<()> {
     //step1: check if provisioning is complete
     let identity_client = Identity::new(settings.clone());
     let mut is_provisioned = match identity_client.is_device_provisioned() {
         Ok(v) => v,
         Err(e) => bail!(e),
     };
-
     //step2: if not complete, start GRPC and the provisioning service
     if !is_provisioned {
         match init_provisioning_service().await {
@@ -152,7 +189,11 @@ async fn main() -> Result<()> {
             Err(e) => bail!(e),
         };
     } else {
-        match init_heartbeat_client().await {
+        match init_heartbeat_service().await {
+            Ok(_) => (),
+            Err(e) => bail!(e),
+        };
+        match init_device_settings_service().await {
             Ok(_) => (),
             Err(e) => bail!(e),
         };
@@ -166,7 +207,11 @@ async fn main() -> Result<()> {
                 Err(e) => bail!(e),
             };
             if is_provisioned {
-                match init_heartbeat_client().await {
+                match init_heartbeat_service().await {
+                    Ok(_) => (),
+                    Err(e) => bail!(e),
+                };
+                match init_device_settings_service().await {
                     Ok(_) => (),
                     Err(e) => bail!(e),
                 };
@@ -174,12 +219,5 @@ async fn main() -> Result<()> {
         }
         Ok(())
     });
-
-    //init the GRPC server
-    match init_grpc_server().await {
-        Ok(_) => (),
-        Err(e) => bail!(e),
-    };
-
     Ok(())
 }
