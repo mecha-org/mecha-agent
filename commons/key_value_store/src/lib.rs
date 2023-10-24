@@ -1,37 +1,40 @@
 pub mod errors;
 extern crate sled;
-use std::path::PathBuf;
-
 use anyhow::{bail, Result};
+use lazy_static::lazy_static;
+use sled::Db;
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use crate::errors::{KeyValueStoreError, KeyValueStoreErrorCodes};
+static DATABASE_STORE_FIILE_PATH: &str = "~/.mecha/agent/storage/key_value_store";
+// Singleton database connection
+lazy_static! {
 
-#[derive(Clone)]
-pub struct KevValueStoreClient {
-    db: sled::Db,
+    static ref DATABASE: Arc<Mutex<Db>> = Arc::new(Mutex::new(
+        //TODO: change this path to be dynamic
+        sled::open(DATABASE_STORE_FIILE_PATH).unwrap()
+    ));
 }
 
-impl KevValueStoreClient {
-    pub fn new(storage_file_path: String) -> Result<Self> {
-        // Create dir if not exist
-        let _r = check_dir_if_exist(storage_file_path.clone());
-        Ok(Self {
-            db: match sled::open(storage_file_path) {
-                Ok(s) => s,
-                Err(e) => bail!(KeyValueStoreError::new(
-                    KeyValueStoreErrorCodes::DbInitializationError,
-                    format!("database initialization failed error - {}", e),
-                    true
-                )),
-            },
-        })
+pub struct KeyValueStoreClient;
+
+impl KeyValueStoreClient {
+    pub fn new() -> Self {
+        let _r = check_dir_if_exist(DATABASE_STORE_FIILE_PATH);
+        KeyValueStoreClient
     }
-    pub fn set(&self, key: &str, value: &str) -> Result<bool> {
-        let _last_inserted = self.db.insert(key, value);
+    pub fn set(&mut self, key: &str, value: &str) -> Result<bool> {
+        let db = DATABASE.lock().expect("Failed to acquire lock");
+        let _last_inserted = db.insert(key, value);
+
         Ok(true)
     }
     pub fn get(&self, key: &str) -> Result<Option<String>> {
-        let last_inserted = self.db.get(key);
+        let db = DATABASE.lock().expect("Failed to acquire lock");
+        let last_inserted = db.get(key);
         match last_inserted {
             Ok(s) => Ok(s.map(|s| String::from_utf8(s.to_vec()).unwrap())),
             Err(e) => bail!(KeyValueStoreError::new(
@@ -43,7 +46,7 @@ impl KevValueStoreClient {
     }
 }
 
-fn check_dir_if_exist(storage_file_path: String) -> Result<()> {
+fn check_dir_if_exist(storage_file_path: &str) -> Result<()> {
     println!("check_dir_if_exist: {:?}", storage_file_path);
     let path = PathBuf::from(&storage_file_path);
     if !path.exists() {

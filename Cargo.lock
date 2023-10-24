@@ -1163,6 +1163,7 @@ name = "key_value_store"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "lazy_static",
  "mkdirp",
  "sentry",
  "sentry-anyhow",

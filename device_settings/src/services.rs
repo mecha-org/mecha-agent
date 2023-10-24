@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use futures::StreamExt;
-use key_value_store::KevValueStoreClient;
+use key_value_store::KeyValueStoreClient;
 use messaging::service::{Messaging, MessagingScope};
 use nats_client::{jetstream::JetStreamClient, Bytes};
 use serde::{Deserialize, Serialize};
@@ -77,12 +77,7 @@ impl DeviceSettings {
             Err(e) => bail!(e),
         };
 
-        let key_value_store =
-            match KevValueStoreClient::new(self.settings.device_settings.storage.file_path.clone())
-            {
-                Ok(s) => s,
-                Err(e) => bail!(e),
-            };
+        let mut key_value_store = KeyValueStoreClient::new();
         trace!(
             task = "start",
             target = "device_settings",
@@ -168,12 +163,7 @@ impl DeviceSettings {
     }
     pub async fn get_settings(&self, key: String) -> Result<String> {
         println!("key to get settings :{:?}", key);
-        let key_value_store =
-            match KevValueStoreClient::new(self.settings.device_settings.storage.file_path.clone())
-            {
-                Ok(s) => s,
-                Err(e) => bail!(e),
-            };
+        let key_value_store = KeyValueStoreClient::new();
         let result = match key_value_store.get(&key) {
             Ok(s) => s,
             Err(err) => bail!(err),
