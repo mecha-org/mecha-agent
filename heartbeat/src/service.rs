@@ -37,16 +37,7 @@ impl Heatbeat {
             "starting heartbeat service"
         );
 
-        let subject_name_result =
-            crypto::x509::get_subject_name(&self.settings.provisioning.paths.device.cert);
-        let subject_name = match subject_name_result {
-            Ok(v) => v,
-            Err(e) => bail!(e),
-        };
-
-        // generate sha256 digest of subject name
-        let topic_to_publish = format!("device.{}.heartbeat", digest(subject_name.to_string()));
-
+        let public_key_path = self.settings.provisioning.paths.device.cert.clone();
         // subscribe to the system topic every 1 minutes
         let result: tokio::task::JoinHandle<std::result::Result<bool, anyhow::Error>> =
             tokio::spawn(async move {
@@ -65,7 +56,12 @@ impl Heatbeat {
                             true
                         )),
                     };
-
+                    let subject_name_result =
+                        crypto::x509::get_subject_name(public_key_path.as_str());
+                    let subject_name = match subject_name_result {
+                        Ok(v) => v,
+                        Err(e) => bail!(e),
+                    };
                     let current_utc_time = chrono::Utc::now();
                     let formatted_utc_time =
                         current_utc_time.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
@@ -74,6 +70,9 @@ impl Heatbeat {
                         device_id: subject_name.to_string(),
                     };
 
+                    // generate sha256 digest of subject name
+                    let topic_to_publish =
+                        format!("device.{}.heartbeat", digest(subject_name.to_string()));
                     let payload_payload_json = json!(publish_payload);
                     let _ = match messaging_client
                         .publish(
