@@ -56,12 +56,12 @@ impl Heatbeat {
         };
 
         // generate sha256 digest of subject name
-        let topic_to_suscribe = format!("device.{}.heartbeat", digest(subject_name.to_string()));
+        let topic_to_publish = format!("device.{}.heartbeat", digest(subject_name.to_string()));
 
-        // subscribe to the system topic every 2 minutes
+        // subscribe to the system topic every 1 minutes
         let result: tokio::task::JoinHandle<std::result::Result<bool, anyhow::Error>> =
             tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(120));
+                let mut interval = tokio::time::interval(Duration::from_secs(60));
                 loop {
                     interval.tick().await; // This should go first.
                     let current_utc_time = chrono::Utc::now();
@@ -75,13 +75,28 @@ impl Heatbeat {
                     let payload_payload_json = json!(publish_payload);
                     let _ = match messaging_client
                         .publish(
-                            &topic_to_suscribe,
+                            &topic_to_publish,
                             Bytes::from(payload_payload_json.to_string()),
                         )
                         .await
                     {
-                        Ok(s) => s,
-                        Err(e) => bail!(e),
+                        Ok(s) => {
+                            tracing::info!(
+                                task = "start",
+                                trace_id = trace_id,
+                                "heartbeat message published"
+                            );
+                            s
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                task = "start",
+                                trace_id = trace_id,
+                                "failed to publish heartbeat message - {}",
+                                e
+                            );
+                            bail!(e)
+                        }
                     };
                 }
             });

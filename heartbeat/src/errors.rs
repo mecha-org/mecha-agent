@@ -41,7 +41,7 @@ impl HeatbeatError {
     pub fn new(code: HeatbeatErrorCodes, message: String, capture_error: bool) -> Self {
         let trace_id = find_current_trace_id();
         error!(
-            target = "messaging",
+            target = "heartbeat",
             "error: (code: {:?}, message: {})", code, message
         );
         if capture_error {

@@ -1,8 +1,10 @@
 [package]
-name = "messaging"
+name = "key_value_store"
 version.workspace = true
-edition.workspace = true
 authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -10,22 +12,12 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-crypto = { path = "../commons/crypto" }
-settings = { path = "../commons/settings" }
-nats_client = { path = "../commons/nats_client" }
-identity = { path = "../identity" }
+sled = "0.34.7"
 anyhow = { version = "1.0.71", features = ["backtrace"]}
-mkdirp = "1.0.0"
-openssl = "0.10.56"
-rand = "0.8.5"
-reqwest = { version = "0.11", features = ["json"] }
 sentry-tracing = {version = "0.31.0"}
 sentry = { version = "0.31.0",features = ["backtrace", "anyhow"] }
 sentry-anyhow = { version= "0.31.1", features = ["backtrace"]}
-serde_json = "1.0.33"
-serde = { version  = "1.0.159", features = ["derive"]}
-tonic = "0.9.2"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-opentelemetry-instrumentation-sdk = "0.12.0"
-sha256 = "1.1.2"
+mkdirp = "1.0.0"
+lazy_static = "1.4.0"
