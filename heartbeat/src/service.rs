@@ -85,8 +85,7 @@ impl Heatbeat {
                             tracing::info!(
                                 task = "start",
                                 trace_id = trace_id,
-                                "heartbeat message published: subject -{}",
-                                subject_name
+                                "heartbeat message published"
                             );
                             s
                         }
