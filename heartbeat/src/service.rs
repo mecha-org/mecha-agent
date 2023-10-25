@@ -53,7 +53,7 @@ impl Heatbeat {
                 let mut interval = tokio::time::interval(Duration::from_secs(60));
                 loop {
                     interval.tick().await; // This should go first.
-                    println!("create new client");
+
                     //TODO: It should be outside of the loop
                     //initiate messaging service and publish a message
                     let mut messaging_client = Messaging::new(MessagingScope::System, true);
