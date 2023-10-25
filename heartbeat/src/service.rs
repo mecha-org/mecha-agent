@@ -37,17 +37,6 @@ impl Heatbeat {
             "starting heartbeat service"
         );
 
-        //initiate messaging service and publish a message
-        let mut messaging_client = Messaging::new(MessagingScope::System, true);
-        let _ = match messaging_client.connect().await {
-            Ok(s) => s,
-            Err(e) => bail!(HeatbeatError::new(
-                HeatbeatErrorCodes::InitMessagingClientError,
-                format!("error initializing messaging client - {}", e),
-                true
-            )),
-        };
-
         let subject_name_result =
             crypto::x509::get_subject_name(&self.settings.provisioning.paths.device.cert);
         let subject_name = match subject_name_result {
@@ -64,6 +53,19 @@ impl Heatbeat {
                 let mut interval = tokio::time::interval(Duration::from_secs(60));
                 loop {
                     interval.tick().await; // This should go first.
+
+                    //TODO: It should be outside of the loop
+                    //initiate messaging service and publish a message
+                    let mut messaging_client = Messaging::new(MessagingScope::System, true);
+                    let _ = match messaging_client.connect().await {
+                        Ok(s) => s,
+                        Err(e) => bail!(HeatbeatError::new(
+                            HeatbeatErrorCodes::InitMessagingClientError,
+                            format!("error initializing messaging client - {}", e),
+                            true
+                        )),
+                    };
+
                     let current_utc_time = chrono::Utc::now();
                     let formatted_utc_time =
                         current_utc_time.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
