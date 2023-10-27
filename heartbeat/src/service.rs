@@ -11,8 +11,6 @@ use settings::AgentSettings;
 use sha256::digest;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
-use crate::errors::{HeatbeatError, HeatbeatErrorCodes};
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HeartbeatPublishPayload {
     pub time: String,
@@ -48,57 +46,58 @@ impl Heatbeat {
                     //TODO: It should be outside of the loop
                     //initiate messaging service and publish a message
                     let mut messaging_client = Messaging::new(MessagingScope::System, true);
-                    let _ = match messaging_client.connect().await {
-                        Ok(s) => s,
-                        Err(e) => bail!(HeatbeatError::new(
-                            HeatbeatErrorCodes::InitMessagingClientError,
-                            format!("error initializing messaging client - {}", e),
-                            true
-                        )),
-                    };
-                    let subject_name_result =
-                        crypto::x509::get_subject_name(public_key_path.as_str());
-                    let subject_name = match subject_name_result {
-                        Ok(v) => v,
-                        Err(e) => bail!(e),
-                    };
-                    let current_utc_time = chrono::Utc::now();
-                    let formatted_utc_time =
-                        current_utc_time.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
-                    let publish_payload = HeartbeatPublishPayload {
-                        time: formatted_utc_time,
-                        device_id: subject_name.to_string(),
-                    };
+                    if let Err(e) = messaging_client.connect().await {
+                        tracing::error!(
+                            task = "start",
+                            trace_id = trace_id,
+                            "error initializing messaging client - {}",
+                            e
+                        );
+                    } else {
+                        let subject_name_result =
+                            crypto::x509::get_subject_name(public_key_path.as_str());
+                        let subject_name = match subject_name_result {
+                            Ok(v) => v,
+                            Err(e) => bail!(e),
+                        };
+                        let current_utc_time = chrono::Utc::now();
+                        let formatted_utc_time =
+                            current_utc_time.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
+                        let publish_payload = HeartbeatPublishPayload {
+                            time: formatted_utc_time,
+                            device_id: subject_name.to_string(),
+                        };
 
-                    // generate sha256 digest of subject name
-                    let topic_to_publish =
-                        format!("device.{}.heartbeat", digest(subject_name.to_string()));
-                    let payload_payload_json = json!(publish_payload);
-                    let _ = match messaging_client
-                        .publish(
-                            &topic_to_publish,
-                            Bytes::from(payload_payload_json.to_string()),
-                        )
-                        .await
-                    {
-                        Ok(s) => {
-                            tracing::info!(
-                                task = "start",
-                                trace_id = trace_id,
-                                "heartbeat message published"
-                            );
-                            s
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                task = "start",
-                                trace_id = trace_id,
-                                "failed to publish heartbeat message - {}",
-                                e
-                            );
-                            bail!(e)
-                        }
-                    };
+                        // generate sha256 digest of subject name
+                        let topic_to_publish =
+                            format!("device.{}.heartbeat", digest(subject_name.to_string()));
+                        let payload_payload_json = json!(publish_payload);
+                        let _ = match messaging_client
+                            .publish(
+                                &topic_to_publish,
+                                Bytes::from(payload_payload_json.to_string()),
+                            )
+                            .await
+                        {
+                            Ok(s) => {
+                                tracing::info!(
+                                    task = "start",
+                                    trace_id = trace_id,
+                                    "heartbeat message published"
+                                );
+                                s
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    task = "start",
+                                    trace_id = trace_id,
+                                    "failed to publish heartbeat message - {}",
+                                    e
+                                );
+                                bail!(e)
+                            }
+                        };
+                    }
                 }
             });
         Ok(result.is_finished())
