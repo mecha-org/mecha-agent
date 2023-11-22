@@ -2,10 +2,13 @@ use crate::{
     messaging::MessagingSettings, provisioning::ProvisioningSettings, telemetry::TelemetrySettings,
 };
 use anyhow::{bail, Result};
+use device_settings::DeviceSettings;
 use dotenv::dotenv;
 use serde::{Deserialize, Serialize};
 use std::{env, fmt, fs::File, path::PathBuf};
 use tracing::{error, info};
+
+use crate::{messaging::MessagingSettings, provisioning::ProvisioningSettings};
 pub mod messaging;
 pub mod provisioning;
 pub mod telemetry;
@@ -17,6 +20,7 @@ pub struct AgentSettings {
     pub server: ServerSettings,
     pub provisioning: ProvisioningSettings,
     pub messaging: MessagingSettings,
+    pub device_settings: DeviceSettings,
     pub telemetry: TelemetrySettings,
 }
 
@@ -27,6 +31,7 @@ impl Default for AgentSettings {
             server: ServerSettings::default(),
             provisioning: ProvisioningSettings::default(),
             messaging: MessagingSettings::default(),
+            device_settings: DeviceSettings::default(),
             telemetry: TelemetrySettings::default(),
         }
     }
