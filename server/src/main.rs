@@ -23,6 +23,7 @@ pub mod services;
 
 pub mod agent {
     tonic::include_proto!("provisioning");
+    tonic::include_proto!("device_settings");
 }
 
 pub mod metrics {
@@ -46,10 +47,7 @@ use crate::services::telemetry::{
     TelemetryLogsHandler, TelemetryMetricsHandler, TelemetryTraceHandler,
 };
 use logs::logs_service_server::LogsServiceServer;
-use logs::logs_service_server::LogsServiceServer;
 use metrics::metrics_service_server::MetricsServiceServer;
-use metrics::metrics_service_server::MetricsServiceServer;
-use trace::trace_service_server::TraceServiceServer;
 use trace::trace_service_server::TraceServiceServer;
 
 async fn init_grpc_server() -> Result<()> {
@@ -155,36 +153,25 @@ async fn init_heartbeat_service() -> Result<bool> {
     Ok(true)
 }
 
-async fn init_telemtry() {
-    let telemetry_settings = match settings::read_settings_yml() {
-        Ok(v) => v.telemetry,
-        Err(_e) => AgentSettings::default().telemetry,
+async fn init_telemetry() -> Result<bool> {
+    let agent_settings = match settings::read_settings_yml() {
+        Ok(v) => v,
+        Err(_e) => AgentSettings::default(),
     };
 
-    if !telemetry_settings.enabled {
+    if !agent_settings.telemetry.enabled {
         info!(
             target = "init_telemetry_otel_collector_service",
             "Telemetry collection is disabled"
         );
     }
 
-    let _ = TelemetryService::telemetry_init(telemetry_settings);
-}
-
-async fn init_telemtry() {
-    let telemetry_settings = match settings::read_settings_yml() {
-        Ok(v) => v.telemetry,
-        Err(_e) => AgentSettings::default().telemetry,
-    };
-
-    if !telemetry_settings.enabled {
-        info!(
-            target = "init_telemetry_otel_collector_service",
-            "Telemetry collection is disabled"
-        );
-    }
-
-    let _ = TelemetryService::telemetry_init(telemetry_settings);
+    let _ = TelemetryService::telemetry_init(agent_settings);
+    info!(
+        target = "init_telemetry_otel_collector_service",
+        "telemetry services started"
+    );
+    Ok(true)
 }
 
 async fn init_device_settings_service() -> Result<bool> {
@@ -272,11 +259,16 @@ async fn start_services(settings: AgentSettings) -> Result<()> {
             Ok(_) => (),
             Err(e) => bail!(e),
         };
+        match init_telemetry().await {
+            Ok(_) => (),
+            Err(e) => bail!(e),
+        }
         match init_device_settings_service().await {
             Ok(_) => (),
             Err(e) => bail!(e),
         };
     }
+
     let _result = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(60));
         while !is_provisioned {
@@ -290,8 +282,10 @@ async fn start_services(settings: AgentSettings) -> Result<()> {
                     Ok(_) => (),
                     Err(e) => bail!(e),
                 };
-                // `init the telemetryService
-                init_telemtry().await;
+                match init_telemetry().await {
+                    Ok(_) => (),
+                    Err(e) => bail!(e),
+                }
                 match init_device_settings_service().await {
                     Ok(_) => (),
                     Err(e) => bail!(e),

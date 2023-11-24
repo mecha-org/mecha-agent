@@ -1,11 +1,10 @@
 use crate::errors::{TelemetryError, TelemetryErrorCodes};
 use anyhow::{bail, Result};
-use messaging::{
-    service::{Messaging, MessagingScope},
-    Bytes,
-};
+use identity::service::Identity;
+use messaging::service::Messaging;
 use serde::{Deserialize, Serialize};
-use settings::{telemetry::TelemetrySettings, AgentSettings};
+use settings::AgentSettings;
+use sha256::digest;
 use std::process::Command;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
@@ -21,20 +20,29 @@ pub struct TelemetryResponseGeneric<T> {
     pub payload: T,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct EncodeData {
+    encoded: Vec<u8>,
+    user_type: String,
+    machine_id: String,
+}
+
 #[derive(Clone)]
 pub struct TelemetryService {
-    pub settings: TelemetrySettings,
+    pub settings: AgentSettings,
 }
 
 impl TelemetryService {
-    pub fn telemetry_init(settings: TelemetrySettings) -> Result<String> {
+    pub fn telemetry_init(settings: AgentSettings) -> Result<String> {
         let trace_id = find_current_trace_id();
-        tracing::trace!(trace_id, task = "Telemetry", "init");
-        if settings.enabled {
-            let _ = Command::new(settings.otel_collector.bin)
+        tracing::info!(trace_id, task = "telemetry_init", "init");
+        if settings.telemetry.enabled {
+            let _ = Command::new(settings.telemetry.otel_collector.bin)
                 .arg("--config")
-                .arg(settings.otel_collector.conf)
+                .arg(settings.telemetry.otel_collector.conf.clone())
                 .spawn();
+
+            tracing::info!(trace_id, task = "telemetry_init", "telemetry initialized");
             Ok("success".to_string())
         } else {
             bail!(TelemetryError::new(
@@ -45,12 +53,40 @@ impl TelemetryService {
         }
     }
 
-    pub async fn user_metrics(self, content: Bytes, messaging_client: Messaging) -> Result<String> {
+    pub async fn user_metrics(
+        self,
+        content: Vec<u8>,
+        metrics_type: &str,
+        messaging_client: Messaging,
+    ) -> Result<String> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "user_metrics", "init");
-        if self.settings.collect.user {
+        let machine_id = match get_machine_id() {
+            Ok(v) => v,
+            Err(e) => bail!(e),
+        };
+
+        // Construct message payload
+        let content: String = match serde_json::to_string(&EncodeData {
+            encoded: content,
+            user_type: metrics_type.to_string(),
+            machine_id: machine_id.clone(),
+        }) {
+            Ok(k) => k,
+            Err(e) => bail!(TelemetryError::new(
+                TelemetryErrorCodes::MetricsSerializeFailed,
+                format!("Failed to serialize metrics - {}", e),
+                true
+            )),
+        };
+
+        // Publish data on the subject
+        if self.settings.telemetry.collect.user {
             match messaging_client
-                .publish("devices.12.telemetry.metrics", content)
+                .publish(
+                    &format!("device.{}.telemetry.metrics", digest(machine_id)),
+                    content.into(),
+                )
                 .await
             {
                 Ok(_) => {
@@ -74,17 +110,40 @@ impl TelemetryService {
         }
     }
 
-    pub async fn user_logs(self, content: Bytes, messaging_client: Messaging) -> Result<String> {
+    pub async fn user_logs(
+        self,
+        content: Vec<u8>,
+        logs_type: &str,
+        messaging_client: Messaging,
+    ) -> Result<String> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "user_logs", "init");
-        if self.settings.collect.user {
-            match messaging_client
-                .publish("device.1234.telemetry.logs", content)
-                .await
-            {
+
+        let machine_id = match get_machine_id() {
+            Ok(v) => v,
+            Err(e) => bail!(e),
+        };
+
+        // Construct message payload
+        let payload: String = match serde_json::to_string(&EncodeData {
+            encoded: content,
+            user_type: logs_type.to_string(),
+            machine_id: machine_id.clone(),
+        }) {
+            Ok(k) => k,
+            Err(e) => bail!(TelemetryError::new(
+                TelemetryErrorCodes::LogsSeralizeFailed,
+                format!("Failed to serialize logs - {}", e),
+                true
+            )),
+        };
+
+        if self.settings.telemetry.collect.user {
+            let subject = format!("device.{}.telemetry.logs", machine_id);
+            match messaging_client.publish(&subject, payload.into()).await {
                 Ok(_) => {
-                    tracing::info!(trace_id, task = "user_logs", "User logs sent successfully");
-                    println!("successfully sent logs");
+                    tracing::info!(trace_id, task = "user_logs", "user logs sent successfully");
+                    println!("logs sent successfully");
                     return Ok("Success".to_string());
                 }
                 Err(e) => {
@@ -104,12 +163,38 @@ impl TelemetryService {
         }
     }
 
-    pub async fn user_trace(self, content: Bytes, messaging_client: Messaging) -> Result<String> {
+    pub async fn user_trace(
+        self,
+        content: Vec<u8>,
+        trace_type: &str,
+        messaging_client: Messaging,
+    ) -> Result<String> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "user_trace", "init");
-        if self.settings.collect.user {
+        let machine_id = match get_machine_id() {
+            Ok(v) => v,
+            Err(e) => bail!(e),
+        };
+
+        // Construct message payload
+        let payload: String = match serde_json::to_string(&EncodeData {
+            encoded: content,
+            user_type: trace_type.to_string(),
+            machine_id: machine_id.clone(),
+        }) {
+            Ok(k) => k,
+            Err(e) => bail!(TelemetryError::new(
+                TelemetryErrorCodes::TraceSeralizeFailed,
+                format!("Failed to serialize trace - {}", e),
+                true
+            )),
+        };
+        if self.settings.telemetry.collect.user {
             match messaging_client
-                .publish("devices.12.telemetry.trace", content)
+                .publish(
+                    &format!("device.{}.telemetry.trace", machine_id),
+                    payload.into(),
+                )
                 .await
             {
                 Ok(_) => {
@@ -132,7 +217,16 @@ impl TelemetryService {
         }
     }
 
-    pub async fn new(settings: TelemetrySettings) -> Self {
+    pub async fn new(settings: AgentSettings) -> Self {
         Self { settings: settings }
     }
+}
+
+fn get_machine_id() -> Result<String> {
+    let identity_client = Identity::new(AgentSettings::default());
+    let machine_id = match identity_client.get_machine_id() {
+        Ok(v) => v,
+        Err(e) => bail!(e),
+    };
+    Ok(machine_id)
 }

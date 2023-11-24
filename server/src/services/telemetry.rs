@@ -3,9 +3,6 @@ use crate::metrics::{
     ExportMetricsServiceResponse,
 };
 use messaging::service::Messaging;
-use messaging::Bytes;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
 use settings::{read_settings_yml, AgentSettings};
 use telemetry::service::TelemetryService;
 use tonic::{Code, Request, Response, Status};
@@ -23,19 +20,13 @@ async fn new_telemetry_service() -> TelemetryService {
         Err(_) => AgentSettings::default(),
     };
 
-    TelemetryService::new(settings.telemetry).await
+    TelemetryService::new(settings).await
 }
 
 // Metrics
 #[derive(Clone)]
 pub struct TelemetryMetricsHandler {
     pub messaging_client: Messaging,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct EncodeData {
-    encoded: Vec<u8>,
-    user_type: String,
 }
 
 #[tonic::async_trait]
@@ -48,16 +39,9 @@ impl MetricsService for TelemetryMetricsHandler {
         let binding = request.metadata().clone();
         let metrics_type = binding.get("user").unwrap().to_str().unwrap();
         let metrics = request.into_inner().clone().resource_metrics;
-        let encoded: Vec<u8> = bincode::serialize(&metrics).unwrap();
-        let content: String = match serde_json::to_string(&EncodeData {
-            encoded: encoded,
-            user_type: metrics_type.to_string(),
-        }) {
-            Ok(k) => k,
-            Err(e) => return Err(Status::new(Code::Aborted, format!("{}", e))),
-        };
+        let metrics_encoded: Vec<u8> = bincode::serialize(&metrics).unwrap();
         let _ = match telemetry_service
-            .user_metrics(content.into(), self.messaging_client.clone())
+            .user_metrics(metrics_encoded, metrics_type, self.messaging_client.clone())
             .await
         {
             Ok(res) => res,
@@ -104,15 +88,9 @@ impl LogsService for TelemetryLogsHandler {
         let logs_type = binding.get("user").unwrap().to_str().unwrap();
         let logs = request.into_inner().clone().resource_logs;
         let encoded: Vec<u8> = bincode::serialize(&logs).unwrap();
-        let content = match serde_json::to_string(&EncodeData {
-            encoded: encoded,
-            user_type: logs_type.to_string(),
-        }) {
-            Ok(res) => res,
-            Err(e) => return Err(Status::new(Code::Aborted, format!("{}", e))),
-        };
+
         let _ = match telemetry_service
-            .user_logs(content.into(), self.messaging_client.clone())
+            .user_logs(encoded, logs_type, self.messaging_client.clone())
             .await
         {
             Ok(res) => res,
@@ -149,16 +127,8 @@ impl TraceService for TelemetryTraceHandler {
         let trace_type = binding.get("user").unwrap().to_str().unwrap();
         let trace = request.into_inner().clone().resource_spans;
         let encoded: Vec<u8> = bincode::serialize(&trace).unwrap();
-        let content = EncodeData {
-            encoded: encoded,
-            user_type: trace_type.to_string(),
-        };
-        let payload_payload_json = json!(content);
         let _ = match telemetry_service
-            .user_trace(
-                Bytes::from(payload_payload_json.to_string()),
-                self.messaging_client.clone(),
-            )
+            .user_trace(encoded, trace_type, self.messaging_client.clone())
             .await
         {
             Ok(res) => res,

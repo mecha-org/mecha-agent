@@ -9,6 +9,9 @@ pub enum TelemetryErrorCodes {
     DataCollectionDisabled,
     MessageSentFailed,
     InitMessagingClientError,
+    MetricsSerializeFailed,
+    LogsSeralizeFailed,
+    TraceSeralizeFailed,
 }
 
 impl fmt::Display for TelemetryErrorCodes {
@@ -22,6 +25,15 @@ impl fmt::Display for TelemetryErrorCodes {
             }
             TelemetryErrorCodes::InitMessagingClientError => {
                 write!(f, "TelemetryErrorCodes: InitMessagingClientError")
+            }
+            TelemetryErrorCodes::MetricsSerializeFailed => {
+                write!(f, "TelemetryErrorCodes: MetricsSerializeFailed")
+            }
+            TelemetryErrorCodes::LogsSeralizeFailed => {
+                write!(f, "TelemetryErrorCodes: LogsSeralizeFailed")
+            }
+            TelemetryErrorCodes::TraceSeralizeFailed => {
+                write!(f, "TelemetryErrorCodes: TraceSeralizeFailed")
             }
         }
     }
