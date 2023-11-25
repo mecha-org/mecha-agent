@@ -105,7 +105,16 @@ impl Networking {
             .get_settings("networking.provider.name".to_string())
             .await
         {
-            Ok(r) => r,
+            Ok(v) => {
+                if v.is_empty() {
+                    bail!(NetworkingError::new(
+                        NetworkingErrorCodes::MachineSettingsProviderNameNotFoundError,
+                        format!("networking provider name empty in machine settings",),
+                        true
+                    ))
+                }
+                v
+            }
             Err(e) => bail!(NetworkingError::new(
                 NetworkingErrorCodes::MachineSettingsProviderNameNotFoundError,
                 format!(
@@ -120,7 +129,16 @@ impl Networking {
             .get_settings("networking.provider.version".to_string())
             .await
         {
-            Ok(r) => r,
+            Ok(v) => {
+                if v.is_empty() {
+                    bail!(NetworkingError::new(
+                        NetworkingErrorCodes::MachineSettingsProviderVersionNotFoundError,
+                        format!("networking provider version empty in machine settings",),
+                        true
+                    ))
+                }
+                v
+            }
             Err(e) => bail!(NetworkingError::new(
                 NetworkingErrorCodes::MachineSettingsProviderVersionNotFoundError,
                 format!(
@@ -135,7 +153,16 @@ impl Networking {
             .get_settings("networking.provider.os".to_string())
             .await
         {
-            Ok(r) => r,
+            Ok(v) => {
+                if v.is_empty() {
+                    bail!(NetworkingError::new(
+                        NetworkingErrorCodes::MachineSettingsProviderOsNotFoundError,
+                        format!("networking provider os empty in machine settings",),
+                        true
+                    ))
+                }
+                v
+            }
             Err(e) => bail!(NetworkingError::new(
                 NetworkingErrorCodes::MachineSettingsProviderOsNotFoundError,
                 format!(
