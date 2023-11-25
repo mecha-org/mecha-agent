@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{bail, Result};
+use identity::service::Identity;
 use messaging::{
     service::{Messaging, MessagingScope},
     Bytes,
@@ -36,6 +37,7 @@ impl Heatbeat {
         );
 
         let public_key_path = self.settings.provisioning.paths.device.cert.clone();
+        let settings_cloned = self.settings.clone();
         // subscribe to the system topic every 1 minutes
         let result: tokio::task::JoinHandle<std::result::Result<bool, anyhow::Error>> =
             tokio::spawn(async move {
@@ -54,9 +56,8 @@ impl Heatbeat {
                             e
                         );
                     } else {
-                        let subject_name_result =
-                            crypto::x509::get_subject_name(public_key_path.as_str());
-                        let subject_name = match subject_name_result {
+                        let identity_client = Identity::new(settings_cloned.clone());
+                        let subject_name = match identity_client.get_machine_id() {
                             Ok(v) => v,
                             Err(e) => bail!(e),
                         };

@@ -8,6 +8,7 @@ use init_tracing_opentelemetry::tracing_subscriber_ext::build_otel_layer;
 use init_tracing_opentelemetry::tracing_subscriber_ext::{
     build_logger_text, build_loglevel_filter_layer,
 };
+use networking::service::Networking;
 use provisioning::service::Provisioning;
 use sentry_tracing::{self, EventFilter};
 use settings::AgentSettings;
@@ -118,6 +119,28 @@ async fn init_device_settings_service() -> Result<bool> {
 
     Ok(true)
 }
+
+async fn init_networking_service() -> Result<bool> {
+    let agent_settings = match settings::read_settings_yml() {
+        Ok(v) => v,
+        Err(_e) => AgentSettings::default(),
+    };
+
+    // return false if networking is disabled
+    if !agent_settings.networking.enabled {
+        info!(
+            target = "init_networking_service",
+            "networking service is disabled"
+        );
+        return Ok(false);
+    }
+
+    // initiate networking service
+    let networking_service = Networking::new(agent_settings.clone());
+    let _ = networking_service.start().await;
+
+    Ok(true)
+}
 #[tokio::main]
 async fn main() -> Result<()> {
     let settings = match settings::read_settings_yml() {
@@ -139,12 +162,14 @@ async fn main() -> Result<()> {
             },
         ));
     }
+    // let filter = Targets::new().with_target("networking", LevelFilter::TRACE);
 
     // TODO: logging to an output file
     // start the tracing service
     let subscriber = tracing_subscriber::registry()
         .with(sentry_tracing::layer().event_filter(|_| EventFilter::Ignore))
         .with(build_loglevel_filter_layer()) //temp for terminal log
+        // .with(filter)
         .with(build_logger_text()) //temp for terminal log
         .with(build_otel_layer().unwrap()); // trace collection layer
     tracing::subscriber::set_global_default(subscriber).unwrap();
@@ -189,6 +214,14 @@ async fn start_services(settings: AgentSettings) -> Result<()> {
             Err(e) => bail!(e),
         };
     } else {
+        //start networking service on its own
+        let _ = tokio::spawn(async move {
+            if let Err(e) = init_networking_service().await {
+                eprintln!("error initializing networking service: {:?}", e);
+            } else {
+                println!("networking service started successfully!");
+            }
+        });
         match init_heartbeat_service().await {
             Ok(_) => (),
             Err(e) => bail!(e),

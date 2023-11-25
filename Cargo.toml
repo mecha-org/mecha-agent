@@ -1,6 +1,6 @@
 [workspace]
 default-members = ["server"]
-members = ["server", "provisioning", "messaging", "identity", "heartbeat","device_settings", "commons/crypto", "commons/settings", "commons/key_value_store"]
+members = ["server", "provisioning", "messaging", "identity", "heartbeat", "device_settings", "networking", "commons/crypto", "commons/settings", "commons/key_value_store"]
 
 
 [workspace.package]

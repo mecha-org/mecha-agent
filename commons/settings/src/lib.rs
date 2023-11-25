@@ -1,5 +1,6 @@
 use anyhow::{bail, Result};
 use device_settings::DeviceSettings;
+use networking::NetworkingSettings;
 use serde::{Deserialize, Serialize};
 use std::{env, fmt, fs::File, path::PathBuf};
 use tracing::{error, info};
@@ -7,6 +8,7 @@ use tracing::{error, info};
 use crate::{messaging::MessagingSettings, provisioning::ProvisioningSettings};
 pub mod device_settings;
 pub mod messaging;
+pub mod networking;
 pub mod provisioning;
 
 /// Agent Settings - Struct corresponding to the settings.yml schema
@@ -17,6 +19,7 @@ pub struct AgentSettings {
     pub provisioning: ProvisioningSettings,
     pub messaging: MessagingSettings,
     pub device_settings: DeviceSettings,
+    pub networking: NetworkingSettings,
 }
 
 impl Default for AgentSettings {
@@ -27,6 +30,7 @@ impl Default for AgentSettings {
             provisioning: ProvisioningSettings::default(),
             messaging: MessagingSettings::default(),
             device_settings: DeviceSettings::default(),
+            networking: NetworkingSettings::default(),
         }
     }
 }
