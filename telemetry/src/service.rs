@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use settings::AgentSettings;
 use sha256::digest;
 use std::process::Command;
+use tracing::instrument;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -27,7 +28,7 @@ pub struct EncodeData {
     machine_id: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TelemetryService {
     pub settings: AgentSettings,
 }

@@ -210,8 +210,8 @@ async fn main() -> Result<()> {
     // start the tracing service
     let subscriber = tracing_subscriber::registry()
         .with(sentry_tracing::layer().event_filter(|_| EventFilter::Ignore))
-        // .with(build_loglevel_filter_layer()) //temp for terminal log
-        // .with(build_logger_text()) //temp for terminal log
+        .with(build_loglevel_filter_layer()) //temp for terminal log
+        .with(build_logger_text()) //temp for terminal log
         .with(build_otel_layer().unwrap()); // trace collection layer
     tracing::subscriber::set_global_default(subscriber).unwrap();
     tracing::info!(
