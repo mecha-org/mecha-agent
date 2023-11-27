@@ -9,11 +9,10 @@ pub enum NetworkingErrorCodes {
     NetworkingError,
     ExtractMessagePayloadError,
     MachineSettingsProviderNameNotFoundError,
-    MachineSettingsProviderVersionNotFoundError,
-    MachineSettingsProviderOsNotFoundError,
-    MachineSettingsProviderArchNotFoundError,
-    MachineSettingsProviderSettingsNotFoundError,
+    ProviderMetadataPayloadCreateError,
     MachineSettingsMachineIdNotFoundError,
+    SystemArchNotFoundError,
+    SystemOsNotFoundError,
     GetProviderConfigsError,
     MessagingClientConnectError,
     MessagingRequestProviderMetadataError,
@@ -71,28 +70,16 @@ impl fmt::Display for NetworkingErrorCodes {
                     "NetworkingErrorCodes: MachineSettingsProviderNameNotFoundError"
                 )
             }
-            NetworkingErrorCodes::MachineSettingsProviderVersionNotFoundError => {
-                write!(
-                    f,
-                    "NetworkingErrorCodes: MachineSettingsProviderVersionNotFoundError"
-                )
+            NetworkingErrorCodes::SystemArchNotFoundError => {
+                write!(f, "NetworkingErrorCodes: SystemArchNotFoundError")
             }
-            NetworkingErrorCodes::MachineSettingsProviderOsNotFoundError => {
-                write!(
-                    f,
-                    "NetworkingErrorCodes: MachineSettingsProviderOsNotFoundError"
-                )
+            NetworkingErrorCodes::SystemOsNotFoundError => {
+                write!(f, "NetworkingErrorCodes: SystemOsNotFoundError")
             }
-            NetworkingErrorCodes::MachineSettingsProviderArchNotFoundError => {
+            NetworkingErrorCodes::ProviderMetadataPayloadCreateError => {
                 write!(
                     f,
-                    "NetworkingErrorCodes: MachineSettingsProviderArchNotFoundError"
-                )
-            }
-            NetworkingErrorCodes::MachineSettingsProviderSettingsNotFoundError => {
-                write!(
-                    f,
-                    "NetworkingErrorCodes: MachineSettingsProviderSettingsNotFoundError"
+                    "NetworkingErrorCodes: ProviderMetadataPayloadCreateError"
                 )
             }
             NetworkingErrorCodes::MachineSettingsMachineIdNotFoundError => {

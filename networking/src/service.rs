@@ -54,7 +54,6 @@ pub struct Networking {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ProviderMetadataPayload {
     pub app_name: String,
-    pub app_version: String,
     pub os: String,
     pub arch: String,
 }
@@ -125,75 +124,27 @@ impl Networking {
             )),
         };
 
-        let app_version = match machine_settings
-            .get_settings("networking.provider.version".to_string())
-            .await
-        {
-            Ok(v) => {
-                if v.is_empty() {
-                    bail!(NetworkingError::new(
-                        NetworkingErrorCodes::MachineSettingsProviderVersionNotFoundError,
-                        format!("networking provider version empty in machine settings",),
-                        true
-                    ))
-                }
-                v
-            }
-            Err(e) => bail!(NetworkingError::new(
-                NetworkingErrorCodes::MachineSettingsProviderVersionNotFoundError,
-                format!(
-                    "networking provider version not found in machine settings, error - {}",
-                    e.to_string()
-                ),
+        let arch = std::env::consts::ARCH.to_lowercase();
+
+        if arch.is_empty() {
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::SystemArchNotFoundError,
+                format!("arch not found",),
                 true
-            )),
+            ))
         };
 
-        let os = match machine_settings
-            .get_settings("networking.provider.os".to_string())
-            .await
-        {
-            Ok(v) => {
-                if v.is_empty() {
-                    bail!(NetworkingError::new(
-                        NetworkingErrorCodes::MachineSettingsProviderOsNotFoundError,
-                        format!("networking provider os empty in machine settings",),
-                        true
-                    ))
-                }
-                v
-            }
-            Err(e) => bail!(NetworkingError::new(
-                NetworkingErrorCodes::MachineSettingsProviderOsNotFoundError,
-                format!(
-                    "networking provider os not found in machine settings, error - {}",
-                    e.to_string()
-                ),
+        let os = std::env::consts::OS.to_lowercase();
+
+        if os.is_empty() {
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::SystemOsNotFoundError,
+                format!("os name not found",),
                 true
-            )),
+            ))
         };
 
-        let arch = match machine_settings
-            .get_settings("networking.provider.arch".to_string())
-            .await
-        {
-            Ok(r) => r,
-            Err(e) => bail!(NetworkingError::new(
-                NetworkingErrorCodes::MachineSettingsProviderArchNotFoundError,
-                format!(
-                    "networking provider arch not found in machine settings, error - {}",
-                    e.to_string()
-                ),
-                true
-            )),
-        };
-
-        let provider_metadata_payload = ProviderMetadataPayload {
-            app_name,
-            app_version,
-            os,
-            arch,
-        };
+        let provider_metadata_payload = ProviderMetadataPayload { app_name, os, arch };
 
         debug!(
             task,
@@ -799,16 +750,17 @@ impl Networking {
         let trace_id = find_current_trace_id();
         let task = "start";
         let target = "networking_service_start";
-        info!(task, target, trace_id, "starting netwoking service");
+
+        info!(task, target, trace_id, "starting netwoking service",);
 
         //Get provider info from settings
         let provider_metadata_payload = match self.get_provider_info().await {
             Ok(r) => r,
             Err(e) => {
                 bail!(NetworkingError::new(
-                    NetworkingErrorCodes::MachineSettingsProviderSettingsNotFoundError,
+                    NetworkingErrorCodes::ProviderMetadataPayloadCreateError,
                     format!(
-                        "networking provider settings found in machine settings, error - {}",
+                        "networking provider metadata payload create, error - {}",
                         e.to_string()
                     ),
                     true

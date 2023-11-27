@@ -1,5 +1,6 @@
 use anyhow::{bail, Result};
 use flate2::read::GzDecoder;
+use nix::unistd::Uid;
 use sha256::try_digest;
 use std::process::{Command, Stdio};
 use std::{
@@ -37,19 +38,7 @@ pub async fn extract_tar_file(compressed_file_path: &str, temp_path: &PathBuf) -
 }
 
 pub fn is_sudo() -> bool {
-    let sudo_check = Command::new("sudo")
-        .arg("-n")
-        .arg("true")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
-
-    if let Ok(exit_status) = sudo_check {
-        return exit_status.success();
-    }
-
-    false
+    return Uid::effective().is_root();
 }
 
 pub fn run_command(cmd: &str) -> Result<bool> {
