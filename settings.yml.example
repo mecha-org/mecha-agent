@@ -39,3 +39,5 @@ device_settings:
   storage:
     type: file
     file_path: ~/.mecha/agent/db/settings.bin
+networking:
+  enabled: true

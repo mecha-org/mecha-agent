@@ -15,6 +15,7 @@ settings = { path = "../commons/settings" }
 telemetry = { path = "../telemetry" }
 identity = { path = "../identity" }
 device_settings = { path = "../device_settings" }
+networking = { path = "../networking" }
 axum = "0.6.17"
 axum-macros = "0.3.8"
 tokio = { version = "1.27.0", features = ["full"] }

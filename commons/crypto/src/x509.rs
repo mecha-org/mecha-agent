@@ -1,6 +1,7 @@
 use crate::errors::{CryptoError, CryptoErrorCodes};
 use anyhow::{bail, Result};
-use openssl::{pkey::PKey, sign::Signer, x509::X509};
+use chrono::{DateTime, Utc};
+use openssl::{asn1::Asn1Time, pkey::PKey, sign::Signer, x509::X509};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
@@ -64,6 +65,13 @@ impl fmt::Display for PrivateKeySize {
             PrivateKeySize::EcP521 => write!(f, "EC_P521"),
         }
     }
+}
+
+// Decoded cert
+#[derive(Debug)]
+pub struct DecodedCert {
+    pub not_after: DateTime<Utc>,
+    pub not_before: DateTime<Utc>,
 }
 
 pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Result<bool> {
@@ -256,72 +264,6 @@ pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<
     };
 }
 
-pub fn get_subject_name(public_key_path: &str) -> Result<String> {
-    let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "get_subject_name", "init");
-    let mut public_key_buf = Vec::new();
-    let mut file = match File::open(public_key_path) {
-        Ok(v) => v,
-        Err(e) => {
-            bail!(CryptoError::new(
-                CryptoErrorCodes::ReadPrivateKeyError,
-                format!("failed to open private key file - {}", e),
-                true
-            ))
-        }
-    };
-
-    match file.read_to_end(&mut public_key_buf) {
-        Ok(v) => v,
-        Err(e) => bail!(CryptoError::new(
-            CryptoErrorCodes::ReadPrivateKeyError,
-            format!("failed to read private key file - {}", e),
-            true
-        )),
-    };
-    let cert = match X509::from_pem(public_key_buf.as_slice()) {
-        Ok(cert) => cert,
-        Err(err) => {
-            tracing::error!(
-                trace_id,
-                task = "issue_token",
-                "error deserializing pem -{}",
-                err
-            );
-            bail!(CryptoError::new(
-                CryptoErrorCodes::PemDeserializeError,
-                format!("error deserializing pem",),
-                true
-            ))
-        }
-    };
-
-    let sub_entries = match cert.subject_name().entries().next() {
-        Some(sub) => sub,
-        None => {
-            bail!(CryptoError::new(
-                CryptoErrorCodes::ExtractSubjectNameError,
-                format!("error in getting subject name entries",),
-                true
-            ))
-        }
-    };
-
-    match String::from_utf8(sub_entries.data().as_slice().to_vec()) {
-        Ok(str) => {
-            tracing::info!("extracted subject name from pem file");
-            return Ok(str);
-        }
-        Err(err) => {
-            tracing::error!("error extracting subject name: {:?}", err);
-            bail!(CryptoError::new(
-                CryptoErrorCodes::ExtractSubjectNameError,
-                format!("error extracting subject name",),
-                true
-            ))
-        }
-    };
-}
 fn safe_create_dir(path: &str) -> Result<bool> {
     let trace_id = find_current_trace_id();
     tracing::info!(trace_id, task = "safe_create_dir", "init",);

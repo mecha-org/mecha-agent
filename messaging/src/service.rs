@@ -1,6 +1,7 @@
 use anyhow::{bail, Result};
 use crypto::base64::b64_encode;
-use crypto::x509::{get_subject_name, sign_with_private_key};
+use crypto::x509::sign_with_private_key;
+use identity::service::Identity;
 use nats_client::{Bytes, NatsClient, Subscriber};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -110,10 +111,12 @@ impl Messaging {
             Err(e) => bail!(e),
         };
 
-        let device_id = match get_subject_name(&self.settings.provisioning.paths.device.cert) {
-            Ok(s) => s,
+        let identity_client = Identity::new(self.settings.clone());
+        let device_id = match identity_client.get_machine_id() {
+            Ok(v) => v,
             Err(e) => bail!(e),
         };
+
         let inbox_prefix = format!("inbox.{}", digest(device_id));
 
         match self
@@ -139,8 +142,9 @@ impl Messaging {
     pub async fn authenticate(&self) -> Result<String> {
         // Step 1: Get Device ID
         //TODO: Path Check
-        let device_id = match get_subject_name(&self.settings.provisioning.paths.device.cert) {
-            Ok(s) => s,
+        let identity_client = Identity::new(self.settings.clone());
+        let device_id = match identity_client.get_machine_id() {
+            Ok(v) => v,
             Err(e) => bail!(e),
         };
 
@@ -342,6 +346,27 @@ impl Messaging {
         };
 
         Ok(is_published)
+    }
+
+    pub async fn request(&self, subject: &str, data: Bytes) -> Result<Bytes> {
+        let trace_id = find_current_trace_id();
+        tracing::trace!(trace_id, task = "request", "init");
+
+        if self.nats_client.is_none() {
+            bail!(MessagingError::new(
+                MessagingErrorCodes::NatsClientNotInitialized,
+                format!("messaging service initialized without nats client"),
+                true
+            ))
+        }
+
+        let nats_client = self.nats_client.as_ref().unwrap();
+        let response = match nats_client.request(subject, data).await {
+            Ok(s) => s,
+            Err(e) => bail!(e),
+        };
+
+        Ok(response)
     }
 
     pub async fn subscribe(&self, subject: &str) -> Result<Subscriber> {

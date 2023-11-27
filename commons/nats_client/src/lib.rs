@@ -127,6 +127,36 @@ impl NatsClient {
         Ok(true)
     }
 
+    pub async fn request(&self, subject: &str, data: Bytes) -> Result<Bytes> {
+        let trace_id = find_current_trace_id();
+        tracing::trace!(trace_id, target = "nats_client", task = "request", "init");
+
+        let client = match self.get_connected_client() {
+            Ok(c) => c,
+            Err(e) => bail!(e),
+        };
+
+        tracing::trace!(
+            trace_id,
+            target = "nats_client",
+            task = "request",
+            "nats client is in connected status"
+        );
+
+        let response = match client.request(String::from(subject), data.clone()).await {
+            Ok(v) => v,
+            Err(e) => bail!(NatsClientError::new(
+                NatsClientErrorCodes::RequestError,
+                format!(
+                    "error requesting message to sub - {}, error - {}",
+                    subject, e
+                ),
+                true
+            )),
+        };
+        Ok(response.payload)
+    }
+
     pub async fn subscribe(&self, subject: &str) -> Result<Subscriber> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, target = "nats_client", task = "publish", "init");
