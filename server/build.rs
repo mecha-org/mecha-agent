@@ -6,7 +6,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // adding attributes
         .type_attribute(".", "#[derive(serde::Deserialize, serde::Serialize,)]")
         .compile(
-            &["proto/provisioning.proto", "proto/device_settings.proto"],
+            &[
+                "proto/provisioning.proto",
+                "proto/device_settings.proto",
+                "proto/metrics.proto",
+                "proto/logs.proto",
+                "proto/trace.proto",
+            ],
             &["."],
         )
         .unwrap_or_else(|e| panic!("protobuf compile error: {}", e));

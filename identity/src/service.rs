@@ -1,5 +1,5 @@
-use crate::errors::{CryptoError, CryptoErrorCodes};
 use anyhow::{bail, Result};
+use crypto::errors::{CryptoError, CryptoErrorCodes};
 use openssl::x509::X509;
 use serde::{Deserialize, Serialize};
 use settings::AgentSettings;
@@ -43,13 +43,6 @@ impl Identity {
             Ok(false)
         }
     }
-    // pub fn sign_with_device_key(&self, data: Vec<u8>) -> Result<Vec<u8>> {
-    //     let trace_id = find_current_trace_id();
-    //     tracing::trace!(trace_id, task = "sign_with_device_key", "init",);
-
-    //     let device_key_path = &self.settings.provisioning.paths.device.private_key;
-
-    // }
     pub fn get_machine_id(&self) -> Result<String> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, task = "get_subject_name", "init");

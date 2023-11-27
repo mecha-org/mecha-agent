@@ -8,10 +8,13 @@ use init_tracing_opentelemetry::tracing_subscriber_ext::build_otel_layer;
 use init_tracing_opentelemetry::tracing_subscriber_ext::{
     build_logger_text, build_loglevel_filter_layer,
 };
+use messaging::service::{Messaging, MessagingScope};
 use networking::service::Networking;
 use provisioning::service::Provisioning;
 use sentry_tracing::{self, EventFilter};
 use settings::AgentSettings;
+use telemetry::errors::{TelemetryError, TelemetryErrorCodes};
+use telemetry::service::TelemetryService;
 use tonic::transport::Server;
 use tracing::info;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
@@ -23,26 +26,67 @@ pub mod agent {
     tonic::include_proto!("provisioning");
     tonic::include_proto!("device_settings");
 }
+
+pub mod metrics {
+    tonic::include_proto!("opentelemetry.proto.collector.metrics.v1");
+}
+
+pub mod trace {
+    tonic::include_proto!("opentelemetry.proto.collector.trace.v1");
+}
+
+pub mod logs {
+    tonic::include_proto!("opentelemetry.proto.collector.logs.v1");
+}
+
 use crate::agent::device_setting_service_server::DeviceSettingServiceServer;
 use crate::agent::provisioning_service_server::ProvisioningServiceServer;
 use crate::errors::{AgentServerError, AgentServerErrorCodes};
 use crate::services::device_settings::DeviceSettingServiceHandler;
 use crate::services::provisioning::ProvisioningServiceHandler;
+use crate::services::telemetry::{
+    TelemetryLogsHandler, TelemetryMetricsHandler, TelemetryTraceHandler,
+};
+use logs::logs_service_server::LogsServiceServer;
+use metrics::metrics_service_server::MetricsServiceServer;
+use trace::trace_service_server::TraceServiceServer;
 
 async fn init_grpc_server() -> Result<()> {
     // TODO: pass settings from main()
-    let server_settings = match settings::read_settings_yml() {
-        Ok(v) => v.server,
-        Err(_e) => AgentSettings::default().server,
+    let settings = match settings::read_settings_yml() {
+        Ok(v) => v,
+        Err(_e) => AgentSettings::default(),
     };
+
+    //initiate messaging service and publish a message
+    let mut messaging_client =
+        Messaging::new(MessagingScope::System, settings.messaging.system.enabled);
+    let _ = match messaging_client.connect().await {
+        Ok(s) => s,
+        Err(e) => bail!(TelemetryError::new(
+            TelemetryErrorCodes::InitMessagingClientError,
+            format!("error initializing messaging client - {}", e),
+            true
+        )),
+    };
+
     let addr = format!(
         "{}:{}",
-        server_settings.url.unwrap_or(String::from("127.0.0.1")),
-        server_settings.port
+        settings.server.url.unwrap_or(String::from("127.0.0.1")),
+        settings.server.port
     )
     .parse()
     .unwrap();
     let provisioning_service = ProvisioningServiceHandler::default();
+    let trace_service = TelemetryTraceHandler {
+        messaging_client: messaging_client.clone(),
+    };
+    let log_service = TelemetryLogsHandler {
+        messaging_client: messaging_client.clone(),
+    };
+    let metrics_service = TelemetryMetricsHandler {
+        messaging_client: messaging_client.clone(),
+    };
     let device_settings_service = DeviceSettingServiceHandler::default();
 
     info!(
@@ -54,6 +98,9 @@ async fn init_grpc_server() -> Result<()> {
 
     match Server::builder()
         .add_service(ProvisioningServiceServer::new(provisioning_service))
+        .add_service(MetricsServiceServer::new(metrics_service))
+        .add_service(LogsServiceServer::new(log_service))
+        .add_service(TraceServiceServer::new(trace_service))
         .add_service(DeviceSettingServiceServer::new(device_settings_service))
         .serve(addr)
         .await
@@ -107,6 +154,27 @@ async fn init_heartbeat_service() -> Result<bool> {
     Ok(true)
 }
 
+async fn init_telemetry() -> Result<bool> {
+    let agent_settings = match settings::read_settings_yml() {
+        Ok(v) => v,
+        Err(_e) => AgentSettings::default(),
+    };
+
+    if !agent_settings.telemetry.enabled {
+        info!(
+            target = "init_telemetry_otel_collector_service",
+            "Telemetry collection is disabled"
+        );
+    }
+
+    let _ = TelemetryService::telemetry_init(agent_settings);
+    info!(
+        target = "init_telemetry_otel_collector_service",
+        "telemetry services started"
+    );
+    Ok(true)
+}
+
 async fn init_device_settings_service() -> Result<bool> {
     let agent_settings = match settings::read_settings_yml() {
         Ok(v) => v,
@@ -147,8 +215,6 @@ async fn main() -> Result<()> {
         Ok(settings) => settings,
         Err(_) => AgentSettings::default(),
     };
-
-    // setup sentry reporting
     // enable the sentry exception reporting if enabled in settings and a DSN path is specified
     if settings.clone().sentry.enabled && settings.clone().sentry.dsn.is_some() {
         let sentry_path = settings.clone().sentry.dsn.unwrap();
@@ -168,9 +234,8 @@ async fn main() -> Result<()> {
     // start the tracing service
     let subscriber = tracing_subscriber::registry()
         .with(sentry_tracing::layer().event_filter(|_| EventFilter::Ignore))
-        .with(build_loglevel_filter_layer()) //temp for terminal log
-        // .with(filter)
-        .with(build_logger_text()) //temp for terminal log
+        // .with(build_loglevel_filter_layer()) //temp for terminal log
+        // .with(build_logger_text()) //temp for terminal log
         .with(build_otel_layer().unwrap()); // trace collection layer
     tracing::subscriber::set_global_default(subscriber).unwrap();
     tracing::info!(
@@ -226,11 +291,16 @@ async fn start_services(settings: AgentSettings) -> Result<()> {
             Ok(_) => (),
             Err(e) => bail!(e),
         };
+        match init_telemetry().await {
+            Ok(_) => (),
+            Err(e) => bail!(e),
+        }
         match init_device_settings_service().await {
             Ok(_) => (),
             Err(e) => bail!(e),
         };
     }
+
     let _result = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(60));
         while !is_provisioned {
@@ -244,6 +314,10 @@ async fn start_services(settings: AgentSettings) -> Result<()> {
                     Ok(_) => (),
                     Err(e) => bail!(e),
                 };
+                match init_telemetry().await {
+                    Ok(_) => (),
+                    Err(e) => bail!(e),
+                }
                 match init_device_settings_service().await {
                     Ok(_) => (),
                     Err(e) => bail!(e),

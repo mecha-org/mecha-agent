@@ -251,7 +251,7 @@ impl NetworkingError {
     pub fn new(code: NetworkingErrorCodes, message: String, capture_error: bool) -> Self {
         let trace_id = find_current_trace_id();
         error!(
-            target = "provisioning",
+            target = "networking",
             "error: (code: {:?}, message: {})", code, message
         );
         if capture_error {

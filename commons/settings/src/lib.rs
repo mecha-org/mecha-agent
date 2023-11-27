@@ -1,15 +1,18 @@
+use crate::{
+    messaging::MessagingSettings, provisioning::ProvisioningSettings, telemetry::TelemetrySettings,
+};
 use anyhow::{bail, Result};
 use device_settings::DeviceSettings;
+use dotenv::dotenv;
 use networking::NetworkingSettings;
 use serde::{Deserialize, Serialize};
 use std::{env, fmt, fs::File, path::PathBuf};
 use tracing::{error, info};
-
-use crate::{messaging::MessagingSettings, provisioning::ProvisioningSettings};
 pub mod device_settings;
 pub mod messaging;
 pub mod networking;
 pub mod provisioning;
+pub mod telemetry;
 
 /// Agent Settings - Struct corresponding to the settings.yml schema
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -20,6 +23,7 @@ pub struct AgentSettings {
     pub messaging: MessagingSettings,
     pub device_settings: DeviceSettings,
     pub networking: NetworkingSettings,
+    pub telemetry: TelemetrySettings,
 }
 
 impl Default for AgentSettings {
@@ -31,6 +35,7 @@ impl Default for AgentSettings {
             messaging: MessagingSettings::default(),
             device_settings: DeviceSettings::default(),
             networking: NetworkingSettings::default(),
+            telemetry: TelemetrySettings::default(),
         }
     }
 }
@@ -134,6 +139,7 @@ pub fn read_settings_path_from_args() -> Option<String> {
 ///
 /// **Important**: Ensure all fields are present in the yml due to strict parsing
 pub fn read_settings_yml() -> Result<AgentSettings> {
+    dotenv().ok();
     // Add schema validator for yml
     let mut file_path = PathBuf::from(
         std::env::var("MECHA_AGENT_SETTINGS_PATH")

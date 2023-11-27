@@ -12,6 +12,7 @@ provisioning = { path = "../provisioning" }
 messaging = { path = "../messaging" }
 heartbeat = { path = "../heartbeat" }
 settings = { path = "../commons/settings" }
+telemetry = { path = "../telemetry" }
 identity = { path = "../identity" }
 device_settings = { path = "../device_settings" }
 networking = { path = "../networking" }
