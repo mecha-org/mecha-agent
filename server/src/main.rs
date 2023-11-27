@@ -284,7 +284,7 @@ async fn start_services(settings: AgentSettings) -> Result<()> {
             if let Err(e) = init_networking_service().await {
                 eprintln!("error initializing networking service: {:?}", e);
             } else {
-                println!("networking service started successfully!");
+                println!("networking service initialized successfully!");
             }
         });
         match init_heartbeat_service().await {
