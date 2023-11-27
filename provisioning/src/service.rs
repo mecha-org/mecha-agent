@@ -1,6 +1,6 @@
 use crate::errors::ProvisioningError;
 use crate::errors::ProvisioningErrorCodes;
-use crate::utils::safe_write_to_path;
+use ::fs::safe_write_to_path;
 use anyhow::{bail, Result};
 use crypto::x509::generate_csr;
 use crypto::x509::generate_ec_private_key;
