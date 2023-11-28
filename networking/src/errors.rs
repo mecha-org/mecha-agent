@@ -52,6 +52,8 @@ pub enum NetworkingErrorCodes {
     CertExpiredError,
     CertVerificationCheckError,
     CertVerifyError,
+    MachineSettingsNetworkingFirewallRulesNotFoundError,
+    ExtractNetworkingFirewallRulesPayloadError,
 }
 
 impl fmt::Display for NetworkingErrorCodes {
@@ -213,6 +215,18 @@ impl fmt::Display for NetworkingErrorCodes {
             }
             NetworkingErrorCodes::CaCertFileSaveError => {
                 write!(f, "NetworkingErrorCodes: CaCertFileSaveError")
+            }
+            NetworkingErrorCodes::MachineSettingsNetworkingFirewallRulesNotFoundError => {
+                write!(
+                    f,
+                    "NetworkingErrorCodes: MachineSettingsNetworkingFirewallRulesNotFoundError"
+                )
+            }
+            NetworkingErrorCodes::ExtractNetworkingFirewallRulesPayloadError => {
+                write!(
+                    f,
+                    "NetworkingErrorCodes: ExtractNetworkingFirewallRulesPayloadError"
+                )
             }
         }
     }
