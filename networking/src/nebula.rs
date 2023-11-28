@@ -159,7 +159,12 @@ pub struct ConntrackSettings {
 pub struct FirewallRule {
     pub port: String,
     pub proto: String,
-    pub host: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cidr: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
