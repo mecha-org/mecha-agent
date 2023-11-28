@@ -139,7 +139,7 @@ impl TelemetryService {
         };
 
         if self.settings.telemetry.collect.user {
-            let subject = format!("device.{}.telemetry.logs", machine_id);
+            let subject = format!("device.{}.telemetry.logs", sha256::digest(machine_id));
             match messaging_client.publish(&subject, payload.into()).await {
                 Ok(_) => {
                     tracing::info!(trace_id, task = "user_logs", "user logs sent successfully");
