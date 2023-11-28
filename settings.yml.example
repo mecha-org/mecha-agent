@@ -41,3 +41,11 @@ device_settings:
     file_path: ~/.mecha/agent/db/settings.bin
 networking:
   enabled: true
+telemetry:
+  enabled: true
+  collect:
+    system: true
+    user: true
+  otel_collector:
+    bin: /etc/mecha/otelcol-contrib
+    conf: /etc/mecha/otel-collector-config.yaml

@@ -1,0 +1,167 @@
+# Basic Opentelemetry Profile
+#
+# Extensions - Plugins
+# Receivers - HostMetrics
+# Processors - Batch/Filter/Sampling/Attributes add/remove
+# Exporters - Logging
+# Pipelines - Configurations [Receiver > Processor > Exporter]
+#
+# End
+# Extensions
+extensions:
+  # Extensions: zPages (an HTTP endpoint that provides live data for debugging different components)
+  zpages:
+    endpoint: 0.0.0.0:55679
+  # Extension: Memory Ballast (sets a pre-sized heap for lower GC cycles)
+  memory_ballast:
+    size_mib: 50
+  basicauth/grafana:
+    client_auth: 
+      username: <USERNAME>
+      password: <PASSWORD>
+  basicauth/tempo:
+    client_auth: 
+      username: <USERNAME>
+      password: <PASSWORD>
+  # Extension: Healthcheck
+  health_check:
+    endpoint: 0.0.0.0:13133
+    path: "/health/status"
+    # check_collector_pipeline:
+    #   enabled: true
+    #   interval: "5m"
+  pprof:
+    endpoint: 0.0.0.0:1777
+    save_to_file: ./cpu_usage.txt
+# Receivers
+receivers:
+  hostmetrics/memory:
+    collection_interval: 60s
+    # root_path: /
+    scrapers:
+      memory:
+        metrics:
+          system.memory.usage: # Bytes of memory usage
+            enabled: true
+          system.memory.utilization: # Percentage of memory bytes in use
+            enabled: true
+  otlp:
+    protocols:
+      http:
+        endpoint:
+        cors:
+          allowed_origins:
+            - "*"
+            # Origins can have wildcards with *, use * by itself to match any origin.
+  filelog:
+    include: [ rolling.log ]
+    start_at: beginning
+    operators:
+      - type: json_parser
+        timestamp:
+          parse_from: attributes.time
+          layout: '%Y-%m-%d %H:%M:%S'
+  hostmetrics/cpu:
+    collection_interval: 60s
+    # root_path: / # RootFS to check
+    scrapers: ## Scrapers for different metrics
+      cpu:
+        metrics:
+          system.cpu.time: # Total CPU seconds broken down by different states
+            enabled: true
+          system.cpu.utilization: # Percentage of CPU time broken down by different states.
+            enabled: true
+  # HostMetrics: Load
+  hostmetrics/load:
+    collection_interval: 60s
+    # root_path: / # RootFS to check
+    scrapers: ## Scrapers for different metrics
+      cpu:
+        metrics:
+          system.cpu.time: # Total CPU seconds broken down by different states
+            enabled: true
+          system.cpu.utilization: # Percentage of CPU time broken down by different states.
+            enabled: true
+  # HostMetrics: Processes
+  hostmetrics/processes:
+    collection_interval: 60s
+    # root_path: /
+    scrapers:
+      processes:
+        metrics:
+          system.processes.count: # Total number of processes in each state
+            enabled: true
+          system.processes.created: # Total number of created processes
+            enabled: true
+  # Filelog: /var/log/syslog
+  filelog/syslog:
+    include: [ /var/log/syslog ]
+    resource:
+      - machine_id: mecha_comet-m
+      - stream_name: syslog
+  # Not working
+  syslog:
+    udp:
+      listen_address: "localhost:514"
+    protocol: rfc5424
+    location: UTC
+# Processors
+processors:
+  batch:
+  attributes:
+    actions:
+      - action: insert
+        key: event_domain
+        from_attribute: event.domain
+      - action: insert
+        key: loki.attribute.labels
+        value: event_domain
+
+  resource:
+    attributes:
+      - action: insert
+        key: loki.resource.labels
+        value: machine_id, stream_name      
+# Exporters
+exporters:
+  file/no_rotation:
+    path: ./foo1
+  prometheusremotewrite:
+    endpoint: <PROM_ENDPOINT>
+    auth:
+      authenticator: basicauth/grafana
+    headers: # Pass extra headers
+    external_labels: # Pass extra labels
+      machine_id: example-machine-id
+    resource_to_telemetry_conversion: # Convert resource attributes
+      enabled: true
+  otlp:
+    endpoint: 0.0.0.0:3001
+    compression: none
+    retry_on_failure:
+      enabled: false
+    tls:
+      insecure: true
+    headers:
+      user: "User"
+  otlp/2:
+    endpoint: 0.0.0.0:3001
+    compression: none
+    tls:
+      insecure: true
+    headers:
+      user: "System"
+  # Logging: Prints Otelcol logs to console
+  logging:
+    verbosity: detailed # can be detailed|normal|basic
+# Service
+service:
+  pipelines:
+    logs:
+      receivers: [filelog/syslog]
+      processors: [attributes,resource]
+      exporters: [otlp]
+    metrics:
+      receivers: [hostmetrics/memory]
+      exporters: [otlp]  
+  extensions: [basicauth/tempo]
