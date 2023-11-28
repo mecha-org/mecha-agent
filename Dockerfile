@@ -44,7 +44,7 @@ RUN apt-get update && \
 # Download and extract the OpenTelemetry Collector contrib binary
 RUN wget -O /tmp/otelcol-contrib.tar.gz $OTLP_COL_PACKAGE_URL && \
     tar -xzf /tmp/otelcol-contrib.tar.gz -C /tmp && \
-    mv /tmp/otelcol-contrib /etc/mecha/otelcol-contrib
+    mv /tmp/otelcol-contrib /usr/bin/otelcol-contrib
 
 # Cleanup
 RUN rm /tmp/otelcol-contrib.tar.gz
