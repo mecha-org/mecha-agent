@@ -8,3 +8,4 @@ settings.yml
 ./networking/**/tmp/
 debug/
 target/
+~/*

@@ -12,6 +12,7 @@ homepage.workspace = true
 [dependencies]
 crypto = { path = "../commons/crypto" }
 settings = { path = "../commons/settings" }
+fs = { path = "../commons/fs" }
 anyhow = { version = "1.0.71", features = ["backtrace"]}
 mkdirp = "1.0.0"
 openssl = "0.10.56"
