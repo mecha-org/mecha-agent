@@ -4,6 +4,7 @@ use crate::nebula::generate_nebula_key_cert;
 use crate::nebula::is_cert_valid;
 use crate::nebula::is_cert_verifed;
 use crate::nebula::start_nebula;
+use crate::nebula::FirewallRule;
 use crate::nebula::NebulaSettings;
 use crate::utils::extract_tar_file;
 use crate::utils::extract_zip_file;
@@ -13,6 +14,7 @@ use anyhow::{bail, Result};
 use crypto::base64::b64_decode;
 use device_settings::services::DeviceSettings;
 use identity::service::Identity;
+use ipaddress::IPAddress;
 use messaging::{
     service::{Messaging, MessagingScope},
     Bytes,
@@ -83,11 +85,25 @@ pub struct IssueCertRes {
     pub ca_cert: String,
     pub cert_valid_upto: String,
 }
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkingFirewallRules {
+    pub device_id: String,
+    pub name: String,
+    pub direction: String,
+    pub roles: String,
+    pub protocol: String,
+    pub allow_ports: String,
+    pub status: String,
+}
+
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct OverrideConfigurations {
     pub cert: String,
     pub key: String,
     pub ca: String,
+    pub networking_firewall_rules: Vec<NetworkingFirewallRules>,
 }
 
 impl Networking {
@@ -638,6 +654,75 @@ impl Networking {
         Ok(true)
     }
 
+    pub fn create_firewall_rules(
+        &self,
+        roles: &str,
+        port: &str,
+        protocol: &str,
+    ) -> Vec<FirewallRule> {
+        let mut firewall_rules: Vec<FirewallRule> = vec![];
+        roles.split(",").into_iter().for_each(|role| {
+            let mut firewall_rule = FirewallRule {
+                port: String::from(port),
+                proto: protocol.to_lowercase(),
+                ..Default::default()
+            };
+            //If IP address then add as cidr
+            if IPAddress::is_valid(role) {
+                firewall_rule.cidr = Some(role.to_owned());
+            }
+            //If colon separated string, use group
+            else if role.contains(":") {
+                firewall_rule.group = Some(role.to_owned());
+            }
+            //If any use CIDR 0.0.0.0/0
+            else if role == "any" {
+                firewall_rule.cidr = Some("0.0.0.0/0".to_string());
+            }
+            //If role is a string then use host
+            else {
+                firewall_rule.host = Some(role.to_owned());
+            }
+
+            firewall_rules.push(firewall_rule);
+        });
+        firewall_rules
+    }
+
+    pub fn get_firewall_rules(
+        &self,
+        networking_firewall_rules: &Vec<NetworkingFirewallRules>,
+    ) -> (Vec<FirewallRule>, Vec<FirewallRule>) {
+        let mut inbound_firewall_rules: Vec<FirewallRule> = vec![];
+        let mut outbound_firewall_rules: Vec<FirewallRule> = vec![];
+        networking_firewall_rules
+            .into_iter()
+            .filter(|machine_firewall_rule| machine_firewall_rule.status.to_lowercase() == "active")
+            .for_each(|machine_firewall_rule| {
+                machine_firewall_rule
+                    .allow_ports
+                    .split(",")
+                    .into_iter()
+                    .for_each(|port| {
+                        let firewall_rules = self.create_firewall_rules(
+                            &machine_firewall_rule.roles,
+                            port,
+                            &machine_firewall_rule.protocol,
+                        );
+                        match machine_firewall_rule.direction.to_uppercase().as_str() {
+                            "INBOUND" => {
+                                inbound_firewall_rules.extend_from_slice(&firewall_rules);
+                            }
+                            "OUTBOUND" => {
+                                outbound_firewall_rules.extend_from_slice(&firewall_rules);
+                            }
+                            _ => {}
+                        }
+                    });
+            });
+        (inbound_firewall_rules, outbound_firewall_rules)
+    }
+
     pub async fn generate_nebula_configuartion_file(
         &self,
         encoded_base_config: &str,
@@ -695,6 +780,12 @@ impl Networking {
         nebula_settings.pki.key = overide_configurations.key.to_string();
         nebula_settings.pki.ca = overide_configurations.ca.to_string();
 
+        let (inbound_firewall_roles, outbound_firewall_roles) =
+            self.get_firewall_rules(&overide_configurations.networking_firewall_rules);
+
+        nebula_settings.firewall.inbound = inbound_firewall_roles;
+        nebula_settings.firewall.outbound = outbound_firewall_roles;
+
         info!(
             task,
             target, trace_id, "nebula settings overrided and crated successfully"
@@ -744,6 +835,55 @@ impl Networking {
             target, trace_id, "nebula config file crated successfully",
         );
         Ok(true)
+    }
+
+    pub async fn get_networking_firewall_rules(&self) -> Result<Vec<NetworkingFirewallRules>> {
+        let trace_id = find_current_trace_id();
+        let task = "start";
+        let target = "get_networking_firewall_rules";
+
+        info!(task, target, trace_id,);
+        let machine_settings = DeviceSettings::new(self.settings.clone());
+        let networking_firewall_rules_str = match machine_settings
+            .get_settings("networking.firewall.rules".to_string())
+            .await
+        {
+            Ok(v) => {
+                if v.is_empty() {
+                    bail!(NetworkingError::new(
+                        NetworkingErrorCodes::MachineSettingsNetworkingFirewallRulesNotFoundError,
+                        format!("networking firewall rules empty in machine settings",),
+                        true
+                    ))
+                }
+                v
+            }
+            Err(e) => bail!(NetworkingError::new(
+                NetworkingErrorCodes::MachineSettingsNetworkingFirewallRulesNotFoundError,
+                format!(
+                    "networking firewall rules not found in machine settings, error - {}",
+                    e.to_string()
+                ),
+                true
+            )),
+        };
+
+        let networking_firewall_rules: Vec<NetworkingFirewallRules> =
+            match serde_json::from_str(&networking_firewall_rules_str) {
+                Ok(s) => s,
+                Err(e) => {
+                    bail!(NetworkingError::new(
+                        NetworkingErrorCodes::ExtractNetworkingFirewallRulesPayloadError,
+                        format!(
+                            "Error converting payload to NetworkingFirewallRules - {}",
+                            e
+                        ),
+                        true
+                    ))
+                }
+            };
+
+        Ok(networking_firewall_rules)
     }
 
     pub async fn start(&self) -> Result<bool> {
@@ -902,10 +1042,18 @@ impl Networking {
             "thread have sudo permissions",
         );
 
+        let networking_firewall_rules = match self.get_networking_firewall_rules().await {
+            Ok(v) => v,
+            Err(_) => {
+                vec![]
+            }
+        };
+
         let overide_configurations = OverrideConfigurations {
             cert: format!("{}/machine.crt", certs_dir),
             key: format!("{}/machine.key", certs_dir),
             ca: format!("{}/ca.crt", certs_dir),
+            networking_firewall_rules,
         };
 
         match self
