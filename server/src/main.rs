@@ -58,16 +58,10 @@ async fn init_grpc_server() -> Result<()> {
         Err(_e) => AgentSettings::default(),
     };
 
-    //initiate messaging service and publish a message
-    let mut messaging_client =
-        Messaging::new(MessagingScope::System, settings.messaging.system.enabled);
-    let _ = match messaging_client.connect().await {
-        Ok(s) => s,
-        Err(e) => bail!(TelemetryError::new(
-            TelemetryErrorCodes::InitMessagingClientError,
-            format!("error initializing messaging client - {}", e),
-            true
-        )),
+    let identity_client = Identity::new(settings.clone());
+    let is_provisioned = match identity_client.is_device_provisioned() {
+        Ok(v) => v,
+        Err(e) => bail!(e),
     };
 
     let addr = format!(
@@ -78,40 +72,68 @@ async fn init_grpc_server() -> Result<()> {
     .parse()
     .unwrap();
     let provisioning_service = ProvisioningServiceHandler::default();
-    let trace_service = TelemetryTraceHandler {
-        messaging_client: messaging_client.clone(),
-    };
-    let log_service = TelemetryLogsHandler {
-        messaging_client: messaging_client.clone(),
-    };
-    let metrics_service = TelemetryMetricsHandler {
-        messaging_client: messaging_client.clone(),
-    };
-    let device_settings_service = DeviceSettingServiceHandler::default();
+    if is_provisioned {
+        //initiate messaging service and publish a message
+        let mut messaging_client =
+            Messaging::new(MessagingScope::System, settings.messaging.system.enabled);
+        let _ = match messaging_client.connect().await {
+            Ok(s) => s,
+            Err(e) => bail!(TelemetryError::new(
+                TelemetryErrorCodes::InitMessagingClientError,
+                format!("error initializing messaging client - {}", e),
+                true
+            )),
+        };
 
-    info!(
-        task = "init_grpc_server",
-        result = "success",
-        "agent server listening on {} [grpc]",
-        addr
-    );
+        let trace_service = TelemetryTraceHandler {
+            messaging_client: messaging_client.clone(),
+        };
+        let log_service = TelemetryLogsHandler {
+            messaging_client: messaging_client.clone(),
+        };
+        let metrics_service = TelemetryMetricsHandler {
+            messaging_client: messaging_client.clone(),
+        };
+        let device_settings_service = DeviceSettingServiceHandler::default();
 
-    match Server::builder()
-        .add_service(ProvisioningServiceServer::new(provisioning_service))
-        .add_service(MetricsServiceServer::new(metrics_service))
-        .add_service(LogsServiceServer::new(log_service))
-        .add_service(TraceServiceServer::new(trace_service))
-        .add_service(DeviceSettingServiceServer::new(device_settings_service))
-        .serve(addr)
-        .await
-    {
-        Ok(s) => s,
-        Err(e) => bail!(AgentServerError::new(
-            AgentServerErrorCodes::InitGRPCServerError,
-            format!("error initializing grpc server - {}", e),
-            true
-        )),
-    };
+        info!(
+            task = "init_grpc_server",
+            result = "success",
+            "agent server listening on {} [grpc]",
+            addr
+        );
+
+        match Server::builder()
+            .add_service(ProvisioningServiceServer::new(provisioning_service))
+            .add_service(MetricsServiceServer::new(metrics_service))
+            .add_service(LogsServiceServer::new(log_service))
+            .add_service(TraceServiceServer::new(trace_service))
+            .add_service(DeviceSettingServiceServer::new(device_settings_service))
+            .serve(addr)
+            .await
+        {
+            Ok(s) => s,
+            Err(e) => bail!(AgentServerError::new(
+                AgentServerErrorCodes::InitGRPCServerError,
+                format!("error initializing grpc server - {}", e),
+                true
+            )),
+        };
+    } else {
+        match Server::builder()
+            .add_service(ProvisioningServiceServer::new(provisioning_service))
+            .serve(addr)
+            .await
+        {
+            Ok(s) => s,
+            Err(e) => bail!(AgentServerError::new(
+                AgentServerErrorCodes::InitGRPCServerError,
+                format!("error initializing grpc server - {}", e),
+                true
+            )),
+        };
+    }
+
     Ok(())
 }
 
