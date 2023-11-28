@@ -26,6 +26,30 @@ RUN apt update \
     && apt clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
+# Set the version and URL for the OpenTelemetry Collector contrib binary
+ENV OTLP_VERSION=0.86.0
+ENV OTLP_ARCH=linux_386
+ENV OTLP_URL=https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.86.0/otelcol-contrib_0.86.0_linux_amd64.tar.gz
+
+# Create parent directory
+RUN mkdir -p /etc/mecha && \
+    mkdir /etc/mecha/otel-collector
+
+# Copy your collector configuration file into the container
+COPY ./otel-collector-config.yaml /etc/mecha/otel-collector-config.yaml
+
+# Install necessary tools
+RUN apt-get update && \
+    apt-get install -y wget tar
+
+# Download and extract the OpenTelemetry Collector contrib binary
+RUN wget -O /tmp/otelcol-contrib.tar.gz $OTLP_URL && \
+    tar -xzf /tmp/otelcol-contrib.tar.gz -C /tmp && \
+    mv /tmp/otelcol-contrib /etc/mecha/otelcol-contrib
+
+# Cleanup
+RUN rm /tmp/otelcol-contrib.tar.gz
+
 EXPOSE 3001
 
 COPY --from=builder /usr/app/target/release/mecha_agent_server ./

@@ -221,6 +221,13 @@ async fn main() -> Result<()> {
         "tracing set up",
     );
 
+    let start_services = tokio::spawn(async move {
+        if let Err(e) = start_services(settings).await {
+            eprintln!("Error initializing services: {:?}", e);
+        } else {
+            println!("Services started successfully!");
+        }
+    });
     // Start the gRPC server in its own task
     let start_grpc = tokio::spawn(async move {
         if let Err(e) = init_grpc_server().await {
@@ -230,14 +237,7 @@ async fn main() -> Result<()> {
         }
     });
 
-    let start_services = tokio::spawn(async move {
-        if let Err(e) = start_services(settings).await {
-            eprintln!("Error initializing services: {:?}", e);
-        } else {
-            println!("Services started successfully!");
-        }
-    });
-    tokio::join!(start_grpc, start_services);
+    let _ = tokio::join!(start_services, start_grpc);
     Ok(())
 }
 
