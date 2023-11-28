@@ -15,15 +15,15 @@ provisioning:
     engine:
   paths:
     device:
-      private_key: ~/.mecha/agent/.keys/device.key
-      csr: ~/.mecha/agent/certs/device.csr
-      cert: ~/.mecha/agent/certs/device.pem
+      private_key: /home/user/.mecha/agent/.keys/device.key
+      csr: /home/user/.mecha/agent/certs/device.csr
+      cert: /home/user/.mecha/agent/certs/device.pem
     server:
-      cert: ~/.mecha/agent/certs/server.pem
+      cert: /home/user/.mecha/agent/certs/server.pem
     intermediate:
-      cert: ~/.mecha/agent/certs/intermediate.pem
+      cert: /home/user/.mecha/agent/certs/intermediate.pem
     root:
-      cert: ~/.mecha/agent/certs/root.pem
+      cert: /home/user/.mecha/agent/certs/root.pem
 messaging:
   system:
     enabled: true
@@ -38,7 +38,7 @@ messaging:
 device_settings:
   storage:
     type: file
-    file_path: ~/.mecha/agent/db/settings.bin
+    file_path: /home/user/.mecha/agent/db/settings.bin
 networking:
   enabled: true
 telemetry:
@@ -47,5 +47,5 @@ telemetry:
     system: true
     user: true
   otel_collector:
-    bin: /etc/mecha/otelcol-contrib
-    conf: /etc/mecha/otel-collector-config.yaml
+    bin: /usr/bin/otelcol-contrib
+    conf: /etc/mecha/otel-contrib.yml

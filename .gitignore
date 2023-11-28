@@ -1,11 +1,13 @@
 **/target/
-
 **/.DS_Store
+debug/
+target/
+./~/*
+
+# Mecha Agent specific
 settings.yml
+otel-contrib.yml
 .env
 **/private_key.pem
 **/public_key.pem
-./networking/**/tmp/
-debug/
-target/
-~/*
+
