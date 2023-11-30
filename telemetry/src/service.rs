@@ -35,15 +35,11 @@ pub struct TelemetryService {
 
 impl TelemetryService {
     pub fn telemetry_init(settings: AgentSettings) -> Result<String> {
-        let trace_id = find_current_trace_id();
-        tracing::info!(trace_id, task = "telemetry_init", "init");
         if settings.telemetry.enabled {
             let _ = Command::new(settings.telemetry.otel_collector.bin)
                 .arg("--config")
                 .arg(settings.telemetry.otel_collector.conf.clone())
                 .spawn();
-
-            tracing::info!(trace_id, task = "telemetry_init", "telemetry initialized");
             Ok("success".to_string())
         } else {
             bail!(TelemetryError::new(
@@ -117,9 +113,6 @@ impl TelemetryService {
         logs_type: &str,
         messaging_client: Messaging,
     ) -> Result<String> {
-        let trace_id = find_current_trace_id();
-        tracing::trace!(trace_id, task = "user_logs", "init");
-
         let machine_id = match get_machine_id() {
             Ok(v) => v,
             Err(e) => bail!(e),
@@ -143,7 +136,6 @@ impl TelemetryService {
             let subject = format!("device.{}.telemetry.logs", sha256::digest(machine_id));
             match messaging_client.publish(&subject, payload.into()).await {
                 Ok(_) => {
-                    tracing::info!(trace_id, task = "user_logs", "user logs sent successfully");
                     println!("logs sent successfully");
                     return Ok("Success".to_string());
                 }

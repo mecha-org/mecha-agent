@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{bail, Result};
@@ -17,7 +18,11 @@ use telemetry::errors::{TelemetryError, TelemetryErrorCodes};
 use telemetry::service::TelemetryService;
 use tonic::transport::Server;
 use tracing::info;
+use tracing_appender::non_blocking;
+use tracing_appender::rolling::never;
+use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
+use tracing_subscriber::EnvFilter;
 
 pub mod errors;
 pub mod services;
@@ -190,10 +195,6 @@ async fn init_telemetry() -> Result<bool> {
     }
 
     let _ = TelemetryService::telemetry_init(agent_settings);
-    info!(
-        target = "init_telemetry_otel_collector_service",
-        "telemetry services started"
-    );
     Ok(true)
 }
 
@@ -250,16 +251,36 @@ async fn main() -> Result<()> {
             },
         ));
     }
-    // let filter = Targets::new().with_target("networking", LevelFilter::TRACE);
 
-    // TODO: logging to an output file
-    // start the tracing service
+    let path = Path::new(settings.logging.path.as_str());
+    let directory = path.parent().unwrap();
+    let file_name = path.file_name().unwrap();
+    let file_appender = never(directory, file_name);
+    let (non_blocking_writer, _guard) = non_blocking(file_appender);
+    // Set optional layer for logging to a file
+    let layer = if settings.logging.enabled && !settings.logging.path.is_empty() {
+        Some(
+            Layer::new()
+                .with_writer(non_blocking_writer)
+                .with_ansi(false),
+        )
+    } else {
+        None
+    };
+
     let subscriber = tracing_subscriber::registry()
+        .with(layer)
+        .with(EnvFilter::new(settings.logging.level.as_str()))
         .with(sentry_tracing::layer().event_filter(|_| EventFilter::Ignore))
         .with(build_loglevel_filter_layer()) //temp for terminal log
         .with(build_logger_text()) //temp for terminal log
         .with(build_otel_layer().unwrap()); // trace collection layer
-    tracing::subscriber::set_global_default(subscriber).unwrap();
+
+    match tracing::subscriber::set_global_default(subscriber) {
+        Ok(_) => (),
+        Err(e) => bail!(e),
+    };
+
     tracing::info!(
         //sample log
         task = "tracing_setup",
