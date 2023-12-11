@@ -18,6 +18,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::str;
 use tokio::sync::broadcast::Sender;
+use tracing::info;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -162,6 +163,12 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
         Err(e) => bail!(e),
     };
     let _ = event_tx.send(Event::Provisioning(events::ProvisioningEvent::Provisioned));
+    info!(
+        trace_id,
+        task = "provision_me",
+        result = "success",
+        "machine provisioned successfully"
+    );
     Ok(true)
 }
 

@@ -1,6 +1,7 @@
 use crate::errors::{CryptoError, CryptoErrorCodes};
 use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
+use fs::safe_open_file;
 use openssl::{asn1::Asn1Time, pkey::PKey, sign::Signer, x509::X509};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -207,7 +208,7 @@ pub fn generate_csr(file_path: &str, private_key_path: &str, common_name: &str) 
 pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<u8>> {
     // Load the private key from a file
     let mut private_key_buf = Vec::new();
-    let mut file = match File::open(private_key_path) {
+    let mut file = match safe_open_file(private_key_path) {
         Ok(v) => v,
         Err(e) => bail!(CryptoError::new(
             CryptoErrorCodes::ReadPrivateKeyError,

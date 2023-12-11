@@ -8,6 +8,7 @@ use tokio::{
     sync::{broadcast, mpsc, oneshot},
 };
 use tonic::async_trait;
+use tracing::info;
 
 use crate::service::{Messaging, MessagingScope};
 
@@ -55,7 +56,7 @@ impl MessagingHandler {
     pub fn new(options: MessagingOptions) -> Self {
         Self {
             event_tx: options.event_tx,
-            status: ServiceStatus::INACTIVE,
+            status: ServiceStatus::STARTED,
             messaging_client: Messaging::new(MessagingScope::System, true),
             identity_tx: options.identity_tx,
         }
@@ -63,43 +64,62 @@ impl MessagingHandler {
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<MessagingMessage>) {
         // start the service
         let _ = &self.start().await;
+        let mut event_rx = self.event_tx.subscribe();
         loop {
             select! {
-                msg = message_rx.recv() => {
-                    if msg.is_none() {
-                        continue;
-                    }
+                            msg = message_rx.recv() => {
+                                if msg.is_none() {
+                                    continue;
+                                }
 
-                    match msg.unwrap() {
-                        MessagingMessage::Send{reply_to, message, subject} => {
-                            let res = self.messaging_client.publish(&subject.as_str(), Bytes::from(message)).await;
-                            let _ = reply_to.send(res);
+                                match msg.unwrap() {
+                                    MessagingMessage::Send{reply_to, message, subject} => {
+                                        let res = self.messaging_client.publish(&subject.as_str(), Bytes::from(message)).await;
+                                        let _ = reply_to.send(res);
 
-                        }
-                        MessagingMessage::Request{reply_to, message, subject} => {
-                            let res = self.messaging_client.request(&subject.as_str(), Bytes::from(message)).await;
-                            let _ = reply_to.send(res);
-                        },
-                        MessagingMessage::Connect { reply_to } => {
-                            let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
-                            let _ = reply_to.send(res);
-                        },
-                        MessagingMessage::Disconnect { reply_to } => todo!(),
-                        MessagingMessage::Reconnect { reply_to } => {
-                            let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
-                            let _ = reply_to.send(res);
-                        },
-                        MessagingMessage::Subscriber { reply_to, subject } => {
-                            let res = self.messaging_client.subscribe(subject.as_str()).await;
-                            let _ = reply_to.send(res);
-                        },
-                        MessagingMessage::InitJetStream { reply_to } => {
-                            let res = self.messaging_client.init_jetstream().await;
-                            let _ = reply_to.send(res);
-                        }
-                    };
+                                    }
+                                    MessagingMessage::Request{reply_to, message, subject} => {
+                                        let res = self.messaging_client.request(&subject.as_str(), Bytes::from(message)).await;
+                                        let _ = reply_to.send(res);
+                                    },
+                                    MessagingMessage::Connect { reply_to } => {
+                                        let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
+                                        let _ = reply_to.send(res);
+                                    },
+                                    MessagingMessage::Disconnect { reply_to } => todo!(),
+                                    MessagingMessage::Reconnect { reply_to } => {
+                                        let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
+                                        let _ = reply_to.send(res);
+                                    },
+                                    MessagingMessage::Subscriber { reply_to, subject } => {
+                                        let res = self.messaging_client.subscribe(subject.as_str()).await;
+                                        let _ = reply_to.send(res);
+                                    },
+                                    MessagingMessage::InitJetStream { reply_to } => {
+                                        let res = self.messaging_client.init_jetstream().await;
+                                        let _ = reply_to.send(res);
+                                    }
+                                };
+                            }
+            // Receive events from other services
+            event = event_rx.recv() => {
+                if event.is_err() {
+                    continue;
+                }
+                match event.unwrap() {
+                    Event::Provisioning(events::ProvisioningEvent::Provisioned) => {
+                        info!("Messaging service received provisioning event");
+                        println!("Messaging service received provisioning event");
+                        let _ = &self.start().await;
+                    },
+                    Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
+                        let _ = &self.stop().await;
+                    },
+                    Event::Messaging(_) => {},
+                    Event::Settings(_) => {},
                 }
             }
+                        }
         }
     }
 }

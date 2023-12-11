@@ -206,7 +206,7 @@ pub async fn start_consumer(
         )),
     };
 
-    // mpsc getting blocked due to while that's why spawning a new task
+    // mpsc getting blocked due to while loop that's why spawning a new task
     tokio::spawn(async move {
         while let Some(Ok(message)) = messages.next().await {
             let _status = process_message(
@@ -287,11 +287,13 @@ async fn process_message(
     if let Some(header_value) = header_map_values.get(header_name) {
         let (tx, _rx) = oneshot::channel();
         // Publish ack message to service
-        let _ = messaging_tx.send(MessagingMessage::Send {
-            reply_to: tx,
-            message: header_value.to_string(),
-            subject: json!(ack_payload).to_string(),
-        });
+        let _ = messaging_tx
+            .send(MessagingMessage::Send {
+                reply_to: tx,
+                message: json!(ack_payload).to_string(),
+                subject: header_value.to_string(),
+            })
+            .await;
     } else {
         bail!(DeviceSettingError::new(
             DeviceSettingErrorCodes::AckHeaderNotFoundError,
@@ -313,7 +315,6 @@ async fn get_machine_id(identity_tx: Sender<IdentityMessage>) -> Result<String> 
             if machine_id_result.is_ok() {
                 match machine_id_result {
                     Ok(machine_id_value) => {
-                        println!("Machine ID: {}", machine_id_value);
                         machine_id = machine_id_value;
                     }
                     Err(_) => {

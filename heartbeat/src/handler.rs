@@ -13,6 +13,7 @@ use tokio::{
     },
 };
 use tonic::async_trait;
+use tracing::info;
 
 use crate::service::{get_time_interval, send_heartbeat, SendHeartbeatOptions};
 
@@ -45,11 +46,10 @@ impl HeartbeatHandler {
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<HeartbeatMessage>) {
         // start the service
-        // TODO: FOR HEARTBEAT WE DON'T NEED TO START DEFAULT, IT WILL BE START ONCE MACHINE GET PROVISIONED
         let _ = &self.start().await;
         let interval_in_secs: u64 = get_time_interval();
         let mut event_rx = self.event_tx.subscribe();
-        let mut timer = tokio::time::interval(std::time::Duration::from_secs(10));
+        let mut timer = tokio::time::interval(std::time::Duration::from_secs(interval_in_secs));
         loop {
             select! {
                     msg = message_rx.recv() => {
@@ -75,6 +75,7 @@ impl HeartbeatHandler {
                         }
                         match event.unwrap() {
                             Event::Provisioning(events::ProvisioningEvent::Provisioned) => {
+                                info!("Heartbeat service received provisioning event");
                                 let _ = &self.start().await;
                             },
                             Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
@@ -91,6 +92,8 @@ impl HeartbeatHandler {
                                 messaging_tx: self.messaging_tx.clone(),
                                 identity_tx: self.identity_tx.clone(),
                             }).await;
+                    } else {
+                        info!("Heartbeat service is not started");
                     }
                 }
             }

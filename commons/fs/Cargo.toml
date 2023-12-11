@@ -14,3 +14,4 @@ homepage.workspace = true
 [dependencies]
 anyhow = { version = "1.0.71", features = ["backtrace"]}
 mkdirp = "1.0.0"
+dirs = "5.0.1"

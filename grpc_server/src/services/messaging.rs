@@ -39,10 +39,9 @@ impl MessagingService for MessagingServiceHandler {
             .await;
 
         // TODO handle
-        let reply =
-            rx.await.unwrap_or(Err(
-                Status::unavailable("provisioning service unavailable").into()
-            ));
+        let reply = rx.await.unwrap_or(Err(
+            Status::unavailable("messaging service unavailable").into()
+        ));
 
         if reply.is_ok() {
             let status = reply.unwrap();

@@ -198,7 +198,10 @@ impl Messaging {
 
         let nats_client = self.nats_client.as_ref().unwrap();
         let is_published = match nats_client.publish(subject, data).await {
-            Ok(s) => s,
+            Ok(s) => {
+                println!("published to subject: {}", subject);
+                s
+            }
             Err(e) => bail!(e),
         };
 
