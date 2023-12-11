@@ -12,9 +12,11 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+events = { path = "../core/events" }
+services = { path = "../core/services" }
 messaging = { path = "../messaging" }
 identity = { path = "../identity" }
-settings = { path = "../commons/settings" }
+agent_settings = { path = "../core/settings" }
 crypto = { path = "../commons/crypto" }
 anyhow = { version = "1.0.71", features = ["backtrace"]}
 sentry-tracing = {version = "0.31.0"}

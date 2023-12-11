@@ -1,0 +1,54 @@
+version: 1.0
+sentry:
+  enabled: true
+  dsn:
+logging:
+  enabled: true
+  path: /var/log/mecha-agent.log
+  level: info
+server:
+  url: 0.0.0.0
+  port: 3001
+  tls: false
+provisioning: 
+  server_url: http://localhost:3000
+  openssl:
+    engine:
+  paths:
+    device:
+      private_key: ~/.mecha/openssl/ecdsa/key.pem
+      csr: ~/.mecha/openssl/ecdsa/csr.pem
+      cert: ~/.mecha/agent/certs/device.pem
+    server:
+      cert: ~/.mecha/agent/certs/server.pem
+    intermediate:
+      cert: ~/.mecha/agent/certs/intermediate.pem
+    root:
+      cert: ~/.mecha/agent/certs/root.pem
+messaging:
+  system:
+    enabled: true
+    url: nats.sandbox.mecha.build:4222
+  user:
+    enabled: true
+    url: nats.sandbox.mecha.build:4222
+  service_urls:
+    base_url: http://localhost:3000
+    get_nonce: /v1/messaging/get_nonce
+    issue_auth_token: /v1/messaging/issue_token
+device_settings:
+  storage:
+    type: file
+    file_path: ~/.mecha/agent/db/settings.bin
+heartbeat:
+  time_interval_sec: 60
+networking:
+  enabled: true
+telemetry:
+  enabled: true
+  collect:
+    system: true
+    user: true
+  otel_collector:
+    bin: /etc/mecha/telemetry/otelcol-contrib
+    conf: /etc/mecha/telemetry/tracing-promql.yml

@@ -9,6 +9,7 @@ use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 pub mod errors;
 pub mod jetstream;
+pub use async_nats::jetstream::message::Message;
 
 #[derive(Clone)]
 pub struct NatsClient {
@@ -38,7 +39,6 @@ impl NatsClient {
             task = "connect",
             "connecting to nats"
         );
-
         // Connect to nats
         let key_pair = self.user_key_pair.clone();
         self.client = match async_nats::ConnectOptions::new()
@@ -61,7 +61,6 @@ impl NatsClient {
                 true
             )),
         };
-
         info!(
             target = "nats_client",
             task = "connect",
@@ -100,7 +99,6 @@ impl NatsClient {
     pub async fn publish(&self, subject: &str, data: Bytes) -> Result<bool> {
         let trace_id = find_current_trace_id();
         tracing::trace!(trace_id, target = "nats_client", task = "publish", "init");
-
         let client = match self.get_connected_client() {
             Ok(c) => c,
             Err(e) => bail!(e),
@@ -112,17 +110,18 @@ impl NatsClient {
             task = "publish",
             "nats client is in connected status"
         );
-
         match client.publish(String::from(subject), data.clone()).await {
             Ok(v) => v,
-            Err(e) => bail!(NatsClientError::new(
-                NatsClientErrorCodes::PublishError,
-                format!(
-                    "error publishing message to sub - {}, error - {}",
-                    subject, e
-                ),
-                true
-            )),
+            Err(e) => {
+                bail!(NatsClientError::new(
+                    NatsClientErrorCodes::PublishError,
+                    format!(
+                        "error publishing message to sub - {}, error - {}",
+                        subject, e
+                    ),
+                    true
+                ))
+            }
         }
         Ok(true)
     }
