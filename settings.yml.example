@@ -1,0 +1,51 @@
+version: 1.0
+sentry:
+  enabled: true
+  dsn:
+logging:
+  enabled: true
+  path:
+server:
+  url: 0.0.0.0
+  port: 3001
+  tls: false
+provisioning: 
+  server_url:  http://localhost:3000
+  openssl:
+    engine:
+  paths:
+    device:
+      private_key: /home/user/.mecha/agent/.keys/device.key
+      csr: /home/user/.mecha/agent/certs/device.csr
+      cert: /home/user/.mecha/agent/certs/device.pem
+    server:
+      cert: /home/user/.mecha/agent/certs/server.pem
+    intermediate:
+      cert: /home/user/.mecha/agent/certs/intermediate.pem
+    root:
+      cert: /home/user/.mecha/agent/certs/root.pem
+messaging:
+  system:
+    enabled: true
+    url: nats://127.0.0.1:4222
+  user:
+    enabled: true
+    url:  nats://127.0.0.1:4222
+  service_urls:
+    base_url:  http://localhost:3000
+    get_nonce: /v1/messaging/get_nonce
+    issue_auth_token: /v1/messaging/issue_token
+device_settings:
+  storage:
+    type: file
+    file_path: /home/user/.mecha/agent/db/settings.bin
+networking:
+  enabled: true
+telemetry:
+  enabled: true
+  collect:
+    system: true
+    user: true
+  otel_collector:
+    bin: /usr/bin/otelcol-contrib
+    conf: /etc/mecha/otel-contrib.yml
