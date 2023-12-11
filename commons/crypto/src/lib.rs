@@ -2,6 +2,7 @@ use std::{fs::File, io::Read};
 
 use anyhow::{bail, Result};
 use base64::b64_encode;
+use fs::safe_open_file;
 use openssl::{hash::MessageDigest, x509::X509};
 use serde::{Deserialize, Serialize};
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
@@ -29,7 +30,7 @@ pub fn get_machine_id() -> Result<String> {
     };
     let mut public_key_buf = Vec::new();
     let public_key_path = settings.provisioning.paths.device.cert.clone();
-    let mut file = match File::open(public_key_path) {
+    let mut file = match safe_open_file(public_key_path.as_str()) {
         Ok(v) => v,
         Err(e) => {
             bail!(CryptoError::new(
@@ -103,7 +104,7 @@ pub fn get_machine_cert() -> Result<MachineCert> {
 
     // Read public key
     let public_key_path = settings.provisioning.paths.device.cert.clone();
-    let mut pub_key_file = match File::open(public_key_path) {
+    let mut pub_key_file = match safe_open_file(public_key_path.as_str()) {
         Ok(v) => v,
         Err(e) => {
             bail!(CryptoError::new(
@@ -193,7 +194,7 @@ fn read_certificates(
 }
 
 fn read_file_to_string(file_path: &str) -> Result<String> {
-    let mut file = match File::open(file_path) {
+    let mut file = match safe_open_file(file_path) {
         Ok(v) => v,
         Err(e) => {
             bail!(CryptoError::new(

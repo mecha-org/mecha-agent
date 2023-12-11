@@ -17,7 +17,7 @@ use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HeartbeatPublishPayload {
     pub time: String,
-    pub machine_id: String,
+    pub device_id: String,
 }
 pub struct SendHeartbeatOptions {
     pub messaging_tx: Sender<MessagingMessage>,
@@ -67,7 +67,7 @@ pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<b
     let formatted_utc_time = current_utc_time.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
     let publish_payload = HeartbeatPublishPayload {
         time: formatted_utc_time,
-        machine_id: machine_id.clone(),
+        device_id: machine_id.clone(),
     };
     let _ = heartbeat_options
         .messaging_tx

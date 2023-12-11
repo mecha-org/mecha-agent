@@ -19,7 +19,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 async fn init_services() -> Result<bool> {
-    set_tracing().await;
+    let _ = set_tracing().await;
     let (event_tx, _) = broadcast::channel(CHANNEL_SIZE);
     // start services
     let (prov_t, prov_tx) = init_provisioning_service(ProvisioningOptions {
@@ -66,15 +66,6 @@ async fn init_services() -> Result<bool> {
         setting_tx.clone(),
     )
     .await;
-    // tokio::spawn(async move {
-    //     tokio::time::sleep(std::time::Duration::from_secs(20)).await;
-    //     let (tx, rx) = oneshot::channel();
-    //     let _ = heartbeat_tx
-    //         .send(HeartbeatMessage::Send { reply_to: tx })
-    //         .await;
-
-    //     let res = rx.await.expect("No reply from service");
-    // });
     // wait on all join handles
     prov_t.await.unwrap();
     identity_t.await.unwrap();

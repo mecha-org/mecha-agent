@@ -63,7 +63,6 @@ impl ProvisioningService for ProvisioningServiceHandler {
             })
             .await;
 
-        // TODO handle
         let reply =
             rx.await.unwrap_or(Err(
                 Status::unavailable("provisioning service unavailable").into()
