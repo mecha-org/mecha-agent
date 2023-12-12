@@ -35,7 +35,7 @@ RUN mkdir -p /etc/mecha && \
     mkdir /etc/mecha/otel-collector
 
 # Copy your collector configuration file into the container
-COPY ./otel-contrib.yml /etc/mecha/otel-contrib.yml
+COPY ./config/otel-contrib.yml /etc/mecha/otel-contrib.yml
 
 # Install necessary tools
 RUN apt-get update && \
