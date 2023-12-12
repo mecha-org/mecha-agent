@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+package messaging;
+
+service MessagingService {
+  rpc publish (SendMessageRequest) returns (SendMessageResponse);
+}
+
+message SendMessageRequest {
+    string subject = 1;
+    string message = 2;
+}
+
+message SendMessageResponse {
+    bool status = 1;
+}

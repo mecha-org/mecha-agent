@@ -14,6 +14,8 @@ pub enum CryptoErrorCodes {
     PemDeserializeError,
     ExtractSubjectNameError,
     FilePathError,
+    GenerateFingerprintError,
+    ReadCertFileError,
     #[default]
     UnknownError,
 }
@@ -41,6 +43,10 @@ impl fmt::Display for CryptoErrorCodes {
                 write!(f, "CryptoErrorCodes: ExtractSubjectNameError")
             }
             CryptoErrorCodes::FilePathError => write!(f, "CryptoErrorCodes: FilePathError"),
+            CryptoErrorCodes::GenerateFingerprintError => {
+                write!(f, "CryptoErrorCodes: GenerateFingerprintError")
+            }
+            CryptoErrorCodes::ReadCertFileError => write!(f, "CryptoErrorCodes: ReadCertFileError"),
         }
     }
 }
