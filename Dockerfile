@@ -51,7 +51,7 @@ RUN rm /tmp/otelcol-contrib.tar.gz
 
 EXPOSE 3001
 
-COPY --from=builder /usr/app/target/release/mecha_agent_server ./
+COPY --from=builder /usr/app/target/release/agent ./
 COPY ./settings.yml ./
 
-CMD ["/usr/app/mecha_agent_server", "-s", "/usr/app/settings.yml"]
+CMD ["/usr/app/agent", "-s", "/usr/app/settings.yml"]
