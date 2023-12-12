@@ -85,7 +85,7 @@ impl TelemetryService {
         if self.settings.telemetry.collect.user {
             match messaging_client
                 .publish(
-                    &format!("device.{}.telemetry.metrics", digest(machine_id)),
+                    &format!("machine.{}.telemetry.metrics", digest(machine_id)),
                     content.into(),
                 )
                 .await
@@ -140,7 +140,7 @@ impl TelemetryService {
         };
 
         if self.settings.telemetry.collect.user {
-            let subject = format!("device.{}.telemetry.logs", sha256::digest(machine_id));
+            let subject = format!("machine.{}.telemetry.logs", sha256::digest(machine_id));
             match messaging_client.publish(&subject, payload.into()).await {
                 Ok(_) => {
                     tracing::info!(trace_id, task = "user_logs", "user logs sent successfully");
@@ -193,7 +193,7 @@ impl TelemetryService {
         if self.settings.telemetry.collect.user {
             match messaging_client
                 .publish(
-                    &format!("device.{}.telemetry.trace", machine_id),
+                    &format!("machine.{}.telemetry.trace", machine_id),
                     payload.into(),
                 )
                 .await

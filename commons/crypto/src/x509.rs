@@ -1,16 +1,11 @@
 use crate::errors::{CryptoError, CryptoErrorCodes};
 use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
-use fs::safe_open_file;
-use openssl::{asn1::Asn1Time, pkey::PKey, sign::Signer, x509::X509};
+use fs::{construct_dir_path, safe_open_file};
+use openssl::{pkey::PKey, sign::Signer, x509::X509};
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt,
-    fs::File,
-    io::Read,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{fmt, fs::File, io::Read, path::Path, process::Command};
+use tracing::info;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 /**
@@ -78,7 +73,10 @@ pub struct DecodedCert {
 pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Result<bool> {
     let trace_id = find_current_trace_id();
     tracing::trace!(trace_id, task = "generate_ec_private_key", "init",);
-
+    let file_path_buf = match construct_dir_path(file_path) {
+        Ok(v) => v,
+        Err(e) => bail!(e),
+    };
     let elliptic_curve = match key_size {
         PrivateKeySize::EcP256 => String::from("secp256r1"),
         PrivateKeySize::EcP384 => String::from("secp384r1"),
@@ -91,7 +89,7 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
     };
 
     // Check if the directory of file_path exists, and create it if it doesn't.
-    let parent_directory = match Path::new(&file_path).parent() {
+    let parent_directory = match Path::new(&file_path_buf).parent() {
         Some(v) => v,
         None => bail!(CryptoError::new(
             CryptoErrorCodes::FilePathError,
@@ -99,6 +97,7 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
             true
         )),
     };
+    println!("parent_directory: {:?}", parent_directory);
     if !parent_directory.exists() {
         let _res = safe_create_dir(&file_path);
     }
@@ -111,7 +110,7 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
         .arg("-genkey")
         .arg("-noout")
         .arg("-out")
-        .arg(file_path)
+        .arg(file_path_buf.to_str().unwrap())
         .output();
 
     let output = match output_result {
@@ -153,22 +152,37 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
     Ok(true)
 }
 
-pub fn generate_csr(file_path: &str, private_key_path: &str, common_name: &str) -> Result<bool> {
+pub fn generate_csr(
+    csr_file_path: &str,
+    private_key_path: &str,
+    common_name: &str,
+) -> Result<bool> {
     let trace_id = find_current_trace_id();
     tracing::trace!(trace_id, task = "generate_csr", "init",);
 
     let subject = format!("/C=/ST=/L=/O=/OU=/CN={}", common_name);
+    let private_key_path_buf = match construct_dir_path(private_key_path) {
+        Ok(v) => v,
+        Err(e) => bail!(e),
+    };
+
+    let csr_file_path_buf = match construct_dir_path(csr_file_path) {
+        Ok(v) => v,
+        Err(e) => bail!(e),
+    };
+    info!(trace_id, "csr_file_path_buf: {:?}", csr_file_path_buf);
+    info!(trace_id, "private_key_path_buf: {:?}", private_key_path_buf);
     // Command: openssl req -new -sha256 -key key.pem -subj "/C=/ST=/L=/O=/OU=/CN=" -out req.pem
     let output_result = Command::new("openssl")
         .arg("req")
         .arg("-new")
         .arg("-sha256")
         .arg("-key")
-        .arg(private_key_path)
+        .arg(private_key_path_buf.to_str().unwrap())
         .arg("-subj")
         .arg(subject)
         .arg("-out")
-        .arg(file_path)
+        .arg(csr_file_path_buf.to_str().unwrap())
         .output();
 
     let output = match output_result {
@@ -268,15 +282,18 @@ pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<
 fn safe_create_dir(path: &str) -> Result<bool> {
     let trace_id = find_current_trace_id();
     tracing::info!(trace_id, task = "safe_create_dir", "init",);
-    let path = Path::new(&path);
+    let path_buf = match construct_dir_path(path) {
+        Ok(v) => v,
+        Err(e) => bail!(e),
+    };
 
     // Extract the file name (the last component of the path)
-    if let Some(file_name) = path.file_name() {
+    if let Some(file_name) = path_buf.file_name() {
         if let Some(_file_name_str) = file_name.to_str() {
-            let mut dir_to_crate = PathBuf::from(path);
+            let mut dir_to_create = path_buf.clone();
             //Last component will be pooled out
-            dir_to_crate.pop();
-            match mkdirp::mkdirp(&dir_to_crate) {
+            dir_to_create.pop();
+            match mkdirp::mkdirp(&dir_to_create) {
                 Ok(p) => p,
                 Err(err) => bail!(err),
             };

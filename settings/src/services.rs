@@ -57,7 +57,7 @@ pub async fn sync_settings(
     };
 
     let stream = match jet_stream_client
-        .get_stream("device_settings".to_string())
+        .get_stream("machine_settings".to_string())
         .await
     {
         Ok(s) => s,
@@ -94,7 +94,7 @@ pub async fn sync_settings(
     }
 
     // Create consumer
-    let filter_subject = format!("device.{}.settings.kv.>", digest(machine_id.clone()));
+    let filter_subject = format!("machine.{}.settings.kv.>", digest(machine_id.clone()));
     let consumer = match jet_stream_client
         .create_consumer(stream, filter_subject)
         .await
@@ -168,7 +168,7 @@ pub async fn start_consumer(
     };
 
     let stream = match jet_stream_client
-        .get_stream("device_settings".to_string())
+        .get_stream("machine_settings".to_string())
         .await
     {
         Ok(s) => s,
@@ -181,7 +181,7 @@ pub async fn start_consumer(
     };
 
     // Create consumer
-    let filter_subject = format!("device.{}.settings.kv.>", digest(machine_id.clone()));
+    let filter_subject = format!("machine.{}.settings.kv.>", digest(machine_id.clone()));
     let consumer = match jet_stream_client
         .create_consumer(stream, filter_subject)
         .await

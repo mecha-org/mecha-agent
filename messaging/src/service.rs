@@ -55,7 +55,7 @@ pub enum MessagingAuthTokenType {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GetAuthTokenRequest {
-    id: String,
+    machine_id: String,
     #[serde(rename = "type")]
     _type: MessagingAuthTokenType,
     scope: MessagingScope,
@@ -382,7 +382,7 @@ async fn get_auth_token(
     settings: &MessagingSettings,
 ) -> Result<String> {
     let request_body = GetAuthTokenRequest {
-        id: machine_id.to_string(),
+        machine_id: machine_id.to_string(),
         _type: MessagingAuthTokenType::Device,
         scope: scope,
         nonce: nonce.to_string(),

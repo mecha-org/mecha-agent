@@ -83,7 +83,7 @@ pub struct IssueCertRes {
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkingFirewallRules {
-    pub device_id: String,
+    pub machine_id: String,
     pub name: String,
     pub direction: String,
     pub roles: String,
@@ -884,7 +884,7 @@ pub async fn start(
 
     //Get provider config
     let topic_to_publish = format!(
-        "device.{}.networking.provider.metadata",
+        "machine.{}.networking.provider.metadata",
         digest(machine_id.to_string())
     );
     let provider_config: ProviderMetadataReply =
