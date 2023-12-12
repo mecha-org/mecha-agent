@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use crypto::MachineCert;
-use std::path::PathBuf;
+use fs::construct_dir_path;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 pub fn get_provision_status() -> Result<bool> {
@@ -12,8 +12,14 @@ pub fn get_provision_status() -> Result<bool> {
         Err(e) => bail!(e),
     };
 
-    let device_cert_path = PathBuf::from(certificate_paths.device.cert);
-    let device_private_key = PathBuf::from(certificate_paths.device.private_key);
+    let device_cert_path = match construct_dir_path(&certificate_paths.device.cert) {
+        Ok(v) => v,
+        Err(e) => bail!(e),
+    };
+    let device_private_key = match construct_dir_path(&certificate_paths.device.private_key) {
+        Ok(v) => v,
+        Err(e) => bail!(e),
+    };
 
     if device_cert_path.exists() && device_private_key.exists() {
         tracing::info!(

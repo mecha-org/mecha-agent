@@ -15,7 +15,9 @@ use tokio::{
 use tonic::async_trait;
 use tracing::info;
 
-use crate::service::{get_time_interval, send_heartbeat, SendHeartbeatOptions};
+use crate::service::{
+    device_provision_status, get_time_interval, send_heartbeat, SendHeartbeatOptions,
+};
 
 pub struct HeartbeatHandler {
     event_tx: broadcast::Sender<Event>,
@@ -104,7 +106,10 @@ impl HeartbeatHandler {
 #[async_trait]
 impl ServiceHandler for HeartbeatHandler {
     async fn start(&mut self) -> Result<bool> {
-        self.status = ServiceStatus::STARTED;
+        // Start if device is provisioned
+        if device_provision_status(self.identity_tx.clone()).await {
+            self.status = ServiceStatus::STARTED;
+        }
         Ok(true)
     }
 

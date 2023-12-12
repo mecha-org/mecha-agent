@@ -1,5 +1,6 @@
 use crate::errors::ProvisioningError;
 use crate::errors::ProvisioningErrorCodes;
+use ::fs::construct_dir_path;
 use ::fs::safe_write_to_path;
 use agent_settings::provisioning::CertificatePaths;
 use agent_settings::read_settings_yml;
@@ -15,7 +16,6 @@ use reqwest::Client as RequestClient;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
 use std::str;
 use tokio::sync::broadcast::Sender;
 use tracing::info;
@@ -36,7 +36,7 @@ pub struct ProvisioningServerResponseGeneric<T> {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvisioningManifest {
-    pub device_id: String,
+    pub machine_id: String,
     pub cert_signing_url: String,
     pub cert_key_pair_algorithm: PrivateKeyAlgorithm,
     pub cert_key_pair_size: PrivateKeySize,
@@ -46,7 +46,7 @@ pub struct ProvisioningManifest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SignCSRRequest {
     pub csr: String,
-    pub device_id: String,
+    pub machine_id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -126,7 +126,7 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
     let csr_status = generate_csr(
         &settings.provisioning.paths.device.csr,
         &settings.provisioning.paths.device.private_key,
-        &manifest.device_id,
+        &manifest.machine_id,
     );
 
     match csr_status {
@@ -143,7 +143,7 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
     let signed_certificates = match sign_csr(
         &settings.provisioning.server_url,
         &settings.provisioning.paths.device.csr,
-        &manifest.device_id,
+        &manifest.machine_id,
         &manifest.cert_signing_url,
     )
     .await
@@ -309,7 +309,15 @@ async fn sign_csr(
     let trace_id = find_current_trace_id();
     tracing::trace!(trace_id, task = "sign_csr", "init");
 
-    let csr_pem = match fs::read_to_string(PathBuf::from(csr_path)) {
+    let constructed_path = match construct_dir_path(csr_path) {
+        Ok(v) => v,
+        Err(e) => bail!(ProvisioningError::new(
+            ProvisioningErrorCodes::CSRSignReadFileError,
+            format!("error opening csr in path - {} - {}", csr_path, e),
+            true
+        )),
+    };
+    let csr_pem = match fs::read_to_string(constructed_path) {
         Ok(pem) => pem,
         Err(e) => bail!(ProvisioningError::new(
             ProvisioningErrorCodes::CSRSignReadFileError,
@@ -321,7 +329,7 @@ async fn sign_csr(
     //construct payload for signing the csr
     let sign_csr_request_body = SignCSRRequest {
         csr: csr_pem,
-        device_id: machine_id.to_string(),
+        machine_id: machine_id.to_string(),
     };
 
     tracing::info!(

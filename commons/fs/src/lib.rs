@@ -6,23 +6,10 @@ use std::{fs::File, io::Write, path::PathBuf};
  * Writes to path safely, creates director if required
  */
 pub fn safe_write_to_path(path: &str, content: &[u8]) -> Result<bool> {
-    // Convert the string path to a Path
-    let mut path_buf = PathBuf::from(path);
-
-    // Expand the tilde if it exists
-    if path.starts_with("~") {
-        if let Some(home_dir) = home_dir() {
-            let path_to_join = match path_buf.strip_prefix("~") {
-                Ok(v) => v,
-                Err(e) => {
-                    bail!("Failed to open public key file - {}", e);
-                }
-            };
-            path_buf = home_dir.join(path_to_join);
-        }
-    } else {
-        bail!("Could not determine home directory");
-    }
+    let path_buf = match construct_dir_path(path) {
+        Ok(v) => v,
+        Err(e) => bail!(e),
+    };
     // Extract the file name (the last component of the path)
     if let Some(file_name) = path_buf.file_name() {
         if let Some(file_name_str) = file_name.to_str() {
@@ -56,17 +43,10 @@ pub fn safe_write_to_path(path: &str, content: &[u8]) -> Result<bool> {
  * Writes to path safely, creates director if required
  */
 pub fn safe_open_file(path: &str) -> Result<File> {
-    let mut path_buf = PathBuf::from(path);
-
-    // Expand the tilde if it exists
-    if path.starts_with("~") {
-        if let Some(home_dir) = home_dir() {
-            path_buf = home_dir.join(path_buf.strip_prefix("~").unwrap());
-            println!("path_buf {:?}", path_buf);
-        } else {
-            bail!("Could not determine home directory");
-        }
-    }
+    let path_buf = match construct_dir_path(path) {
+        Ok(v) => v,
+        Err(e) => bail!(e),
+    };
     let file = match File::open(path_buf) {
         Ok(v) => v,
         Err(e) => {
@@ -74,4 +54,25 @@ pub fn safe_open_file(path: &str) -> Result<File> {
         }
     };
     Ok(file)
+}
+
+pub fn construct_dir_path(path: &str) -> Result<PathBuf> {
+    // Convert the string path to a Path
+    let mut path_buf = PathBuf::from(path);
+
+    // Expand the tilde if it exists
+    if path.starts_with("~") {
+        if let Some(home_dir) = home_dir() {
+            let path_to_join = match path_buf.strip_prefix("~") {
+                Ok(v) => v,
+                Err(e) => {
+                    bail!("Failed to join path - {}", e);
+                }
+            };
+            path_buf = home_dir.join(path_to_join);
+        }
+    } else {
+        bail!("Could not determine home directory");
+    }
+    Ok(path_buf)
 }

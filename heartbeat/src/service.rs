@@ -17,7 +17,7 @@ use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HeartbeatPublishPayload {
     pub time: String,
-    pub device_id: String,
+    pub machine_id: String,
 }
 pub struct SendHeartbeatOptions {
     pub messaging_tx: Sender<MessagingMessage>,
@@ -67,14 +67,14 @@ pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<b
     let formatted_utc_time = current_utc_time.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
     let publish_payload = HeartbeatPublishPayload {
         time: formatted_utc_time,
-        device_id: machine_id.clone(),
+        machine_id: machine_id.clone(),
     };
     let _ = heartbeat_options
         .messaging_tx
         .send(MessagingMessage::Send {
             reply_to: publish_result_tx,
             message: json!(publish_payload).to_string(),
-            subject: format!("device.{}.heartbeat", digest(machine_id.clone())),
+            subject: format!("machine.{}.heartbeat", digest(machine_id.clone())),
         })
         .await;
 
@@ -107,4 +107,31 @@ pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<b
         }
     }
     Ok(true)
+}
+
+pub async fn device_provision_status(identity_tx: Sender<IdentityMessage>) -> bool {
+    let trace_id = find_current_trace_id();
+    tracing::info!(
+        task = "start",
+        trace_id = trace_id,
+        "starting heartbeat service"
+    );
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let _ = identity_tx
+        .send(IdentityMessage::GetProvisionStatus { reply_to: tx })
+        .await;
+    let status = match rx.await {
+        Ok(provisioning_status_result) => {
+            if provisioning_status_result.is_ok() {
+                match provisioning_status_result {
+                    Ok(provisioning_status_value) => provisioning_status_value,
+                    Err(_) => false,
+                }
+            } else {
+                false
+            }
+        }
+        Err(_err) => false,
+    };
+    status
 }
