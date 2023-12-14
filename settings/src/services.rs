@@ -94,9 +94,10 @@ pub async fn sync_settings(
     }
 
     // Create consumer
+    let consumer_name = generator::generate_random_string(10);
     let filter_subject = format!("machine.{}.settings.kv.>", digest(machine_id.clone()));
     let consumer = match jet_stream_client
-        .create_consumer(stream, filter_subject)
+        .create_consumer(stream, filter_subject, consumer_name)
         .await
     {
         Ok(s) => s,
@@ -181,9 +182,10 @@ pub async fn start_consumer(
     };
 
     // Create consumer
+    let consumer_name = generator::generate_random_string(10);
     let filter_subject = format!("machine.{}.settings.kv.>", digest(machine_id.clone()));
     let consumer = match jet_stream_client
-        .create_consumer(stream, filter_subject)
+        .create_consumer(stream, filter_subject, consumer_name)
         .await
     {
         Ok(s) => s,

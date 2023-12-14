@@ -14,6 +14,7 @@ agent_settings = { path = "../core/settings" }
 identity = { path = "../identity" }
 provisioning = { path = "../provisioning" }
 settings = { path = "../settings" }
+telemetry = { path = "../telemetry" }
 axum = "0.6.17"
 axum-macros = "0.3.8"
 tokio = { version = "1.27.0", features = ["full"] }

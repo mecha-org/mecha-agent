@@ -71,8 +71,6 @@ pub fn construct_dir_path(path: &str) -> Result<PathBuf> {
             };
             path_buf = home_dir.join(path_to_join);
         }
-    } else {
-        bail!("Could not determine home directory");
     }
     Ok(path_buf)
 }

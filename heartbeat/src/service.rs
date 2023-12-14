@@ -1,17 +1,12 @@
-use std::time::Duration;
-
 use agent_settings::{read_settings_yml, AgentSettings};
 use anyhow::{bail, Result};
 use identity::handler::IdentityMessage;
-use messaging::{
-    handler::MessagingMessage,
-    service::{Messaging, MessagingScope},
-    Bytes,
-};
+use messaging::handler::MessagingMessage;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha256::digest;
-use tokio::sync::{broadcast, mpsc::Sender};
+use tokio::sync::mpsc::Sender;
+use tracing::info;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -83,7 +78,11 @@ pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<b
             if publish_result.is_ok() {
                 match publish_result {
                     Ok(true) => {
-                        println!("Heartbeat published successfully");
+                        info!(
+                            task = "send_heartbeat",
+                            trace_id = trace_id,
+                            "heartbeat published"
+                        );
                         // Handle the case where the result is Ok(true)
                         // Do something when the result is true
                     }

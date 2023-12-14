@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read};
+use std::io::Read;
 
 use anyhow::{bail, Result};
 use base64::b64_encode;
@@ -79,7 +79,6 @@ pub fn get_machine_id() -> Result<String> {
 
     match String::from_utf8(sub_entries.data().as_slice().to_vec()) {
         Ok(str) => {
-            tracing::info!("extracted subject name from pem file");
             return Ok(str);
         }
         Err(err) => {

@@ -8,7 +8,7 @@ use heartbeat::HeartbeatSettings;
 use networking::NetworkingSettings;
 use serde::{Deserialize, Serialize};
 use std::{env, fmt, fs::File, path::PathBuf};
-use tracing::{error, info};
+use tracing::error;
 pub mod device_settings;
 pub mod heartbeat;
 pub mod messaging;
@@ -149,7 +149,6 @@ impl std::fmt::Display for SettingsError {
 pub fn read_settings_path_from_args() -> Option<String> {
     let args: Vec<String> = env::args().collect();
     if args.len() > 2 && (args[1] == "-s" || args[1] == "--settings") {
-        info!("using settings path from argument - {}", args[2]);
         return Some(String::from(args[2].clone()));
     }
     None
@@ -175,11 +174,6 @@ pub fn read_settings_yml() -> Result<AgentSettings> {
     if file_path_in_args.is_some() {
         file_path = PathBuf::from(file_path_in_args.unwrap());
     }
-
-    info!(
-        task = "read_settings_yml",
-        "reading settings from file location - {:?}", file_path
-    );
 
     // open file
     let settings_file_handle = match File::open(file_path) {

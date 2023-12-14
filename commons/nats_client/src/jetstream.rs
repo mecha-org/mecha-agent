@@ -34,10 +34,11 @@ impl JetStreamClient {
         &self,
         stream: Stream,
         filter_subject: String,
+        consumer_name: String,
     ) -> Result<Consumer<Config>> {
         let consumer = match stream
             .create_consumer(async_nats::jetstream::consumer::pull::Config {
-                name: Some(String::from("shoaib")),
+                name: Some(consumer_name),
                 filter_subject: filter_subject,
                 ..Default::default()
             })

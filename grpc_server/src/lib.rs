@@ -7,23 +7,15 @@ use crate::services::identity::IdentityServiceHandler;
 use crate::services::messaging::MessagingServiceHandler;
 use crate::services::provisioning::ProvisioningServiceHandler;
 use crate::services::settings::SettingsServiceHandler;
+use crate::services::telemetry::LogsAgent;
+use crate::services::telemetry::TelemetryServiceHandler;
 use agent_settings::{read_settings_yml, AgentSettings};
 use anyhow::{bail, Result};
-use init_tracing_opentelemetry::tracing_subscriber_ext::build_otel_layer;
-use init_tracing_opentelemetry::tracing_subscriber_ext::{
-    build_logger_text, build_loglevel_filter_layer,
-};
-use sentry_tracing::EventFilter;
+use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
-use std::path::Path;
 use tokio::sync::mpsc;
 use tonic::transport::Server;
 use tracing::info;
-use tracing_appender::non_blocking;
-use tracing_appender::rolling::never;
-use tracing_subscriber::fmt::Layer;
-use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
-use tracing_subscriber::EnvFilter;
 pub mod errors;
 pub mod services;
 
@@ -34,14 +26,31 @@ pub mod agent {
     tonic::include_proto!("messaging");
     // tonic::include_proto!("opentelemetry.proto.collector.metrics.v1");
     // tonic::include_proto!("opentelemetry.proto.collector.trace.v1");
-    // tonic::include_proto!("opentelemetry.proto.collector.logs.v1");
+    tonic::include_proto!("opentelemetry.proto.collector.logs.v1");
 }
 
+// use agent::{
+//     metrics_service_server::{MetricsService, MetricsServiceServer},
+//     ExportMetricsServiceRequest, ExportMetricsServiceResponse,
+// };
+
+use agent::logs_service_server::LogsServiceServer;
+// use agent::{
+//     trace_service_server::{TraceService, TraceServiceServer},
+//     ExportTraceServiceRequest, ExportTraceServiceResponse,
+// };
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct EncodeData {
+    encoded: Vec<u8>,
+    user_type: String,
+}
 pub struct GrpcServerOptions {
     pub provisioning_tx: mpsc::Sender<provisioning::handler::ProvisioningMessage>,
     pub identity_tx: mpsc::Sender<identity::handler::IdentityMessage>,
     pub messaging_tx: mpsc::Sender<messaging::handler::MessagingMessage>,
     pub settings_tx: mpsc::Sender<settings::handler::SettingMessage>,
+    pub telemetry_tx: mpsc::Sender<telemetry::handler::TelemetryMessage>,
 }
 
 pub async fn start_grpc_service(opt: GrpcServerOptions) -> Result<()> {
@@ -74,12 +83,19 @@ pub async fn start_grpc_service(opt: GrpcServerOptions) -> Result<()> {
     let messaging_service_handler = MessagingServiceHandler::new(opt.messaging_tx);
     let settings_service_handler =
         SettingsServiceHandler::new(opt.settings_tx, opt.provisioning_tx);
+    let telemetry_service_handler = TelemetryServiceHandler::new(opt.telemetry_tx);
+    let logs_handler = LogsAgent {
+        telemetry_service_handler: telemetry_service_handler,
+    };
 
     match Server::builder()
         .add_service(ProvisioningServiceServer::new(provisioning_service_handler))
         .add_service(IdentityServiceServer::new(identity_service_handler))
         .add_service(MessagingServiceServer::new(messaging_service_handler))
         .add_service(SettingsServiceServer::new(settings_service_handler))
+        .add_service(LogsServiceServer::new(logs_handler))
+        // .add_service(MetricsServiceServer::new(metric_server))
+        // .add_service(TraceServiceServer::new(trace_server))
         .serve(addr)
         .await
     {
@@ -90,62 +106,5 @@ pub async fn start_grpc_service(opt: GrpcServerOptions) -> Result<()> {
             true
         )),
     };
-    Ok(())
-}
-
-pub async fn set_tracing() -> Result<()> {
-    let settings = match read_settings_yml() {
-        Ok(settings) => settings,
-        Err(_) => AgentSettings::default(),
-    };
-    // enable the sentry exception reporting if enabled in settings and a DSN path is specified
-    if settings.clone().sentry.enabled && settings.clone().sentry.dsn.is_some() {
-        let sentry_path = settings.clone().sentry.dsn.unwrap();
-
-        let _guard = sentry::init((
-            sentry_path,
-            sentry::ClientOptions {
-                release: sentry::release_name!(),
-                trim_backtraces: true,
-                ..Default::default()
-            },
-        ));
-    }
-
-    let path = Path::new(settings.logging.path.as_str());
-    let directory = path.parent().unwrap();
-    let file_name = path.file_name().unwrap();
-    let file_appender = never(directory, file_name);
-    let (non_blocking_writer, _guard) = non_blocking(file_appender);
-    // Set optional layer for logging to a file
-    let layer = if settings.logging.enabled && !settings.logging.path.is_empty() {
-        Some(
-            Layer::new()
-                .with_writer(non_blocking_writer)
-                .with_ansi(false),
-        )
-    } else {
-        None
-    };
-
-    let subscriber = tracing_subscriber::registry()
-        .with(layer)
-        .with(EnvFilter::new(settings.logging.level.as_str()))
-        .with(sentry_tracing::layer().event_filter(|_| EventFilter::Ignore))
-        .with(build_loglevel_filter_layer()) //temp for terminal log
-        .with(build_logger_text()) //temp for terminal log
-        .with(build_otel_layer().unwrap()); // trace collection layer
-
-    match tracing::subscriber::set_global_default(subscriber) {
-        Ok(_) => (),
-        Err(e) => bail!(e),
-    };
-
-    tracing::info!(
-        //sample log
-        task = "tracing_setup",
-        result = "success",
-        "tracing set up",
-    );
     Ok(())
 }
