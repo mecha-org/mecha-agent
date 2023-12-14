@@ -19,6 +19,7 @@ identity = { path = "../identity" }
 nats_client = { path = "../commons/nats_client" }
 services = { path = "../core/services" }
 kv_store = { path = "../commons/kv_store" }
+generator = { path = "../commons/generator" }
 anyhow = { version = "1.0.71", features = ["backtrace"]}
 sentry-tracing = {version = "0.31.0"}
 sentry = { version = "0.31.0",features = ["backtrace", "anyhow"] }

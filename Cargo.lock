@@ -889,6 +889,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "generator"
+version = "1.0.0"
+dependencies = [
+ "rand",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -942,6 +949,7 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
+ "telemetry",
  "tokio",
  "tonic 0.9.2",
  "tonic-build",
@@ -1445,6 +1453,7 @@ checksum = "ed1202b2a6f884ae56f04cff409ab315c5ce26b5e58d7412e484f01fd52f52ef"
 name = "mecha_agent"
 version = "1.0.0"
 dependencies = [
+ "agent_settings",
  "anyhow",
  "axum",
  "axum-macros",
@@ -1470,12 +1479,14 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
+ "telemetry",
  "tokio",
  "tonic 0.9.2",
  "tonic-build",
  "tonic-types",
  "tower-http",
  "tracing",
+ "tracing-appender",
  "tracing-opentelemetry-instrumentation-sdk 0.12.0",
  "tracing-subscriber",
  "url",
@@ -2874,6 +2885,7 @@ dependencies = [
  "anyhow",
  "events",
  "futures",
+ "generator",
  "hyper_serde",
  "identity",
  "kv_store",
@@ -3077,6 +3089,31 @@ dependencies = [
  "filetime",
  "libc",
  "xattr",
+]
+
+[[package]]
+name = "telemetry"
+version = "1.0.0"
+dependencies = [
+ "agent_settings",
+ "anyhow",
+ "axum",
+ "dotenv",
+ "events",
+ "identity",
+ "messaging",
+ "rand",
+ "reqwest",
+ "sentry-anyhow",
+ "serde",
+ "serde_json",
+ "services",
+ "sha256",
+ "tokio",
+ "tonic 0.9.2",
+ "tracing",
+ "tracing-opentelemetry-instrumentation-sdk 0.12.0",
+ "tracing-subscriber",
 ]
 
 [[package]]
