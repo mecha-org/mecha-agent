@@ -13,7 +13,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "proto/settings.proto",
                 "proto/metrics.proto",
                 "proto/logs.proto",
-                "proto/trace.proto",
             ],
             &["."],
         )

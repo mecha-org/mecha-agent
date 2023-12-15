@@ -1373,6 +1373,7 @@ name = "kv_store"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "fs",
  "lazy_static",
  "mkdirp",
  "sentry",
