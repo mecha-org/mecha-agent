@@ -7,7 +7,7 @@ use tokio::select;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 use crate::errors::{ProvisioningError, ProvisioningErrorCodes};
-use crate::service::{generate_code, provision_by_code};
+use crate::service::{de_provision, generate_code, provision_by_code};
 
 pub struct ProvisioningHandler {
     event_tx: broadcast::Sender<Event>,
@@ -69,8 +69,8 @@ impl ProvisioningHandler {
                             let _ = reply_to.send(Some(true));
                         }
                         ProvisioningMessage::Deprovision { reply_to } => {
-                            let _ = self.event_tx.send(Event::Provisioning(events::ProvisioningEvent::Deprovisioned));
-                            let _ = reply_to.send(Ok(true));
+                            let status = de_provision(self.event_tx.clone());
+                            let _ = reply_to.send(status);
                         }
                     };
                 }

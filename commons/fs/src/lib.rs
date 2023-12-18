@@ -39,6 +39,19 @@ pub fn safe_write_to_path(path: &str, content: &[u8]) -> Result<bool> {
     }
 }
 
+pub fn remove_files(paths: Vec<&str>) -> Result<()> {
+    for path in paths {
+        let path_buf = match construct_dir_path(path) {
+            Ok(v) => v,
+            Err(e) => bail!(e),
+        };
+        match std::fs::remove_file(path_buf) {
+            Ok(_) => (),
+            Err(e) => bail!(e),
+        };
+    }
+    Ok(())
+}
 /*
  * Writes to path safely, creates director if required
  */

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha256::digest;
 use tokio::sync::mpsc::Sender;
-use tracing::info;
+use tracing::{info, trace};
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -110,10 +110,10 @@ pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<b
 
 pub async fn device_provision_status(identity_tx: Sender<IdentityMessage>) -> bool {
     let trace_id = find_current_trace_id();
-    tracing::info!(
-        task = "start",
+    info!(
+        task = "device_provision_status",
         trace_id = trace_id,
-        "starting heartbeat service"
+        "init"
     );
     let (tx, rx) = tokio::sync::oneshot::channel();
     let _ = identity_tx

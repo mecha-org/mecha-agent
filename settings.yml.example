@@ -35,10 +35,10 @@ messaging:
     base_url:  http://localhost:3000
     get_nonce: /v1/messaging/get_nonce
     issue_auth_token: /v1/messaging/issue_token
-device_settings:
+settings:
   storage:
     type: file
-    file_path: /home/user/.mecha/agent/db/settings.bin
+    path: /home/user/.mecha/agent/db/settings.bin
 networking:
   enabled: true
 telemetry:

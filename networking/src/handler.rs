@@ -83,6 +83,9 @@ impl NetworkingHandler {
                                 self.messaging_tx.clone()
                             ).await;
                         },
+                        Event::Settings(events::SettingEvent::Updated { key, value }) => {
+                            println!("networking handler: Settings updated");
+                        },
                     }
                 }
             }

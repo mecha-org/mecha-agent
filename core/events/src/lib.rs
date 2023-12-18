@@ -14,6 +14,7 @@ pub enum MessagingEvent {
 #[derive(Clone)]
 pub enum SettingEvent {
     Synced,
+    Updated { key: String, value: String },
 }
 #[derive(Clone)]
 pub enum Event {

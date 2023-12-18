@@ -9,7 +9,7 @@ pub struct DeviceSettings {
 pub struct StorageSettings {
     #[serde(rename = "type")]
     pub r#type: String,
-    pub file_path: String,
+    pub path: String,
 }
 
 impl Default for DeviceSettings {
@@ -17,7 +17,7 @@ impl Default for DeviceSettings {
         Self {
             storage: StorageSettings {
                 r#type: "file".to_string(),
-                file_path: "/tmp".to_string(),
+                path: "/tmp".to_string(),
             },
         }
     }

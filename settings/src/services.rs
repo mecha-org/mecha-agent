@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use agent_settings::AgentSettings;
 use anyhow::{bail, Result};
 use events::Event;
@@ -235,7 +237,13 @@ pub async fn start_consumer(
 }
 
 pub async fn get_settings_by_key(key: String) -> Result<String> {
-    println!("key to get settings :{:?}", key);
+    let trace_id = find_current_trace_id();
+    info!(
+        task = "start",
+        target = "device_settings",
+        trace_id = trace_id,
+        "getting settings by key"
+    );
     let key_value_store = KeyValueStoreClient::new();
     let result = match key_value_store.get(&key) {
         Ok(s) => s,
@@ -246,6 +254,22 @@ pub async fn get_settings_by_key(key: String) -> Result<String> {
         Some(s) => Ok(s),
         None => Ok(String::new()),
     }
+}
+
+pub async fn set_settings(settings: HashMap<String, String>) -> Result<bool> {
+    let trace_id = find_current_trace_id();
+    info!(
+        task = "start",
+        target = "device_settings",
+        trace_id = trace_id,
+        "setting settings"
+    );
+    let mut key_value_store = KeyValueStoreClient::new();
+    let result = match key_value_store.set(settings) {
+        Ok(s) => s,
+        Err(err) => bail!(err),
+    };
+    Ok(result)
 }
 async fn process_message(
     message: Message,
@@ -259,8 +283,9 @@ async fn process_message(
             Ok(s) => s,
             Err(e) => bail!(e),
         };
-    println!("new message payload {:?}", add_task_payload);
-    match kv_store.set(&add_task_payload.key, &add_task_payload.value) {
+    let mut settings_payload: HashMap<String, String> = HashMap::new();
+    settings_payload.insert(add_task_payload.key, add_task_payload.value);
+    match kv_store.set(settings_payload) {
         Ok(s) => s,
         Err(err) => bail!(err),
     };

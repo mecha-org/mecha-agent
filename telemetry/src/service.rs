@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use sha256::digest;
 use std::process::Command;
 use tokio::sync::{mpsc::Sender, oneshot};
+use tracing::info;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -145,7 +146,7 @@ pub async fn process_logs(
     content: Vec<u8>,
     identity_tx: Sender<IdentityMessage>,
     messaging_tx: Sender<MessagingMessage>,
-) -> Result<String> {
+) -> Result<bool> {
     let settings = match read_settings_yml() {
         Ok(v) => v,
         Err(e) => AgentSettings::default(),
@@ -183,7 +184,7 @@ pub async fn process_logs(
         {
             Ok(_) => match rx.await {
                 Ok(_) => {
-                    return Ok("Success".to_string());
+                    return Ok(true);
                 }
                 Err(e) => {
                     bail!(TelemetryError::new(
@@ -236,4 +237,31 @@ async fn get_machine_id(identity_tx: Sender<IdentityMessage>) -> Result<String> 
         }
     }
     Ok(machine_id)
+}
+
+pub async fn device_provision_status(identity_tx: Sender<IdentityMessage>) -> bool {
+    let trace_id = find_current_trace_id();
+    info!(
+        task = "device_provision_status",
+        trace_id = trace_id,
+        "init"
+    );
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let _ = identity_tx
+        .send(IdentityMessage::GetProvisionStatus { reply_to: tx })
+        .await;
+    let status = match rx.await {
+        Ok(provisioning_status_result) => {
+            if provisioning_status_result.is_ok() {
+                match provisioning_status_result {
+                    Ok(provisioning_status_value) => provisioning_status_value,
+                    Err(_) => false,
+                }
+            } else {
+                false
+            }
+        }
+        Err(_err) => false,
+    };
+    status
 }

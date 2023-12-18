@@ -10,7 +10,7 @@ use tokio::{
 use tonic::async_trait;
 use tracing::info;
 
-use crate::service::{Messaging, MessagingScope};
+use crate::service::{get_machine_id, Messaging, MessagingScope};
 
 pub enum MessagingMessage {
     Connect {
@@ -62,7 +62,6 @@ impl MessagingHandler {
         }
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<MessagingMessage>) {
-        // start the service
         let _ = &self.start().await;
         let mut event_rx = self.event_tx.subscribe();
         loop {
@@ -109,10 +108,10 @@ impl MessagingHandler {
                 match event.unwrap() {
                     Event::Provisioning(events::ProvisioningEvent::Provisioned) => {
                         info!("Messaging service received provisioning event");
-                        println!("Messaging service received provisioning event");
                         let _ = &self.start().await;
                     },
                     Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
+                        info!("Messaging service received deprovisioning event");
                         let _ = &self.stop().await;
                     },
                     Event::Messaging(_) => {},
@@ -127,17 +126,19 @@ impl MessagingHandler {
 #[async_trait]
 impl ServiceHandler for MessagingHandler {
     async fn start(&mut self) -> Result<bool> {
-        self.status = ServiceStatus::STARTED;
-        match self
-            .messaging_client
-            .connect(&self.identity_tx, self.event_tx.clone())
-            .await
-        {
-            Ok(_) => {}
-            Err(e) => {
-                println!("Error connecting to NATS: {:?}", e);
-            }
-        };
+        if get_machine_id(self.identity_tx.clone()).await.is_ok() {
+            self.status = ServiceStatus::STARTED;
+            match self
+                .messaging_client
+                .connect(&self.identity_tx, self.event_tx.clone())
+                .await
+            {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("Error connecting to messaging service: {:?}", e);
+                }
+            };
+        }
         Ok(true)
     }
 

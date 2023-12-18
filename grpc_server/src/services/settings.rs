@@ -1,5 +1,7 @@
 use crate::agent::settings_service_server::SettingsService;
-use crate::agent::{GetSettingsRequest, GetSettingsResponse};
+use crate::agent::{
+    GetSettingsRequest, GetSettingsResponse, SetSettingsRequest, SetSettingsResponse,
+};
 use anyhow::Result;
 use provisioning::handler::ProvisioningMessage;
 use settings::handler::SettingMessage;
@@ -28,7 +30,7 @@ impl SettingsServiceHandler {
 
 #[tonic::async_trait]
 impl SettingsService for SettingsServiceHandler {
-    async fn get_settings_by_key(
+    async fn get(
         &self,
         request: Request<GetSettingsRequest>,
     ) -> Result<Response<GetSettingsResponse>, Status> {
@@ -51,6 +53,31 @@ impl SettingsService for SettingsServiceHandler {
         if reply.is_ok() {
             let response = reply.unwrap();
             Ok(Response::new(GetSettingsResponse { value: response }))
+        } else {
+            Err(Status::from_error(reply.unwrap_err().into()))
+        }
+    }
+    async fn set(
+        &self,
+        request: Request<SetSettingsRequest>,
+    ) -> Result<Response<SetSettingsResponse>, Status> {
+        let settings = request.into_inner().settings;
+        let settings_tx = self.settings_tx.clone();
+        // send message
+        let (tx, rx) = oneshot::channel();
+        let _ = settings_tx
+            .send(SettingMessage::SetSettings {
+                reply_to: tx,
+                settings: settings,
+            })
+            .await;
+
+        let reply = rx.await.unwrap_or(Err(
+            Status::unavailable("settings service unavailable").into()
+        ));
+        if reply.is_ok() {
+            let response = reply.unwrap();
+            Ok(Response::new(SetSettingsResponse { success: response }))
         } else {
             Err(Status::from_error(reply.unwrap_err().into()))
         }

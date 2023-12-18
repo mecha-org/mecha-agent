@@ -1,14 +1,14 @@
-use agent_settings::{read_settings_yml, AgentSettings};
-use anyhow::{bail, Result};
+use anyhow::Result;
 use events::Event;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
 use services::{ServiceHandler, ServiceStatus};
+use std::collections::HashMap;
 use tokio::select;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tonic::async_trait;
 
-use crate::services::{get_settings_by_key, start_consumer, sync_settings};
+use crate::services::{get_settings_by_key, set_settings, start_consumer, sync_settings};
 
 pub struct SettingHandler {
     event_tx: broadcast::Sender<Event>,
@@ -27,6 +27,10 @@ pub enum SettingMessage {
     GetSettingsByKey {
         reply_to: oneshot::Sender<Result<String>>,
         key: String,
+    },
+    SetSettings {
+        reply_to: oneshot::Sender<Result<bool>>,
+        settings: HashMap<String, String>,
     },
 }
 
@@ -70,7 +74,10 @@ impl SettingHandler {
                             let value = get_settings_by_key(key).await;
                             let _ = reply_to.send(value);
                         }
-
+                        SettingMessage::SetSettings { reply_to, settings } => {
+                            let result = set_settings(settings).await;
+                            let _ = reply_to.send(Ok(false));
+                        }
                     };
                 }
 

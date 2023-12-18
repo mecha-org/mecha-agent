@@ -25,7 +25,7 @@ pub struct AgentSettings {
     pub provisioning: ProvisioningSettings,
     pub messaging: MessagingSettings,
     pub heartbeat: HeartbeatSettings,
-    pub device_settings: DeviceSettings,
+    pub settings: DeviceSettings,
     pub networking: NetworkingSettings,
     pub telemetry: TelemetrySettings,
 }
@@ -39,7 +39,7 @@ impl Default for AgentSettings {
             provisioning: ProvisioningSettings::default(),
             messaging: MessagingSettings::default(),
             heartbeat: HeartbeatSettings::default(),
-            device_settings: DeviceSettings::default(),
+            settings: DeviceSettings::default(),
             networking: NetworkingSettings::default(),
             telemetry: TelemetrySettings::default(),
         }
