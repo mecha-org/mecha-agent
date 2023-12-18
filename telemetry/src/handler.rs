@@ -97,14 +97,19 @@ impl TelemetryHandler {
                     },
                     Event::Messaging(_) => {},
                     Event::Settings(events::SettingEvent::Synced) => {},
-                    Event::Settings(events::SettingEvent::Updated { key, value }) => {
+                    Event::Settings(events::SettingEvent::Updated { settings }) => {
                         info!("Telemetry service received settings event");
-                        if key == "telemetry.enabled" {
-                            if value == "true" {
-                                let _ = &self.start().await;
-                            } else {
-                                let _ = &self.stop().await;
-                            }
+                        match settings.get("telemetry.enabled") {
+                            Some(value) => {
+                                if value == "true" {
+                                    let _ = &self.start().await;
+                                } else if value == "false" {
+                                    let _ = &self.stop().await;
+                                } else {
+                                    // Can be add other function to perform
+                                }
+                            },
+                            None => {},
                         }
                     },
                 }
@@ -117,6 +122,7 @@ impl TelemetryHandler {
 #[async_trait]
 impl ServiceHandler for TelemetryHandler {
     async fn start(&mut self) -> Result<bool> {
+        info!("start telemetry service");
         if device_provision_status(self.identity_tx.clone()).await {
             self.status = ServiceStatus::STARTED;
             let _ = telemetry_init();
@@ -127,6 +133,7 @@ impl ServiceHandler for TelemetryHandler {
     }
 
     async fn stop(&mut self) -> Result<bool> {
+        info!("stop telemetry service");
         self.status = ServiceStatus::STOPPED;
         Ok(true)
     }

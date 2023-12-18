@@ -9,6 +9,7 @@ use tokio::{
     sync::{broadcast, mpsc, oneshot},
 };
 use tonic::async_trait;
+use tracing::info;
 
 use crate::service::start;
 
@@ -77,14 +78,14 @@ impl NetworkingHandler {
                         },
                         Event::Messaging(_) => {},
                         Event::Settings(events::SettingEvent::Synced) => {
-                            println!("networking handler: Settings synced");
+                            info!("networking handler: Settings synced");
                             let _ = start(self.setting_tx.clone(),
                                 self.identity_tx.clone(),
                                 self.messaging_tx.clone()
                             ).await;
                         },
-                        Event::Settings(events::SettingEvent::Updated { key, value }) => {
-                            println!("networking handler: Settings updated");
+                        Event::Settings(events::SettingEvent::Updated { settings }) => {
+                            info!("networking handler: Settings updated");
                         },
                     }
                 }

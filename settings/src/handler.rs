@@ -75,7 +75,7 @@ impl SettingHandler {
                             let _ = reply_to.send(value);
                         }
                         SettingMessage::SetSettings { reply_to, settings } => {
-                            let result = set_settings(settings).await;
+                            let result = set_settings(self.event_tx.clone(), settings).await;
                             let _ = reply_to.send(Ok(false));
                         }
                     };

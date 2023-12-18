@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::str;
 use tokio::sync::broadcast::Sender;
+use tracing::error;
 use tracing::info;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
@@ -193,7 +194,15 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
             task = "de_provision",
             "certificates deleted successfully"
         ),
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(
+                trace_id,
+                task = "de_provision",
+                "error deleting certificates - {}",
+                e
+            );
+            bail!(e)
+        }
     }
 
     //2. Event to stop all services
@@ -204,7 +213,10 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
     //3. Delete database
     match fs::remove_dir_all(&settings.settings.storage.path) {
         Ok(_) => tracing::info!(trace_id, task = "de_provision", "db deleted successfully"),
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(trace_id, task = "de_provision", "error deleting db - {}", e);
+            bail!(e)
+        }
     }
 
     tracing::info!(trace_id, task = "de_provision", "de provisioned successful",);

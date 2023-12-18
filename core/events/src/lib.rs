@@ -1,4 +1,4 @@
-use tokio::sync::broadcast;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub enum ProvisioningEvent {
@@ -14,7 +14,7 @@ pub enum MessagingEvent {
 #[derive(Clone)]
 pub enum SettingEvent {
     Synced,
-    Updated { key: String, value: String },
+    Updated { settings: HashMap<String, String> },
 }
 #[derive(Clone)]
 pub enum Event {

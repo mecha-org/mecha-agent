@@ -11,7 +11,7 @@ use nats_client::{Bytes, Message};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha256::digest;
-use tokio::sync::{mpsc::Sender, oneshot};
+use tokio::sync::{broadcast, mpsc::Sender, oneshot};
 use tracing::{info, trace};
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
@@ -256,7 +256,10 @@ pub async fn get_settings_by_key(key: String) -> Result<String> {
     }
 }
 
-pub async fn set_settings(settings: HashMap<String, String>) -> Result<bool> {
+pub async fn set_settings(
+    event_tx: broadcast::Sender<Event>,
+    settings: HashMap<String, String>,
+) -> Result<bool> {
     let trace_id = find_current_trace_id();
     info!(
         task = "start",
@@ -265,10 +268,12 @@ pub async fn set_settings(settings: HashMap<String, String>) -> Result<bool> {
         "setting settings"
     );
     let mut key_value_store = KeyValueStoreClient::new();
-    let result = match key_value_store.set(settings) {
+    let result = match key_value_store.set(settings.clone()) {
         Ok(s) => s,
         Err(err) => bail!(err),
     };
+    // Publish event
+    let _ = event_tx.send(Event::Settings(events::SettingEvent::Updated { settings }));
     Ok(result)
 }
 async fn process_message(
