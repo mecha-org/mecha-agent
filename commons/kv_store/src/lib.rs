@@ -1,25 +1,24 @@
 pub mod errors;
 extern crate sled;
 use anyhow::{bail, Result};
+use fs::construct_dir_path;
 use lazy_static::lazy_static;
 use sled::Db;
 use std::{
     collections::HashMap,
-    path::PathBuf,
     sync::{Arc, Mutex},
 };
 use tracing::info;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 use crate::errors::{KeyValueStoreError, KeyValueStoreErrorCodes};
-static DATABASE_STORE_FIILE_PATH: &str = "~/.mecha/agent/db/settings.bin";
+static DATABASE_STORE_FIILE_PATH: &str = "~/.mecha/agent/db";
 // Singleton database connection
 lazy_static! {
-
-    static ref DATABASE: Arc<Mutex<Db>> = Arc::new(Mutex::new(
-        //TODO: change this path to be dynamic
-        sled::open(DATABASE_STORE_FIILE_PATH).unwrap()
-    ));
+    static ref DATABASE: Arc<Mutex<Db>> = {
+        let file_path = fs::construct_dir_path(DATABASE_STORE_FIILE_PATH.clone()).unwrap();
+        Arc::new(Mutex::new(sled::open(&file_path).unwrap()))
+    };
 }
 
 #[derive(Clone)]
@@ -27,7 +26,6 @@ pub struct KeyValueStoreClient;
 
 impl KeyValueStoreClient {
     pub fn new() -> Self {
-        let _r = check_dir_if_exist(DATABASE_STORE_FIILE_PATH);
         KeyValueStoreClient
     }
     pub fn set(&mut self, settings: HashMap<String, String>) -> Result<bool> {
@@ -89,32 +87,4 @@ impl KeyValueStoreClient {
             )),
         }
     }
-}
-
-fn check_dir_if_exist(storage_file_path: &str) -> Result<()> {
-    let trace_id = find_current_trace_id();
-    info!(
-        trace_id,
-        target = "key_value_store",
-        task = "check_dir_if_exist",
-        "init"
-    );
-
-    let path = PathBuf::from(&storage_file_path);
-    if !path.exists() {
-        match mkdirp::mkdirp(&storage_file_path) {
-            Ok(p) => {
-                println!("path created {:?}", p);
-                p
-            }
-            Err(err) => bail!(err),
-        };
-    }
-    info!(
-        trace_id,
-        target = "key_value_store",
-        task = "check_dir_if_exist",
-        "completed"
-    );
-    Ok(())
 }

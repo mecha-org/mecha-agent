@@ -5,11 +5,17 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tonic::{Request, Response, Status};
 
-use crate::agent::logs_service_server::LogsService;
-use crate::agent::ExportLogsServiceRequest;
-use crate::agent::ExportLogsServiceResponse;
+use metrics::{
+    metrics_service_server::MetricsService, ExportMetricsServiceRequest,
+    ExportMetricsServiceResponse,
+};
 
-#[derive(Debug)]
+use logs::{logs_service_server::LogsService, ExportLogsServiceRequest, ExportLogsServiceResponse};
+
+use crate::logs;
+use crate::metrics;
+
+#[derive(Debug, Clone)]
 pub struct TelemetryServiceHandler {
     pub telemetry_tx: mpsc::Sender<TelemetryMessage>,
 }
@@ -23,7 +29,6 @@ impl TelemetryServiceHandler {
 
 //Logs
 pub struct LogsAgent {
-    // messaging_tx: Sender<MessagingMessage>,
     pub telemetry_service_handler: TelemetryServiceHandler,
 }
 
@@ -52,6 +57,38 @@ impl LogsService for LogsAgent {
         let reply = ExportLogsServiceResponse {
             partial_success: None,
         };
+        Ok(Response::new(reply))
+    }
+}
+
+//Metrics
+pub struct MetricsAgent {
+    pub telemetry_service_handler: TelemetryServiceHandler,
+}
+
+#[tonic::async_trait]
+impl MetricsService for MetricsAgent {
+    async fn export(
+        &self,
+        request: Request<ExportMetricsServiceRequest>,
+    ) -> Result<Response<ExportMetricsServiceResponse>, Status> {
+        let binding = request.metadata().clone();
+        let metrics_type = binding.get("user").unwrap().to_str().unwrap();
+        let metrics = request.into_inner().clone().resource_metrics;
+        let encoded: Vec<u8> = bincode::serialize(&metrics).unwrap();
+
+        let (tx, _rx) = oneshot::channel();
+        let _ = self
+            .telemetry_service_handler
+            .telemetry_tx
+            .send(TelemetryMessage::SendMetrics {
+                metrics: encoded,
+                metrics_type: metrics_type.to_string(),
+                reply_to: tx,
+            })
+            .await;
+
+        let reply = ExportMetricsServiceResponse {};
         Ok(Response::new(reply))
     }
 }

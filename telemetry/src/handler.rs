@@ -10,7 +10,7 @@ use tokio::{
 use tonic::async_trait;
 use tracing::info;
 
-use crate::service::{device_provision_status, process_logs, telemetry_init};
+use crate::service::{device_provision_status, process_logs, process_metrics, telemetry_init};
 
 pub struct TelemetryHandler {
     event_tx: broadcast::Sender<Event>,
@@ -28,6 +28,11 @@ pub enum TelemetryMessage {
     SendLogs {
         logs: Vec<u8>,
         logs_type: String,
+        reply_to: oneshot::Sender<Result<bool>>,
+    },
+    SendMetrics {
+        metrics: Vec<u8>,
+        metrics_type: String,
         reply_to: oneshot::Sender<Result<bool>>,
     },
 }
@@ -70,6 +75,10 @@ impl TelemetryHandler {
                                     continue;
                                 }
                             }
+                        }
+                        TelemetryMessage::SendMetrics {metrics, metrics_type, reply_to } => {
+                            let result = process_metrics(metrics, metrics_type, self.identity_tx.clone(), self.messaging_tx.clone() ).await;
+                            let _ = reply_to.send(result);
                         }
                     };
                 }

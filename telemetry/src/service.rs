@@ -4,7 +4,6 @@ use anyhow::{bail, Result};
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
 use serde::{Deserialize, Serialize};
-use sha256::digest;
 use std::process::Command;
 use tokio::sync::{mpsc::Sender, oneshot};
 use tracing::info;
@@ -66,14 +65,14 @@ pub fn telemetry_init() -> Result<String> {
     }
 }
 
-pub async fn user_metrics(
+pub async fn process_metrics(
     content: Vec<u8>,
-    metrics_type: &str,
-    messaging_tx: Sender<MessagingMessage>,
+    metrics_type: String,
     identity_tx: Sender<IdentityMessage>,
+    messaging_tx: Sender<MessagingMessage>,
 ) -> Result<bool> {
     let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "user_metrics", "init");
+    tracing::trace!(trace_id, task = "process metrics", "init");
     let settings = match read_settings_yml() {
         Ok(v) => v,
         Err(e) => AgentSettings::default(),
@@ -84,9 +83,9 @@ pub async fn user_metrics(
     };
 
     // Construct message payload
-    let content: String = match serde_json::to_string(&EncodeData {
+    let payload: String = match serde_json::to_string(&EncodeData {
         encoded: content,
-        user_type: metrics_type.to_string(),
+        user_type: metrics_type,
         machine_id: machine_id.clone(),
     }) {
         Ok(k) => k,
@@ -96,14 +95,16 @@ pub async fn user_metrics(
             true
         )),
     };
-    let (tx, rx) = oneshot::channel();
-    // Publish data on the subject
+
     if settings.telemetry.collect.user {
+        let subject = format!("machine.{}.telemetry.metrics", sha256::digest(machine_id));
+        let (tx, rx) = oneshot::channel();
+        // Publish data on the subject
         match messaging_tx
             .send(MessagingMessage::Send {
                 reply_to: tx,
-                message: content.into(),
-                subject: format!("machine.{}.telemetry.metrics", digest(machine_id.clone())),
+                message: payload.into(),
+                subject: subject.clone(),
             })
             .await
         {

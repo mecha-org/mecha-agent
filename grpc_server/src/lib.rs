@@ -7,8 +7,8 @@ use crate::services::identity::IdentityServiceHandler;
 use crate::services::messaging::MessagingServiceHandler;
 use crate::services::provisioning::ProvisioningServiceHandler;
 use crate::services::settings::SettingsServiceHandler;
-use crate::services::telemetry::LogsAgent;
 use crate::services::telemetry::TelemetryServiceHandler;
+use crate::services::telemetry::{LogsAgent, MetricsAgent};
 use agent_settings::{read_settings_yml, AgentSettings};
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
@@ -24,21 +24,18 @@ pub mod agent {
     tonic::include_proto!("settings");
     tonic::include_proto!("identity");
     tonic::include_proto!("messaging");
-    // tonic::include_proto!("opentelemetry.proto.collector.metrics.v1");
-    // tonic::include_proto!("opentelemetry.proto.collector.trace.v1");
+}
+
+pub mod metrics {
+    tonic::include_proto!("opentelemetry.proto.collector.metrics.v1");
+}
+pub mod logs {
     tonic::include_proto!("opentelemetry.proto.collector.logs.v1");
 }
 
-// use agent::{
-//     metrics_service_server::{MetricsService, MetricsServiceServer},
-//     ExportMetricsServiceRequest, ExportMetricsServiceResponse,
-// };
+use metrics::metrics_service_server::MetricsServiceServer;
 
-use agent::logs_service_server::LogsServiceServer;
-// use agent::{
-//     trace_service_server::{TraceService, TraceServiceServer},
-//     ExportTraceServiceRequest, ExportTraceServiceResponse,
-// };
+use logs::logs_service_server::LogsServiceServer;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct EncodeData {
@@ -85,7 +82,10 @@ pub async fn start_grpc_service(opt: GrpcServerOptions) -> Result<()> {
         SettingsServiceHandler::new(opt.settings_tx, opt.provisioning_tx);
     let telemetry_service_handler = TelemetryServiceHandler::new(opt.telemetry_tx);
     let logs_handler = LogsAgent {
-        telemetry_service_handler: telemetry_service_handler,
+        telemetry_service_handler: telemetry_service_handler.clone(),
+    };
+    let metrics_handler = MetricsAgent {
+        telemetry_service_handler: telemetry_service_handler.clone(),
     };
 
     match Server::builder()
@@ -94,8 +94,7 @@ pub async fn start_grpc_service(opt: GrpcServerOptions) -> Result<()> {
         .add_service(MessagingServiceServer::new(messaging_service_handler))
         .add_service(SettingsServiceServer::new(settings_service_handler))
         .add_service(LogsServiceServer::new(logs_handler))
-        // .add_service(MetricsServiceServer::new(metric_server))
-        // .add_service(TraceServiceServer::new(trace_server))
+        .add_service(MetricsServiceServer::new(metrics_handler))
         .serve(addr)
         .await
     {
