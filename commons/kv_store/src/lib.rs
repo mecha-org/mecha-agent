@@ -4,7 +4,10 @@ use anyhow::{bail, Result};
 use fs::construct_dir_path;
 use lazy_static::lazy_static;
 use sled::Db;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 use tracing::info;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
@@ -25,7 +28,7 @@ impl KeyValueStoreClient {
     pub fn new() -> Self {
         KeyValueStoreClient
     }
-    pub fn set(&mut self, key: &str, value: &str) -> Result<bool> {
+    pub fn set(&mut self, settings: HashMap<String, String>) -> Result<bool> {
         let trace_id = find_current_trace_id();
         info!(trace_id, target = "key_value_store", task = "set", "init");
         let db = match DATABASE.lock() {
@@ -36,7 +39,17 @@ impl KeyValueStoreClient {
                 true
             )),
         };
-        let _last_inserted = db.insert(key, value);
+
+        for (key, value) in settings {
+            match db.insert(key, value.as_str()) {
+                Ok(_) => {}
+                Err(e) => bail!(KeyValueStoreError::new(
+                    KeyValueStoreErrorCodes::InsertError,
+                    format!("Error inserting value into db - {}", e),
+                    true
+                )),
+            };
+        }
         info!(
             trace_id,
             target = "key_value_store",

@@ -1,6 +1,7 @@
 use crate::errors::ProvisioningError;
 use crate::errors::ProvisioningErrorCodes;
 use ::fs::construct_dir_path;
+use ::fs::remove_files;
 use ::fs::safe_write_to_path;
 use agent_settings::provisioning::CertificatePaths;
 use agent_settings::read_settings_yml;
@@ -18,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::str;
 use tokio::sync::broadcast::Sender;
+use tracing::error;
 use tracing::info;
 use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
@@ -172,6 +174,54 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
     Ok(true)
 }
 
+pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
+    let trace_id = find_current_trace_id();
+    tracing::info!(trace_id, task = "de_provision", "init",);
+    let settings: AgentSettings = match read_settings_yml() {
+        Ok(settings) => settings,
+        Err(_) => AgentSettings::default(),
+    };
+    //1. Delete certs
+    match remove_files(vec![
+        &settings.provisioning.paths.device.cert,
+        &settings.provisioning.paths.device.private_key,
+        &settings.provisioning.paths.device.csr,
+        &settings.provisioning.paths.intermediate.cert,
+        &settings.provisioning.paths.root.cert,
+    ]) {
+        Ok(_) => tracing::info!(
+            trace_id,
+            task = "de_provision",
+            "certificates deleted successfully"
+        ),
+        Err(e) => {
+            error!(
+                trace_id,
+                task = "de_provision",
+                "error deleting certificates - {}",
+                e
+            );
+            bail!(e)
+        }
+    }
+
+    //2. Event to stop all services
+    let _ = event_tx.send(Event::Provisioning(
+        events::ProvisioningEvent::Deprovisioned,
+    ));
+
+    //3. Delete database
+    match fs::remove_dir_all(&settings.settings.storage.path) {
+        Ok(_) => tracing::info!(trace_id, task = "de_provision", "db deleted successfully"),
+        Err(e) => {
+            error!(trace_id, task = "de_provision", "error deleting db - {}", e);
+            bail!(e)
+        }
+    }
+
+    tracing::info!(trace_id, task = "de_provision", "de provisioned successful",);
+    Ok(true)
+}
 async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<ProvisioningManifest> {
     println!("settings: {:?}", settings);
     let trace_id = find_current_trace_id();

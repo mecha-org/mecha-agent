@@ -5,7 +5,8 @@ import "google/protobuf/struct.proto";
 package settings;
 
 service SettingsService {
-  rpc getSettingsByKey (GetSettingsRequest) returns (GetSettingsResponse);
+  rpc get(GetSettingsRequest) returns (GetSettingsResponse);
+  rpc set(SetSettingsRequest) returns (SetSettingsResponse);
 }
 
 message GetSettingsRequest {
@@ -14,4 +15,11 @@ message GetSettingsRequest {
 
 message GetSettingsResponse {
   string value = 1;
+}
+message SetSettingsRequest {
+  map<string, string> settings = 1;
+}
+
+message SetSettingsResponse {
+  bool success = 1;
 }

@@ -8,8 +8,9 @@ use tokio::{
     sync::{broadcast, mpsc, oneshot},
 };
 use tonic::async_trait;
+use tracing::info;
 
-use crate::service::{process_logs, process_metrics, telemetry_init};
+use crate::service::{device_provision_status, process_logs, process_metrics, telemetry_init};
 
 pub struct TelemetryHandler {
     event_tx: broadcast::Sender<Event>,
@@ -48,6 +49,7 @@ impl TelemetryHandler {
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<TelemetryMessage>) {
         // Start the service
         let _ = &self.start().await;
+        let mut event_rx = self.event_tx.subscribe();
         loop {
             select! {
                 msg = message_rx.recv() => {
@@ -57,8 +59,22 @@ impl TelemetryHandler {
 
                     match msg.unwrap() {
                         TelemetryMessage::SendLogs {logs, logs_type, reply_to } => {
-                           let result =  process_logs(logs_type, logs, self.identity_tx.clone(), self.messaging_tx.clone() ).await;
-                            let _ = reply_to.send(result);
+                            match self.is_started() {
+                                Ok(started) => match started {
+                                    true => {
+                                        let result = process_logs(logs_type, logs, self.identity_tx.clone(), self.messaging_tx.clone() ).await;
+                                        let _ = reply_to.send(result);
+                                    },
+                                    false => {
+                                        let _ = reply_to.send(Ok(false));
+                                        continue;
+                                    }
+                                },
+                                Err(_) => {
+                                    let _ = reply_to.send(Ok(false));
+                                    continue;
+                                }
+                            }
                         }
                         TelemetryMessage::SendMetrics {metrics, metrics_type, reply_to } => {
                             let result = process_metrics(metrics, metrics_type, self.identity_tx.clone(), self.messaging_tx.clone() ).await;
@@ -66,6 +82,38 @@ impl TelemetryHandler {
                         }
                     };
                 }
+              // Receive events from other services
+              event = event_rx.recv() => {
+                if event.is_err() {
+                    continue;
+                }
+                match event.unwrap() {
+                    Event::Provisioning(events::ProvisioningEvent::Provisioned) => {
+                        info!("Telemetry service received provisioning event");
+                        let _ = &self.start().await;
+                    },
+                    Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
+                        let _ = &self.stop().await;
+                    },
+                    Event::Messaging(_) => {},
+                    Event::Settings(events::SettingEvent::Synced) => {},
+                    Event::Settings(events::SettingEvent::Updated { settings }) => {
+                        info!("Telemetry service received settings event");
+                        match settings.get("telemetry.enabled") {
+                            Some(value) => {
+                                if value == "true" {
+                                    let _ = &self.start().await;
+                                } else if value == "false" {
+                                    let _ = &self.stop().await;
+                                } else {
+                                    // Can be add other function to perform
+                                }
+                            },
+                            None => {},
+                        }
+                    },
+                }
+            }
             }
         }
     }
@@ -74,12 +122,18 @@ impl TelemetryHandler {
 #[async_trait]
 impl ServiceHandler for TelemetryHandler {
     async fn start(&mut self) -> Result<bool> {
-        self.status = ServiceStatus::STARTED;
-        let _ = telemetry_init();
-        Ok(true)
+        info!("start telemetry service");
+        if device_provision_status(self.identity_tx.clone()).await {
+            self.status = ServiceStatus::STARTED;
+            let _ = telemetry_init();
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     async fn stop(&mut self) -> Result<bool> {
+        info!("stop telemetry service");
         self.status = ServiceStatus::STOPPED;
         Ok(true)
     }

@@ -10,6 +10,7 @@ pub enum KeyValueStoreErrorCodes {
     DbInitializationError,
     RetrieveValueError,
     DbAcquireLockError,
+    InsertError,
 }
 
 impl fmt::Display for KeyValueStoreErrorCodes {
@@ -26,6 +27,9 @@ impl fmt::Display for KeyValueStoreErrorCodes {
             }
             KeyValueStoreErrorCodes::DbAcquireLockError => {
                 write!(f, "KeyValueStoreErrorCodes: DbAcquireLockError")
+            }
+            KeyValueStoreErrorCodes::InsertError => {
+                write!(f, "KeyValueStoreErrorCodes: InsertError")
             }
         }
     }

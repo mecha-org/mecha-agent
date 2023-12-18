@@ -137,29 +137,11 @@ impl Messaging {
                 bail!("Error getting provision status: {:?}", err);
             }
         }
-        let (tx, rx) = oneshot::channel();
-        let _ = identity_tx
-            .clone()
-            .send(IdentityMessage::GetMachineId { reply_to: tx })
-            .await;
-        let mut machine_id = String::new();
-        match rx.await {
-            Ok(provision_status_result) => {
-                if provision_status_result.is_ok() {
-                    match provision_status_result {
-                        Ok(result) => machine_id = result,
-                        Err(err) => {
-                            bail!(err);
-                        }
-                    }
-                } else {
-                    bail!("Error getting provision status");
-                }
-            }
-            Err(err) => {
-                bail!("Error getting provision status: {:?}", err);
-            }
-        }
+        let machine_id = match get_machine_id(identity_tx.clone()).await {
+            Ok(id) => id,
+            Err(e) => bail!(e),
+        };
+
         let auth_token = match authenticate(
             &self.settings,
             &machine_id,
@@ -448,19 +430,29 @@ async fn get_auth_token(
     };
 }
 
-/* pub async fn get_nats_client(&self) -> Result<&NatsClient> {
-    let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "connect", "init");
-
-    if self.nats_client.is_none() {
-        bail!(MessagingError::new(
-            MessagingErrorCodes::NatsClientNotInitialized,
-            format!("messaging service initialized without nats client"),
-            true
-        ))
+pub async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Result<String> {
+    let (tx, rx) = oneshot::channel();
+    let _ = identity_tx
+        .clone()
+        .send(IdentityMessage::GetMachineId { reply_to: tx })
+        .await;
+    let mut machine_id = String::new();
+    match rx.await {
+        Ok(provision_status_result) => {
+            if provision_status_result.is_ok() {
+                match provision_status_result {
+                    Ok(result) => machine_id = result,
+                    Err(err) => {
+                        bail!(err);
+                    }
+                }
+            } else {
+                bail!("Error getting machine id");
+            }
+        }
+        Err(err) => {
+            bail!("Error getting machine id: {:?}", err);
+        }
     }
-
-    let nats_client = self.nats_client.as_ref().unwrap();
-
-    Ok(nats_client)
-} */
+    Ok(machine_id)
+}
