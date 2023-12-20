@@ -52,9 +52,9 @@ dependencies = [
 
 [[package]]
 name = "aho-corasick"
-version = "1.0.5"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c378d78423fdad8089616f827526ee33c19f2fddbd5de1629152c9593ba4783"
+checksum = "b2969dcb958b36655471fc61f7e416fa76033bdd4bfed0678d8fee1e2d07a1f0"
 dependencies = [
  "memchr",
 ]
@@ -449,22 +449,21 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-epoch"
-version = "0.9.15"
+version = "0.9.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae211234986c545741a7dc064309f67ee1e5ad243d0e48335adc0484d960bcc7"
+checksum = "2d2fe95351b870527a5d09bf563ed3c97c0cffb87cf1c78a591bf48bb218d9aa"
 dependencies = [
  "autocfg",
  "cfg-if",
  "crossbeam-utils",
  "memoffset",
- "scopeguard",
 ]
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.8.16"
+version = "0.8.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a22b2d63d4d1dc0b7f1b6b2747dd0088008a9be28b6ddf0b1e7d335e3037294"
+checksum = "c06d96137f14f244c37f989d9fff8f95e6c18b918e71f36638f8c49112e4c78f"
 dependencies = [
  "cfg-if",
 ]
@@ -921,39 +920,25 @@ version = "1.0.0"
 dependencies = [
  "agent_settings",
  "anyhow",
- "axum",
- "axum-macros",
- "axum-tracing-opentelemetry",
  "bincode",
- "dotenv",
- "futures",
  "heartbeat",
  "identity",
- "init-tracing-opentelemetry",
  "messaging",
- "opentelemetry 0.20.0",
  "prost 0.11.9",
  "prost-types 0.7.0",
  "protobuf",
  "provisioning",
  "sentry",
  "sentry-anyhow",
- "sentry-tracing",
  "serde",
- "serde_json",
  "settings",
  "telemetry",
  "tokio",
  "tonic 0.9.2",
  "tonic-build",
  "tonic-types",
- "tower-http",
  "tracing",
- "tracing-appender",
  "tracing-opentelemetry-instrumentation-sdk 0.12.0",
- "tracing-subscriber",
- "url",
- "uuid",
 ]
 
 [[package]]
@@ -1220,20 +1205,11 @@ dependencies = [
  "crypto",
  "events",
  "fs",
- "mkdirp",
- "rand",
- "reqwest",
- "sentry",
- "sentry-anyhow",
- "sentry-tracing",
- "serde",
- "serde_json",
  "services",
  "tokio",
  "tonic 0.9.2",
  "tracing",
  "tracing-opentelemetry-instrumentation-sdk 0.12.0",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -1385,9 +1361,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.147"
+version = "0.2.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4668fb0ea861c1df094127ac5f1da3409a82116a4ba74fca2e58ef927159bb3"
+checksum = "302d7ab3130588088d277783b1e2d2e10c9e9e4a16dd9050e6ec93fb3e7048f4"
 
 [[package]]
 name = "libredox"
@@ -1511,23 +1487,17 @@ dependencies = [
  "crypto",
  "events",
  "identity",
- "mkdirp",
  "nats_client",
- "openssl",
- "rand",
  "reqwest",
- "sentry",
  "sentry-anyhow",
  "sentry-tracing",
  "serde",
- "serde_json",
  "services",
  "sha256",
  "tokio",
  "tonic 0.9.2",
  "tracing",
  "tracing-opentelemetry-instrumentation-sdk 0.12.0",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -2796,9 +2766,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.106"
+version = "1.0.108"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cc66a619ed80bf7a0f6b17dd063a84b88f6dea1813737cf469aef1d081142c2"
+checksum = "3d1c7e3eac408d115102c4c24ad393e0821bb3a5df4d506a80f85f7a742a526b"
 dependencies = [
  "itoa",
  "ryu",
@@ -3122,18 +3092,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.48"
+version = "1.0.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d6d7a740b8a666a7e828dd00da9c0dc290dff53154ea77ac109281de90589b7"
+checksum = "f11c217e1416d6f036b870f14e0413d480dbf28edbee1f877abaf0206af43bb7"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.48"
+version = "1.0.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49922ecae66cc8a249b77e68d1d0623c1b2c514f0060c27cdc68bd62a1219d35"
+checksum = "01742297787513b79cf8e29d1056ede1313e2420b7b3b15d0a768b4921f549df"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4016,9 +3986,9 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.6.0"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a0956f1ba7c7909bfb66c2e9e4124ab6f6482560f6628b5aaeba39207c9aad9"
+checksum = "525b4ec142c6b68a2d10f01f7bbf6755599ca3f81ea53b8431b7dd348f5fdb2d"
 
 [[package]]
 name = "zip"
