@@ -10,6 +10,7 @@ use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 use crate::errors::{CryptoError, CryptoErrorCodes};
 pub mod base64;
 pub mod errors;
+pub mod random;
 pub mod x509;
 
 #[derive(Serialize, Deserialize, Debug)]

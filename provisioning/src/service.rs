@@ -7,12 +7,12 @@ use agent_settings::provisioning::CertificatePaths;
 use agent_settings::read_settings_yml;
 use agent_settings::AgentSettings;
 use anyhow::{bail, Result};
+use crypto::random::generate_random_alphanumeric;
 use crypto::x509::generate_csr;
 use crypto::x509::generate_ec_private_key;
 use crypto::x509::PrivateKeyAlgorithm;
 use crypto::x509::PrivateKeySize;
 use events::Event;
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use reqwest::Client as RequestClient;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -62,12 +62,7 @@ pub fn generate_code() -> Result<String> {
     let trace_id = find_current_trace_id();
     tracing::info!(trace_id, task = "generate_code", "init",);
 
-    let code: String = thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(6)
-        .map(char::from)
-        .collect();
-
+    let code = generate_random_alphanumeric(6);
     tracing::debug!(
         trace_id,
         task = "generate_code",
