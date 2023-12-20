@@ -13,8 +13,8 @@ homepage.workspace = true
 crypto = { path = "../crypto" }
 anyhow = { version = "1.0.71", features = ["backtrace"]}
 bytes = "1.5.0"
-async-nats = "0.31.0"
-nkeys = "0.3.2"
-sentry-anyhow = { version= "0.31.1", features = ["backtrace"]}
+async-nats = "0.33.0"
+nkeys = "0.4.0"
+sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
 tracing = "0.1"
-tracing-opentelemetry-instrumentation-sdk = "0.12.0"
+tracing-opentelemetry-instrumentation-sdk = "0.15.0"
