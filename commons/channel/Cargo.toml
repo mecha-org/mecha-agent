@@ -1,0 +1,16 @@
+[package]
+name = "channel"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.27.0", features = ["full"] }
+anyhow = { version = "1.0.71", features = ["backtrace"]}

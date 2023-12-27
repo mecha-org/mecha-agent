@@ -46,7 +46,7 @@ impl TelemetryHandler {
             status: ServiceStatus::INACTIVE,
         }
     }
-    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<TelemetryMessage>) {
+    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<TelemetryMessage>) -> Result<()> {
         // Start the service
         let _ = &self.start().await;
         let mut event_rx = self.event_tx.subscribe();
@@ -122,13 +122,22 @@ impl TelemetryHandler {
 #[async_trait]
 impl ServiceHandler for TelemetryHandler {
     async fn start(&mut self) -> Result<bool> {
-        info!("start telemetry service");
-        if device_provision_status(self.identity_tx.clone()).await {
-            self.status = ServiceStatus::STARTED;
-            let _ = telemetry_init();
-            Ok(true)
-        } else {
-            Ok(false)
+        match device_provision_status(self.identity_tx.clone()).await {
+            Ok(provisioned) => {
+                if provisioned {
+                    info!("start telemetry service");
+                    self.status = ServiceStatus::STARTED;
+                    let _ = telemetry_init();
+                    Ok(true)
+                } else {
+                    info!("device is not provisioned");
+                    Ok(false)
+                }
+            }
+            Err(err) => {
+                info!("device is not provisioned");
+                Ok(false)
+            }
         }
     }
 

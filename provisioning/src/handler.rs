@@ -1,14 +1,13 @@
-use agent_settings::{read_settings_yml, AgentSettings};
-use anyhow::{bail, Result};
+use crate::service::{de_provision, generate_code, provision_by_code};
+use anyhow::Result;
 use async_trait::async_trait;
 use events::Event;
 use services::{ServiceHandler, ServiceStatus};
 use tokio::select;
 use tokio::sync::{broadcast, mpsc, oneshot};
+use tracing::{debug, info};
 
-use crate::errors::{ProvisioningError, ProvisioningErrorCodes};
-use crate::service::{de_provision, generate_code, provision_by_code};
-
+const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 pub struct ProvisioningHandler {
     event_tx: broadcast::Sender<Event>,
     status: ServiceStatus,
@@ -43,9 +42,15 @@ impl ProvisioningHandler {
         }
     }
 
-    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<ProvisioningMessage>) {
+    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<ProvisioningMessage>) -> Result<()> {
         // start the service
-        let _ = &self.start().await;
+        let res = &self.start().await;
+        debug!(
+            task = "run",
+            package = PACKAGE_NAME,
+            "Provisioning service started: {:?}",
+            res
+        );
 
         loop {
             select! {
@@ -56,16 +61,14 @@ impl ProvisioningHandler {
 
                     match msg.unwrap() {
                         ProvisioningMessage::GenerateCode { reply_to } => {
-                            // let code = generate_error();
                             let code = generate_code();
-                            reply_to.send(code);
+                            let _ = reply_to.send(code);
                         }
                         ProvisioningMessage::ProvisionByCode { code, reply_to } => {
                             let status = provision_by_code(code, self.event_tx.clone()).await;
                             let _ = reply_to.send(status);
                         }
                         ProvisioningMessage::ProvisionByManifest { manifest, reply_to } => {
-                            println!("Provisioning by manifest: {}", manifest);
                             let _ = reply_to.send(Some(true));
                         }
                         ProvisioningMessage::Deprovision { reply_to } => {
@@ -83,6 +86,11 @@ impl ProvisioningHandler {
 impl ServiceHandler for ProvisioningHandler {
     async fn start(&mut self) -> Result<bool> {
         self.status = ServiceStatus::STARTED;
+        info!(
+            task = "start",
+            package = PACKAGE_NAME,
+            "Provisioning service started"
+        );
         Ok(true)
     }
 
@@ -102,19 +110,4 @@ impl ServiceHandler for ProvisioningHandler {
     fn is_started(&self) -> Result<bool> {
         Ok(self.status == ServiceStatus::STARTED)
     }
-}
-
-fn generate_error() -> Result<String> {
-    bail!(ProvisioningError::new(
-        ProvisioningErrorCodes::ManifestLookupBadRequestError,
-        String::from("Dummy Error"),
-        false // Not reporting bad request errors
-    ))
-}
-fn get_settings() -> AgentSettings {
-    let settings: AgentSettings = match read_settings_yml() {
-        Ok(settings) => settings,
-        Err(_) => AgentSettings::default(),
-    };
-    settings
 }

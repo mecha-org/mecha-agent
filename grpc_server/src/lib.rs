@@ -92,9 +92,9 @@ pub async fn start_grpc_service(opt: GrpcServerOptions) -> Result<()> {
         .add_service(ProvisioningServiceServer::new(provisioning_service_handler))
         .add_service(IdentityServiceServer::new(identity_service_handler))
         .add_service(MessagingServiceServer::new(messaging_service_handler))
-        .add_service(SettingsServiceServer::new(settings_service_handler))
-        .add_service(LogsServiceServer::new(logs_handler))
-        .add_service(MetricsServiceServer::new(metrics_handler))
+        // .add_service(SettingsServiceServer::new(settings_service_handler))
+        // .add_service(LogsServiceServer::new(logs_handler))
+        // .add_service(MetricsServiceServer::new(metrics_handler))
         .serve(addr)
         .await
     {

@@ -13,7 +13,7 @@ use tokio::{
     },
 };
 use tonic::async_trait;
-use tracing::info;
+use tracing::{error, info, warn};
 
 use crate::service::{
     device_provision_status, get_time_interval, send_heartbeat, SendHeartbeatOptions,
@@ -46,7 +46,7 @@ impl HeartbeatHandler {
             status: ServiceStatus::INACTIVE,
         }
     }
-    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<HeartbeatMessage>) {
+    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<HeartbeatMessage>) -> Result<()> {
         // start the service
         let _ = &self.start().await;
         let interval_in_secs: u64 = get_time_interval();
@@ -83,7 +83,12 @@ impl HeartbeatHandler {
                             Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
                                 let _ = &self.stop().await;
                             },
-                            Event::Messaging(_) => {},
+                            Event::Messaging(events::MessagingEvent::Connected) => {
+                                info!("Heartbeat service received messaging connected event");
+                                if !self.is_started().unwrap() {
+                                    let _ = &self.start().await;
+                                }
+                            },
                             Event::Settings(_) => {},
                         }
                     }
@@ -95,7 +100,7 @@ impl HeartbeatHandler {
                                 identity_tx: self.identity_tx.clone(),
                             }).await;
                     } else {
-                        info!("Heartbeat service is not started");
+                        info!("heartbeat service is not started");
                     }
                 }
             }
@@ -107,7 +112,9 @@ impl HeartbeatHandler {
 impl ServiceHandler for HeartbeatHandler {
     async fn start(&mut self) -> Result<bool> {
         // Start if device is provisioned
-        if device_provision_status(self.identity_tx.clone()).await {
+        let is_provisioned = device_provision_status(self.identity_tx.clone()).await;
+        error!("is provisioned : {}", is_provisioned);
+        if is_provisioned {
             self.status = ServiceStatus::STARTED;
         }
         Ok(true)

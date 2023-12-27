@@ -1,13 +1,13 @@
 use crate::errors::{TelemetryError, TelemetryErrorCodes};
 use agent_settings::{read_settings_yml, AgentSettings};
 use anyhow::{bail, Result};
+use channel::recv_with_timeout;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use tokio::sync::{mpsc::Sender, oneshot};
-use tracing::info;
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
+use tracing::{info, warn};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -29,11 +29,16 @@ pub struct EncodeData {
 }
 
 pub fn telemetry_init() -> Result<String> {
-    let trace_id = find_current_trace_id();
-    tracing::info!(trace_id, task = "telemetry_init", "init");
+    tracing::info!(task = "telemetry_init", "init");
     let settings = match read_settings_yml() {
         Ok(v) => v,
-        Err(e) => AgentSettings::default(),
+        Err(e) => {
+            warn!(
+                task = "telemetry_init",
+                "Failed to read settings.yml - {}", e
+            );
+            AgentSettings::default()
+        }
     };
     if settings.telemetry.enabled {
         let r = Command::new(settings.telemetry.otel_collector.bin)
@@ -42,11 +47,10 @@ pub fn telemetry_init() -> Result<String> {
             .spawn();
         match r {
             Ok(_) => {
-                tracing::info!(trace_id, task = "telemetry_init", "telemetry initialized");
+                tracing::info!(task = "telemetry_init", "telemetry initialized");
             }
             Err(e) => {
                 tracing::error!(
-                    trace_id,
                     task = "telemetry_init",
                     "telemetry initialization failed - {}",
                     e
@@ -59,7 +63,7 @@ pub fn telemetry_init() -> Result<String> {
     } else {
         bail!(TelemetryError::new(
             TelemetryErrorCodes::DataCollectionDisabled,
-            format!("Telemetry data collection is diabled"),
+            format!("telemetry data collection is diabled"),
             true
         ))
     }
@@ -71,11 +75,16 @@ pub async fn process_metrics(
     identity_tx: Sender<IdentityMessage>,
     messaging_tx: Sender<MessagingMessage>,
 ) -> Result<bool> {
-    let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "process metrics", "init");
+    tracing::trace!(task = "process metrics", "init");
     let settings = match read_settings_yml() {
         Ok(v) => v,
-        Err(e) => AgentSettings::default(),
+        Err(e) => {
+            warn!(
+                task = "process_metrics",
+                "failed to read settings.yml - {}", e
+            );
+            AgentSettings::default()
+        }
     };
     let machine_id = match get_machine_id(identity_tx.clone()).await {
         Ok(v) => v,
@@ -100,46 +109,32 @@ pub async fn process_metrics(
         let subject = format!("machine.{}.telemetry.metrics", sha256::digest(machine_id));
         let (tx, rx) = oneshot::channel();
         // Publish data on the subject
-        match messaging_tx
+        let send_output = messaging_tx
             .send(MessagingMessage::Send {
                 reply_to: tx,
                 message: payload.into(),
                 subject: subject.clone(),
             })
-            .await
-        {
-            Ok(_) => match rx.await {
-                Ok(_) => {
-                    tracing::info!(
-                        trace_id,
-                        task = "user_metrics",
-                        "user metrics sent successfully"
-                    );
-                    return Ok(true);
-                }
-                Err(e) => {
-                    bail!(TelemetryError::new(
-                        TelemetryErrorCodes::MessageSentFailed,
-                        format!("Failed to send message - {}", e),
-                        true
-                    ))
-                }
-            },
+            .await;
+        if send_output.is_err() {
+            bail!(TelemetryError::new(
+                TelemetryErrorCodes::ChannelSendMessageError { num: 1001 },
+                format!("Failed to send message - {}", send_output.err().unwrap()),
+                true
+            ))
+        }
+        match recv_with_timeout(rx).await {
+            Ok(_) => return Ok(true),
             Err(e) => {
                 bail!(TelemetryError::new(
-                    TelemetryErrorCodes::MessageSentFailed,
-                    format!("Failed to send message - {}", e),
+                    TelemetryErrorCodes::ChannelReceiveMessageError { num: 1001 },
+                    format!("Failed to receive message - {}", e),
                     true
                 ))
             }
         }
-    } else {
-        bail!(TelemetryError::new(
-            TelemetryErrorCodes::DataCollectionDisabled,
-            format!("Telemetry data collection is disabled"),
-            true
-        ))
     }
+    Ok(false)
 }
 
 pub async fn process_logs(
@@ -150,13 +145,16 @@ pub async fn process_logs(
 ) -> Result<bool> {
     let settings = match read_settings_yml() {
         Ok(v) => v,
-        Err(e) => AgentSettings::default(),
+        Err(e) => {
+            warn!(task = "process_logs", "failed to read settings.yml - {}", e);
+            AgentSettings::default()
+        }
     };
     let machine_id = match get_machine_id(identity_tx.clone()).await {
         Ok(v) => v,
         Err(e) => bail!(e),
     };
-
+    println!("PROCESSING LOGS");
     // Construct message payload
     let payload: String = match serde_json::to_string(&EncodeData {
         encoded: content,
@@ -175,94 +173,73 @@ pub async fn process_logs(
         let subject = format!("machine.{}.telemetry.logs", sha256::digest(machine_id));
         let (tx, rx) = oneshot::channel();
         // Publish data on the subject
-        match messaging_tx
+        let send_output = messaging_tx
             .send(MessagingMessage::Send {
                 reply_to: tx,
                 message: payload.into(),
                 subject: subject.clone(),
             })
-            .await
-        {
-            Ok(_) => match rx.await {
-                Ok(_) => {
-                    return Ok(true);
-                }
-                Err(e) => {
-                    bail!(TelemetryError::new(
-                        TelemetryErrorCodes::MessageSentFailed,
-                        format!("Failed to send message - {}", e),
-                        true
-                    ))
-                }
-            },
+            .await;
+        if send_output.is_err() {
+            bail!(TelemetryError::new(
+                TelemetryErrorCodes::ChannelSendMessageError { num: 1002 },
+                format!("Failed to send message - {}", send_output.err().unwrap()),
+                true
+            ))
+        }
+        match recv_with_timeout(rx).await {
+            Ok(_) => return Ok(true),
             Err(e) => {
+                println!("ERROR RECEIVING MESSAGE");
                 bail!(TelemetryError::new(
-                    TelemetryErrorCodes::MessageSentFailed,
-                    format!("Failed to send message - {}", e),
+                    TelemetryErrorCodes::ChannelReceiveMessageError { num: 1002 },
+                    format!("Failed to receive message - {}", e),
                     true
                 ))
             }
         }
-    } else {
-        bail!(TelemetryError::new(
-            TelemetryErrorCodes::DataCollectionDisabled,
-            format!("Telemetry data collection is disabled"),
-            true
-        ))
     }
+    Ok(false)
 }
 
 async fn get_machine_id(identity_tx: Sender<IdentityMessage>) -> Result<String> {
-    let mut machine_id = String::new();
     let (tx, rx) = oneshot::channel();
-    let _ = identity_tx
+    let send_output = identity_tx
         .send(IdentityMessage::GetMachineId { reply_to: tx })
         .await;
-    match rx.await {
-        Ok(machine_id_result) => {
-            if machine_id_result.is_ok() {
-                match machine_id_result {
-                    Ok(machine_id_value) => {
-                        machine_id = machine_id_value;
-                    }
-                    Err(_) => {
-                        bail!("Error getting machine ID");
-                    }
-                }
-            } else {
-                bail!("Error getting machine ID");
-            }
-        }
-        Err(err) => {
-            bail!("Error getting machine ID: {:?}", err);
-        }
+    if send_output.is_err() {
+        bail!(TelemetryError::new(
+            TelemetryErrorCodes::ChannelSendMessageError { num: 1000 },
+            format!("get machine id error: {}", send_output.err().unwrap()),
+            true
+        ));
     }
+    let machine_id = match recv_with_timeout(rx).await {
+        Ok(machine_id) => machine_id,
+        Err(err) => {
+            bail!(err);
+        }
+    };
     Ok(machine_id)
 }
 
-pub async fn device_provision_status(identity_tx: Sender<IdentityMessage>) -> bool {
-    let trace_id = find_current_trace_id();
-    info!(
-        task = "device_provision_status",
-        trace_id = trace_id,
-        "init"
-    );
+pub async fn device_provision_status(identity_tx: Sender<IdentityMessage>) -> Result<bool> {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    let _ = identity_tx
+    let send_output = identity_tx
         .send(IdentityMessage::GetProvisionStatus { reply_to: tx })
         .await;
-    let status = match rx.await {
-        Ok(provisioning_status_result) => {
-            if provisioning_status_result.is_ok() {
-                match provisioning_status_result {
-                    Ok(provisioning_status_value) => provisioning_status_value,
-                    Err(_) => false,
-                }
-            } else {
-                false
-            }
+    if send_output.is_err() {
+        bail!(TelemetryError::new(
+            TelemetryErrorCodes::ChannelSendMessageError { num: 1000 },
+            format!("get machine id error: {}", send_output.err().unwrap()),
+            true
+        ));
+    }
+    let status = match recv_with_timeout(rx).await {
+        Ok(status) => status,
+        Err(err) => {
+            bail!(err);
         }
-        Err(_err) => false,
     };
-    status
+    Ok(status)
 }

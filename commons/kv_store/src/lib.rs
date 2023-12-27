@@ -9,7 +9,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tracing::info;
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 use crate::errors::{KeyValueStoreError, KeyValueStoreErrorCodes};
 static DATABASE_STORE_FIILE_PATH: &str = "~/.mecha/agent/db";
@@ -29,8 +28,7 @@ impl KeyValueStoreClient {
         KeyValueStoreClient
     }
     pub fn set(&mut self, settings: HashMap<String, String>) -> Result<bool> {
-        let trace_id = find_current_trace_id();
-        info!(trace_id, target = "key_value_store", task = "set", "init");
+        info!(target = "key_value_store", task = "set", "init");
         let db = match DATABASE.lock() {
             Ok(d) => d,
             Err(e) => bail!(KeyValueStoreError::new(
@@ -50,17 +48,11 @@ impl KeyValueStoreClient {
                 )),
             };
         }
-        info!(
-            trace_id,
-            target = "key_value_store",
-            task = "set",
-            "completed"
-        );
+        info!(target = "key_value_store", task = "set", "completed");
         Ok(true)
     }
     pub fn get(&self, key: &str) -> Result<Option<String>> {
-        let trace_id = find_current_trace_id();
-        info!(trace_id, target = "key_value_store", task = "get", "init");
+        info!(target = "key_value_store", task = "get", "init");
         let db = match DATABASE.lock() {
             Ok(d) => d,
             Err(e) => bail!(KeyValueStoreError::new(
@@ -72,12 +64,7 @@ impl KeyValueStoreClient {
         let last_inserted = db.get(key);
         match last_inserted {
             Ok(s) => {
-                info!(
-                    trace_id,
-                    target = "key_value_store",
-                    task = "get",
-                    "completed"
-                );
+                info!(target = "key_value_store", task = "get", "completed");
                 Ok(s.map(|s| String::from_utf8(s.to_vec()).unwrap()))
             }
             Err(e) => bail!(KeyValueStoreError::new(

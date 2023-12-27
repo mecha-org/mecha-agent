@@ -5,7 +5,6 @@ use base64::b64_encode;
 use fs::safe_open_file;
 use openssl::{hash::MessageDigest, x509::X509};
 use serde::{Deserialize, Serialize};
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 use crate::errors::{CryptoError, CryptoErrorCodes};
 pub mod base64;
@@ -23,14 +22,12 @@ pub struct MachineCert {
     pub root_cert: String,
 }
 pub fn get_machine_id() -> Result<String> {
-    let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "get_machine_id", "init");
     let settings = match agent_settings::read_settings_yml() {
         Ok(v) => v,
         Err(e) => bail!(e),
     };
     let mut public_key_buf = Vec::new();
-    let public_key_path = settings.provisioning.paths.device.cert.clone();
+    let public_key_path = settings.provisioning.paths.machine.cert.clone();
     let mut file = match safe_open_file(public_key_path.as_str()) {
         Ok(v) => v,
         Err(e) => {
@@ -53,12 +50,7 @@ pub fn get_machine_id() -> Result<String> {
     let cert = match X509::from_pem(public_key_buf.as_slice()) {
         Ok(cert) => cert,
         Err(err) => {
-            tracing::error!(
-                trace_id,
-                task = "issue_token",
-                "error deserializing pem -{}",
-                err
-            );
+            tracing::error!(task = "issue_token", "error deserializing pem -{}", err);
             bail!(CryptoError::new(
                 CryptoErrorCodes::PemDeserializeError,
                 format!("error deserializing pem",),
@@ -94,8 +86,7 @@ pub fn get_machine_id() -> Result<String> {
 }
 
 pub fn get_machine_cert() -> Result<MachineCert> {
-    let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "get_machine_cert", "init");
+    tracing::trace!(task = "get_machine_cert", "init");
     let settings = match agent_settings::read_settings_yml() {
         Ok(v) => v,
         Err(e) => bail!(e),
@@ -103,7 +94,7 @@ pub fn get_machine_cert() -> Result<MachineCert> {
     let mut public_key_buf = Vec::new();
 
     // Read public key
-    let public_key_path = settings.provisioning.paths.device.cert.clone();
+    let public_key_path = settings.provisioning.paths.machine.cert.clone();
     let mut pub_key_file = match safe_open_file(public_key_path.as_str()) {
         Ok(v) => v,
         Err(e) => {
@@ -134,12 +125,7 @@ pub fn get_machine_cert() -> Result<MachineCert> {
     let cert = match X509::from_pem(public_key_buf.as_slice()) {
         Ok(cert) => cert,
         Err(err) => {
-            tracing::error!(
-                trace_id,
-                task = "issue_token",
-                "error deserializing pem -{}",
-                err
-            );
+            tracing::error!(task = "issue_token", "error deserializing pem -{}", err);
             bail!(CryptoError::new(
                 CryptoErrorCodes::PemDeserializeError,
                 format!("error deserializing pem",),

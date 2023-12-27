@@ -15,6 +15,7 @@ services = { path = "../core/services" }
 identity = { path = "../identity" }
 messaging = { path = "../messaging" }
 settings = { path = "../settings" }
+channel = { path = "../commons/channel" }
 crypto = { path = "../commons/crypto" }
 agent_settings = { path = "../core/settings" }
 anyhow = { version = "1.0.71", features = ["backtrace"]}

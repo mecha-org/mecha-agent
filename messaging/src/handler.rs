@@ -10,7 +10,7 @@ use tokio::{
 use tonic::async_trait;
 use tracing::info;
 
-use crate::service::{get_machine_id, Messaging, MessagingScope};
+use crate::service::{get_machine_id, Messaging};
 
 pub enum MessagingMessage {
     Connect {
@@ -57,11 +57,11 @@ impl MessagingHandler {
         Self {
             event_tx: options.event_tx,
             status: ServiceStatus::STARTED,
-            messaging_client: Messaging::new(MessagingScope::System, true),
+            messaging_client: Messaging::new(true),
             identity_tx: options.identity_tx,
         }
     }
-    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<MessagingMessage>) {
+    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<MessagingMessage>) -> Result<()> {
         let _ = &self.start().await;
         let mut event_rx = self.event_tx.subscribe();
         loop {
@@ -75,7 +75,6 @@ impl MessagingHandler {
                                     MessagingMessage::Send{reply_to, message, subject} => {
                                         let res = self.messaging_client.publish(&subject.as_str(), Bytes::from(message)).await;
                                         let _ = reply_to.send(res);
-
                                     }
                                     MessagingMessage::Request{reply_to, message, subject} => {
                                         let res = self.messaging_client.request(&subject.as_str(), Bytes::from(message)).await;
@@ -126,7 +125,16 @@ impl MessagingHandler {
 #[async_trait]
 impl ServiceHandler for MessagingHandler {
     async fn start(&mut self) -> Result<bool> {
-        if get_machine_id(self.identity_tx.clone()).await.is_ok() {
+        println!("Starting messaging service");
+        let machine_id = match get_machine_id(self.identity_tx.clone()).await {
+            Ok(id) => id,
+            Err(e) => {
+                println!("Error getting machine id: {:?}", e);
+                return Ok(false);
+            }
+        };
+        println!("Should connect: {}", machine_id);
+        if !machine_id.is_empty() {
             self.status = ServiceStatus::STARTED;
             match self
                 .messaging_client
@@ -139,6 +147,7 @@ impl ServiceHandler for MessagingHandler {
                 }
             };
         }
+        println!("Messaging service started");
         Ok(true)
     }
 

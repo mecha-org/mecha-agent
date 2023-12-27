@@ -1,7 +1,6 @@
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
 use tracing::error;
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub enum TelemetryErrorCodes {
@@ -12,6 +11,12 @@ pub enum TelemetryErrorCodes {
     MetricsSerializeFailed,
     LogsSeralizeFailed,
     TraceSeralizeFailed,
+    ChannelSendMessageError {
+        num: u32,
+    },
+    ChannelReceiveMessageError {
+        num: u32,
+    },
 }
 
 impl fmt::Display for TelemetryErrorCodes {
@@ -35,6 +40,16 @@ impl fmt::Display for TelemetryErrorCodes {
             TelemetryErrorCodes::TraceSeralizeFailed => {
                 write!(f, "TelemetryErrorCodes: TraceSeralizeFailed")
             }
+            TelemetryErrorCodes::ChannelSendMessageError { num } => {
+                write!(f, "TelemetryErrorCodes: ChannelSendMessageError({})", num)
+            }
+            TelemetryErrorCodes::ChannelReceiveMessageError { num } => {
+                write!(
+                    f,
+                    "TelemetryErrorCodes: ChannelReceiveMessageError({})",
+                    num
+                )
+            }
         }
     }
 }
@@ -57,16 +72,13 @@ impl std::fmt::Display for TelemetryError {
 
 impl TelemetryError {
     pub fn new(code: TelemetryErrorCodes, message: String, capture_error: bool) -> Self {
-        let trace_id = find_current_trace_id();
         error!(
             target = "Telemetry",
             "error: (code: {:?}, message: {})", code, message
         );
         if capture_error {
-            let error = &anyhow::anyhow!(code).context(format!(
-                "error: (code: {:?}, message: {} trace:{:?})",
-                code, message, trace_id
-            ));
+            let error = &anyhow::anyhow!(code)
+                .context(format!("error: (code: {:?}, message: {})", code, message));
             capture_anyhow(error);
         }
         Self { code, message }

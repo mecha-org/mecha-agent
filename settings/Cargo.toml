@@ -16,6 +16,7 @@ agent_settings = { path = "../core/settings" }
 events = { path = "../core/events" }
 messaging = { path = "../messaging" }
 identity = { path = "../identity" }
+channel = { path = "../commons/channel" }
 nats_client = { path = "../commons/nats_client" }
 services = { path = "../core/services" }
 kv_store = { path = "../commons/kv_store" }

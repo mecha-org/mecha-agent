@@ -3,9 +3,8 @@ use anyhow::{bail, Result};
 pub use async_nats::Subscriber;
 pub use bytes::Bytes;
 use nkeys::KeyPair;
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 use tracing::info;
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 pub mod errors;
 pub mod jetstream;
@@ -31,8 +30,7 @@ impl NatsClient {
     }
 
     pub async fn connect(&mut self, token: &str, inbox_prefix: &str) -> Result<bool> {
-        let trace_id = find_current_trace_id();
-        tracing::trace!(trace_id, target = "nats_client", task = "connect", "init");
+        tracing::trace!(target = "nats_client", task = "connect", "init");
 
         info!(
             target = "nats_client",
@@ -97,20 +95,28 @@ impl NatsClient {
     }
 
     pub async fn publish(&self, subject: &str, data: Bytes) -> Result<bool> {
-        let trace_id = find_current_trace_id();
-        tracing::trace!(trace_id, target = "nats_client", task = "publish", "init");
+        tracing::trace!(target = "nats_client", task = "publish", "init");
         let client = match self.get_connected_client() {
             Ok(c) => c,
             Err(e) => bail!(e),
         };
 
         tracing::trace!(
-            trace_id,
             target = "nats_client",
             task = "publish",
             "nats client is in connected status"
         );
-        match client.publish(String::from(subject), data.clone()).await {
+        // Set headers
+        let version_detail = format!("mecha_agent_server@{}", env!("CARGO_PKG_VERSION"));
+        let mut headers = async_nats::HeaderMap::new();
+        headers.insert(
+            "X-Agent",
+            async_nats::HeaderValue::from_str(version_detail.as_str()).unwrap(),
+        );
+        match client
+            .publish_with_headers(String::from(subject), headers, data.clone())
+            .await
+        {
             Ok(v) => v,
             Err(e) => {
                 bail!(NatsClientError::new(
@@ -127,8 +133,7 @@ impl NatsClient {
     }
 
     pub async fn request(&self, subject: &str, data: Bytes) -> Result<Bytes> {
-        let trace_id = find_current_trace_id();
-        tracing::trace!(trace_id, target = "nats_client", task = "request", "init");
+        tracing::trace!(target = "nats_client", task = "request", "init");
 
         let client = match self.get_connected_client() {
             Ok(c) => c,
@@ -136,7 +141,6 @@ impl NatsClient {
         };
 
         tracing::trace!(
-            trace_id,
             target = "nats_client",
             task = "request",
             "nats client is in connected status"
@@ -157,8 +161,7 @@ impl NatsClient {
     }
 
     pub async fn subscribe(&self, subject: &str) -> Result<Subscriber> {
-        let trace_id = find_current_trace_id();
-        tracing::trace!(trace_id, target = "nats_client", task = "publish", "init");
+        tracing::trace!(target = "nats_client", task = "publish", "init");
 
         let client = match self.get_connected_client() {
             Ok(c) => c,

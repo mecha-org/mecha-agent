@@ -1,6 +1,7 @@
 use agent_settings::read_settings_yml;
 use agent_settings::{messaging::MessagingSettings, AgentSettings};
 use anyhow::{bail, Result};
+use channel::recv_with_timeout;
 use crypto::base64::b64_encode;
 use crypto::x509::sign_with_private_key;
 use events::Event;
@@ -11,10 +12,10 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use sha256::digest;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
+use tracing::{debug, error, info, trace};
 
 use crate::errors::{MessagingError, MessagingErrorCodes};
-
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MessagingServerResponseGeneric<T> {
@@ -63,28 +64,28 @@ pub struct GetAuthTokenRequest {
     signed_nonce: String,
     public_key: String,
 }
+#[derive(Serialize)]
+pub struct AuthNonceRequest {
+    pub agent_name: String,
+    pub agent_version: String,
+}
 #[derive(Clone)]
 pub struct Messaging {
-    scope: MessagingScope,
     settings: AgentSettings,
     nats_client: Option<NatsClient>,
 }
 impl Messaging {
-    pub fn new(scope: MessagingScope, initialize_client: bool) -> Self {
+    pub fn new(initialize_client: bool) -> Self {
         let settings = match read_settings_yml() {
             Ok(settings) => settings,
             Err(_) => AgentSettings::default(),
         };
-        let nats_url = match scope {
-            MessagingScope::System => settings.messaging.system.url.clone(),
-            MessagingScope::User => settings.messaging.user.url.clone(),
-        };
+        let nats_url = settings.messaging.system.url.clone();
         let nats_client = match initialize_client {
             true => Some(NatsClient::new(&nats_url)),
             false => None,
         };
         Self {
-            scope,
             settings,
             nats_client,
         }
@@ -101,47 +102,39 @@ impl Messaging {
         identity_tx: &mpsc::Sender<IdentityMessage>,
         event_tx: broadcast::Sender<Event>,
     ) -> Result<bool> {
-        let trace_id = find_current_trace_id();
-        tracing::trace!(trace_id, task = "connect", "init");
-        let (tx, rx) = oneshot::channel();
+        let fn_name = "connect";
         if self.nats_client.is_none() {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "messaging service initialized without nats client"
+            );
             bail!(MessagingError::new(
                 MessagingErrorCodes::NatsClientNotInitialized,
                 format!("messaging service initialized without nats client"),
-                true
+                false
             ))
         }
-        // let (identity_tx, identity_rx) = oneshot::channel();
-        let _ = identity_tx
-            .clone()
-            .send(IdentityMessage::GetProvisionStatus { reply_to: tx })
-            .await;
-        match rx.await {
-            Ok(provision_status_result) => {
-                if provision_status_result.is_ok() {
-                    match provision_status_result {
-                        Ok(result) => {
-                            if !result {
-                                return Ok(false);
-                            }
-                        }
-                        Err(err) => {
-                            bail!(err);
-                        }
-                    }
-                } else {
-                    bail!("Error getting provision status");
-                }
-            }
-            Err(err) => {
-                bail!("Error getting provision status: {:?}", err);
-            }
-        }
+
         let machine_id = match get_machine_id(identity_tx.clone()).await {
             Ok(id) => id,
-            Err(e) => bail!(e),
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error getting machine id - {}",
+                    e
+                );
+                bail!(e)
+            }
         };
 
+        debug!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "machine id - {}",
+            machine_id
+        );
         let auth_token = match authenticate(
             &self.settings,
             &machine_id,
@@ -150,7 +143,15 @@ impl Messaging {
         .await
         {
             Ok(t) => t,
-            Err(e) => bail!(e),
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error authenticating - {}",
+                    e
+                );
+                bail!(e)
+            }
         };
         let inbox_prefix = format!("inbox.{}", digest(&machine_id));
         match self
@@ -161,86 +162,178 @@ impl Messaging {
             .await
         {
             Ok(c) => c,
-            Err(e) => bail!(e),
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error connecting to nats - {}",
+                    e
+                );
+                bail!(e)
+            }
         };
         // Send broadcast message as messaging service is connected
-        let _ = event_tx.send(Event::Messaging(events::MessagingEvent::Connected));
+        match event_tx.send(Event::Messaging(events::MessagingEvent::Connected)) {
+            Ok(_) => {}
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error sending messaging service event - {}",
+                    e
+                );
+                bail!(MessagingError::new(
+                    MessagingErrorCodes::EventSendError,
+                    format!("error sending messaging service event - {}", e),
+                    true
+                ));
+            }
+        }
+
         Ok(true)
     }
     pub async fn publish(&self, subject: &str, data: Bytes) -> Result<bool> {
-        let trace_id = find_current_trace_id();
-        tracing::trace!(trace_id, task = "connect", "init");
+        let fn_name = "publish";
+        trace!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "subject - {}",
+            subject
+        );
         if self.nats_client.is_none() {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "messaging service initialized without nats client"
+            );
             bail!(MessagingError::new(
                 MessagingErrorCodes::NatsClientNotInitialized,
                 format!("messaging service initialized without nats client"),
-                true
+                true,
             ))
         }
 
         let nats_client = self.nats_client.as_ref().unwrap();
         let is_published = match nats_client.publish(subject, data).await {
-            Ok(s) => {
-                println!("published to subject: {}", subject);
-                s
+            Ok(s) => s,
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error publishing message - {}",
+                    e
+                );
+                bail!(e)
             }
-            Err(e) => bail!(e),
         };
-
         Ok(is_published)
     }
 
     pub async fn subscribe(&self, subject: &str) -> Result<Subscriber> {
-        let trace_id = find_current_trace_id();
-        tracing::trace!(trace_id, task = "connect", "init");
+        trace!(
+            func = "subscribe",
+            package = PACKAGE_NAME,
+            "subject - {}",
+            subject
+        );
 
         if self.nats_client.is_none() {
+            error!(
+                func = "subscribe",
+                package = PACKAGE_NAME,
+                "messaging service initialized without nats client"
+            );
             bail!(MessagingError::new(
                 MessagingErrorCodes::NatsClientNotInitialized,
                 format!("messaging service initialized without nats client"),
-                true
+                false
             ))
         }
 
         let nats_client = self.nats_client.as_ref().unwrap();
         let subscriber = match nats_client.subscribe(subject).await {
             Ok(s) => s,
-            Err(e) => bail!(e),
+            Err(e) => {
+                error!(
+                    func = "subscribe",
+                    package = PACKAGE_NAME,
+                    "error subscribing to subject - {}",
+                    e
+                );
+                bail!(e)
+            }
         };
-
+        info!(
+            fn_name = "subscribe",
+            package = PACKAGE_NAME,
+            "subscribed to subject - {}",
+            subject
+        );
         Ok(subscriber)
     }
     pub async fn init_jetstream(&self) -> Result<JetStreamClient> {
         if self.nats_client.is_none() {
+            error!(
+                func = "init_jetstream",
+                package = PACKAGE_NAME,
+                "messaging service initialized without nats client"
+            );
             bail!(MessagingError::new(
                 MessagingErrorCodes::NatsClientNotInitialized,
                 format!("messaging service initialized without nats client"),
-                true
+                false
             ))
         }
         let nats_client = self.nats_client.as_ref().unwrap();
         let js_client = JetStreamClient::new(nats_client.client.clone().unwrap());
+        info!(
+            fn_name = "init_jetstream",
+            package = PACKAGE_NAME,
+            "initialized jetstream client"
+        );
         Ok(js_client)
     }
 
     pub async fn request(&self, subject: &str, data: Bytes) -> Result<Bytes> {
-        let trace_id = find_current_trace_id();
-        tracing::trace!(trace_id, task = "request", "init");
+        trace!(
+            func = "request",
+            package = PACKAGE_NAME,
+            "subject - {}",
+            subject
+        );
 
         if self.nats_client.is_none() {
+            error!(
+                func = "request",
+                package = PACKAGE_NAME,
+                "messaging service initialized without nats client"
+            );
             bail!(MessagingError::new(
                 MessagingErrorCodes::NatsClientNotInitialized,
                 format!("messaging service initialized without nats client"),
-                true
+                false
             ))
         }
 
         let nats_client = self.nats_client.as_ref().unwrap();
         let response = match nats_client.request(subject, data).await {
             Ok(s) => s,
-            Err(e) => bail!(e),
+            Err(e) => {
+                error!(
+                    func = "request",
+                    package = PACKAGE_NAME,
+                    "error requesting message - {}",
+                    e
+                );
+                bail!(e)
+            }
         };
-
+        info!(
+            fn_name = "request",
+            package = PACKAGE_NAME,
+            "requested subject - {}",
+            subject
+        );
         Ok(response)
     }
 }
@@ -255,30 +348,55 @@ pub async fn authenticate(
     machine_id: &String,
     nats_client_public_key: &String,
 ) -> Result<String> {
+    let fn_name = "authenticate";
     // Step 2: Get Nonce from Server
     let nonce = match get_auth_nonce(&settings.messaging).await {
         Ok(n) => n,
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error getting auth nonce - {}",
+                e
+            );
+            bail!(e)
+        }
     };
-
+    debug!(func = fn_name, package = PACKAGE_NAME, "nonce - {}", nonce);
     // Step 3: Sign the nonce
-    let nonce_sign = match sign_nonce(&settings.provisioning.paths.device.private_key, &nonce) {
+    let signed_nonce = match sign_nonce(&settings.provisioning.paths.machine.private_key, &nonce) {
         Ok(n) => n,
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error signing nonce - {}",
+                e
+            );
+            bail!(e)
+        }
     };
 
     let token = match get_auth_token(
         MessagingScope::User,
         &machine_id,
         &nonce,
-        &nonce_sign,
+        &signed_nonce,
         &nats_client_public_key,
         &settings.messaging,
     )
     .await
     {
         Ok(t) => t,
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error getting auth token - {}",
+                e
+            );
+            bail!(e)
+        }
     };
     Ok(token)
 }
@@ -286,7 +404,16 @@ pub async fn authenticate(
 fn sign_nonce(private_key_path: &String, nonce: &str) -> Result<String> {
     let signed_nonce = match sign_with_private_key(&private_key_path, nonce.as_bytes()) {
         Ok(s) => s,
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(
+                func = "sign_nonce",
+                package = PACKAGE_NAME,
+                "error signing nonce with private key, path - {}, error - {}",
+                private_key_path,
+                e
+            );
+            bail!(e)
+        }
     };
 
     let encoded_signed_nonce = b64_encode(signed_nonce);
@@ -294,15 +421,26 @@ fn sign_nonce(private_key_path: &String, nonce: &str) -> Result<String> {
 }
 
 async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
-    let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "request_nonce", "init");
     let url = format!(
         "{}{}",
         &settings.service_urls.base_url, &settings.service_urls.get_nonce
     );
+
+    debug!(
+        func = "get_auth_nonce",
+        package = PACKAGE_NAME,
+        "url - {}",
+        url
+    );
+    // Construct request body
+    let request_body: AuthNonceRequest = AuthNonceRequest {
+        agent_name: "mecha_agent".to_string(),
+        agent_version: env!("CARGO_PKG_VERSION").to_string(),
+    };
     let client = reqwest::Client::new();
     let nonce_result = client
-        .get(url)
+        .post(url)
+        .json(&request_body)
         .header("CONTENT_TYPE", "application/json")
         .send()
         .await;
@@ -310,49 +448,101 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
     let nonce_response = match nonce_result {
         Ok(nonce) => nonce,
         Err(e) => match e.status() {
-            Some(StatusCode::INTERNAL_SERVER_ERROR) => bail!(MessagingError::new(
-                MessagingErrorCodes::UnknownError,
-                format!("get auth nonce returned server error - {}", e),
-                true
-            )),
-            Some(StatusCode::BAD_REQUEST) => bail!(MessagingError::new(
-                MessagingErrorCodes::GetAuthNonceBadRequestError,
-                format!("get auth nonce returned bad request - {}", e),
-                true // Not reporting bad request errors
-            )),
-            Some(StatusCode::NOT_FOUND) => bail!(MessagingError::new(
-                MessagingErrorCodes::GetAuthNonceNotFoundError,
-                format!("get auth nonce not found - {}", e),
-                false // Not reporting not found errors
-            )),
-            Some(_) => bail!(MessagingError::new(
-                MessagingErrorCodes::UnknownError,
-                format!("get auth nonce returned unknown error - {}", e),
-                true
-            )),
+            Some(StatusCode::INTERNAL_SERVER_ERROR) => {
+                error!(
+                    func = "get_auth_nonce",
+                    package = PACKAGE_NAME,
+                    "get auth nonce returned internal server error - {}",
+                    e
+                );
+                bail!(MessagingError::new(
+                    MessagingErrorCodes::GetAuthNonceServerError,
+                    format!("get auth nonce returned internal server error - {}", e),
+                    true
+                ))
+            }
+            Some(StatusCode::BAD_REQUEST) => {
+                error!(
+                    func = "get_auth_nonce",
+                    package = PACKAGE_NAME,
+                    "get auth nonce returned bad request - {}",
+                    e
+                );
+                bail!(MessagingError::new(
+                    MessagingErrorCodes::GetAuthNonceBadRequestError,
+                    format!("get auth nonce returned bad request - {}", e),
+                    true
+                ))
+            }
+            Some(StatusCode::NOT_FOUND) => {
+                error!(
+                    func = "get_auth_nonce",
+                    package = PACKAGE_NAME,
+                    "get auth nonce returned not found - {}",
+                    e
+                );
+                bail!(MessagingError::new(
+                    MessagingErrorCodes::GetAuthNonceNotFoundError,
+                    format!("get auth nonce not found - {}", e),
+                    true
+                ))
+            }
+            Some(_) => {
+                error!(
+                    func = "get_auth_nonce",
+                    package = PACKAGE_NAME,
+                    "get auth nonce returned unknown error - {}",
+                    e
+                );
+                bail!(MessagingError::new(
+                    MessagingErrorCodes::UnknownError,
+                    format!("get auth nonce returned unknown error - {}", e),
+                    true
+                ))
+            }
 
-            None => bail!(MessagingError::new(
-                MessagingErrorCodes::UnknownError,
-                format!("get auth nonce returned unknown error - {}", e),
-                true
-            )),
+            None => {
+                error!(
+                    func = "get_auth_nonce",
+                    package = PACKAGE_NAME,
+                    "get auth nonce returned unknown error - {}",
+                    e
+                );
+                bail!(MessagingError::new(
+                    MessagingErrorCodes::UnknownError,
+                    format!("get auth nonce returned error unmatched - {}", e),
+                    true
+                ))
+            }
         },
     };
 
     // parse the manifest lookup result
-    let manifest_response = match nonce_response
+    let nonce_response = match nonce_response
         .json::<MessagingServerResponseGeneric<String>>()
         .await
     {
         Ok(m) => m,
-        Err(e) => bail!(MessagingError::new(
-            MessagingErrorCodes::AuthNonceResponseParseError,
-            format!("error parsing lookup manifest response - {}", e),
-            true
-        )),
+        Err(e) => {
+            error!(
+                func = "get_auth_nonce",
+                package = PACKAGE_NAME,
+                "error parsing nonce response - {}",
+                e
+            );
+            bail!(MessagingError::new(
+                MessagingErrorCodes::AuthNonceResponseParseError,
+                format!("error parsing nonce response - {}", e),
+                true
+            ))
+        }
     };
-
-    Ok(manifest_response.payload)
+    info!(
+        func = "get_auth_nonce",
+        package = PACKAGE_NAME,
+        "auth nonce request completed"
+    );
+    Ok(nonce_response.payload)
 }
 
 async fn get_auth_token(
@@ -363,6 +553,7 @@ async fn get_auth_token(
     nats_user_public_key: &str,
     settings: &MessagingSettings,
 ) -> Result<String> {
+    let fn_name = "get_auth_token";
     let request_body = GetAuthTokenRequest {
         machine_id: machine_id.to_string(),
         _type: MessagingAuthTokenType::Device,
@@ -372,10 +563,12 @@ async fn get_auth_token(
         public_key: nats_user_public_key.to_string(),
     };
 
+    // Format the url to get the auth token
     let url = format!(
         "{}{}",
         &settings.service_urls.base_url, &settings.service_urls.issue_auth_token
     );
+    debug!(func = fn_name, package = PACKAGE_NAME, "url - {}", url);
     let client = reqwest::Client::new();
     let get_auth_token_response = client
         .post(url)
@@ -384,75 +577,149 @@ async fn get_auth_token(
         .send()
         .await;
 
+    // Check if the response is ok
     let auth_token_response = match get_auth_token_response {
         Ok(token) => token,
         Err(e) => match e.status() {
-            Some(StatusCode::INTERNAL_SERVER_ERROR) => bail!(MessagingError::new(
-                MessagingErrorCodes::UnknownError,
-                format!("get auth nonce returned server error - {}", e),
-                true
-            )),
-            Some(StatusCode::BAD_REQUEST) => bail!(MessagingError::new(
-                MessagingErrorCodes::GetAuthNonceBadRequestError,
-                format!("get auth nonce returned bad request - {}", e),
-                true // Not reporting bad request errors
-            )),
-            Some(StatusCode::NOT_FOUND) => bail!(MessagingError::new(
-                MessagingErrorCodes::GetAuthNonceNotFoundError,
-                format!("get auth nonce not found - {}", e),
-                false // Not reporting not found errors
-            )),
-            Some(_) => bail!(MessagingError::new(
-                MessagingErrorCodes::UnknownError,
-                format!("get auth nonce returned unknown error - {}", e),
-                true
-            )),
+            Some(StatusCode::INTERNAL_SERVER_ERROR) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "get auth token returned internal server error - {}",
+                    e
+                );
+                bail!(MessagingError::new(
+                    MessagingErrorCodes::GetAuthTokenServerError,
+                    format!("get auth token returned internal server error - {}", e),
+                    true
+                ))
+            }
+            Some(StatusCode::BAD_REQUEST) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "get auth token returned bad request error - {}",
+                    e
+                );
+                bail!(MessagingError::new(
+                    MessagingErrorCodes::GetAuthTokenBadRequestError,
+                    format!("get auth token returned bad request error - {}", e),
+                    true
+                ))
+            }
+            Some(StatusCode::NOT_FOUND) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "get auth token returned not found error - {}",
+                    e
+                );
+                bail!(MessagingError::new(
+                    MessagingErrorCodes::GetAuthTokenNotFoundError,
+                    format!("get auth token returned not found error - {}", e),
+                    true
+                ))
+            }
+            Some(_) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "get auth token returned unknown error - {}",
+                    e
+                );
+                bail!(MessagingError::new(
+                    MessagingErrorCodes::UnknownError,
+                    format!("get auth token returned unknown error - {}", e),
+                    true
+                ))
+            }
 
-            None => bail!(MessagingError::new(
-                MessagingErrorCodes::UnknownError,
-                format!("get auth nonce returned unknown error - {}", e),
-                true
-            )),
+            None => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "get auth token returned error unmatched - {}",
+                    e
+                );
+                bail!(MessagingError::new(
+                    MessagingErrorCodes::UnknownError,
+                    format!("get auth token returned error unmatched - {}", e),
+                    true
+                ))
+            }
         },
     };
 
-    // parse the auth token result
-    match auth_token_response
+    // Parse the auth token result
+    let auth_token = match auth_token_response
         .json::<MessagingServerResponseGeneric<String>>()
         .await
     {
-        Ok(m) => return Ok(m.payload),
-        Err(e) => bail!(MessagingError::new(
-            MessagingErrorCodes::AuthTokenResponseParseError,
-            format!("error while parsing auth token response - {}", e),
-            true
-        )),
+        Ok(m) => m,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while parsing auth token response - {}",
+                e
+            );
+            bail!(MessagingError::new(
+                MessagingErrorCodes::AuthTokenResponseParseError,
+                format!("error while parsing auth token response - {}", e),
+                true
+            ))
+        }
     };
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "auth token request completed"
+    );
+    Ok(auth_token.payload)
 }
 
 pub async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Result<String> {
     let (tx, rx) = oneshot::channel();
-    let _ = identity_tx
+    match identity_tx
         .clone()
         .send(IdentityMessage::GetMachineId { reply_to: tx })
-        .await;
-    let mut machine_id = String::new();
-    match rx.await {
-        Ok(provision_status_result) => {
-            if provision_status_result.is_ok() {
-                match provision_status_result {
-                    Ok(result) => machine_id = result,
-                    Err(err) => {
-                        bail!(err);
-                    }
-                }
-            } else {
-                bail!("Error getting machine id");
-            }
-        }
-        Err(err) => {
-            bail!("Error getting machine id: {:?}", err);
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
+                "error sending get machine id message - {}",
+                e
+            );
+            bail!(MessagingError::new(
+                MessagingErrorCodes::ChannelSendMessageError,
+                format!("error sending get machine id message - {}", e),
+                true
+            ));
         }
     }
+    let machine_id = match recv_with_timeout(rx).await {
+        Ok(id) => id,
+        Err(e) => {
+            error!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
+                "error receiving get machine id message - {}",
+                e
+            );
+            bail!(MessagingError::new(
+                MessagingErrorCodes::ChannelReceiveMessageError,
+                format!("error receiving get machine id message - {}", e),
+                true
+            ));
+        }
+    };
+    info!(
+        func = "get_machine_id",
+        package = PACKAGE_NAME,
+        "get machine id request completed",
+    );
     Ok(machine_id)
 }

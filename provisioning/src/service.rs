@@ -20,8 +20,9 @@ use std::fs;
 use std::str;
 use tokio::sync::broadcast::Sender;
 use tracing::error;
-use tracing::info;
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
+use tracing::{debug, info, trace, warn};
+
+const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -59,15 +60,20 @@ pub struct SignedCertificates {
 }
 
 pub fn generate_code() -> Result<String> {
-    let trace_id = find_current_trace_id();
-    tracing::info!(trace_id, task = "generate_code", "init",);
+    trace!(func = "generate_code", package = PACKAGE_NAME, "init",);
 
     let code = generate_random_alphanumeric(6);
-    tracing::debug!(
-        trace_id,
-        task = "generate_code",
-        "code generated {:?}",
-        code.to_uppercase()
+    debug!(
+        func = "generate_code",
+        package = PACKAGE_NAME,
+        "code generated - {:?}",
+        code
+    );
+    info!(
+        func = "generate_code",
+        package = PACKAGE_NAME,
+        result = "success",
+        "code generated successfully",
     );
     Ok(code.to_uppercase())
 }
@@ -80,73 +86,117 @@ pub fn generate_code() -> Result<String> {
     5. Store the certificate, intermediate and root in the target path
 */
 pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<bool> {
-    let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "provision machine", "init",);
+    tracing::trace!(
+        func = "provision_by_code",
+        package = PACKAGE_NAME,
+        "init code - {:?}",
+        code
+    );
 
     let settings: AgentSettings = match read_settings_yml() {
         Ok(settings) => settings,
-        Err(_) => AgentSettings::default(),
+        Err(_) => {
+            warn!(
+                func = "provision_me",
+                package = PACKAGE_NAME,
+                "settings.yml not found, using default settings"
+            );
+            AgentSettings::default()
+        }
     };
     // 1. Lookup the manifest, if lookup fails with not found then return error
     let manifest = match lookup_manifest(&settings, &code).await {
-        Ok(m) => {
-            tracing::info!(
-                trace_id,
-                task = "provision_me",
-                result = "success",
-                "provisioning manifest found",
+        Ok(manifest) => {
+            debug!(
+                func = "provision_by_code",
+                package = PACKAGE_NAME,
+                "provisioning manifest - {:?}",
+                manifest
             );
-            m
+            manifest
         }
-        Err(e) => bail!(e), // throw error from manifest lookup
+        Err(e) => {
+            error!(
+                func = "provision_by_code",
+                package = PACKAGE_NAME,
+                "error looking up manifest for code- {}",
+                &code
+            );
+            bail!(e)
+        } // throw error from manifest lookup
     };
 
     // 2. Generate the private key based on the key algorithm
-    let private_key_status = match manifest.cert_key_pair_algorithm {
-        PrivateKeyAlgorithm::ECDSA => generate_ec_private_key(
-            &settings.provisioning.paths.device.private_key,
+    match manifest.cert_key_pair_algorithm {
+        PrivateKeyAlgorithm::ECDSA => match generate_ec_private_key(
+            &settings.provisioning.paths.machine.private_key,
             manifest.cert_key_pair_size,
-        ),
+        ) {
+            Ok(_) => debug!(
+                func = "provision_by_code",
+                package = PACKAGE_NAME,
+                "private key generated successfully"
+            ),
+            Err(e) => {
+                error!(
+                    func = "provision_by_code",
+                    package = PACKAGE_NAME,
+                    "error generating private key on path - {}",
+                    &settings.provisioning.paths.machine.private_key
+                );
+                bail!(e)
+            }
+        },
     };
 
-    match private_key_status {
-        Ok(_) => tracing::info!(
-            trace_id,
-            task = "provision_me",
-            "private key generated in path - {}",
-            &settings.provisioning.paths.device.private_key
-        ),
-        Err(err) => bail!(err),
-    }
-
     // 3. Generate the CSR, using above private key
-    let csr_status = generate_csr(
-        &settings.provisioning.paths.device.csr,
-        &settings.provisioning.paths.device.private_key,
+    match generate_csr(
+        &settings.provisioning.paths.machine.csr,
+        &settings.provisioning.paths.machine.private_key,
         &manifest.machine_id,
-    );
-
-    match csr_status {
-        Ok(_) => tracing::info!(
-            trace_id,
-            task = "provision_me",
-            "private key generated in path - {}",
-            &settings.provisioning.paths.device.private_key
+    ) {
+        Ok(_) => debug!(
+            func = "provision_by_code",
+            package = PACKAGE_NAME,
+            "csr generated successfully"
         ),
-        Err(err) => bail!(err),
-    }
+        Err(e) => {
+            error!(
+                func = "provision_by_code",
+                package = PACKAGE_NAME,
+                "error generating csr - {}",
+                e
+            );
+            bail!(e)
+        }
+    };
 
     // 4. Sign the CSR using the cert signing url
     let signed_certificates = match sign_csr(
         &settings.provisioning.server_url,
-        &settings.provisioning.paths.device.csr,
+        &settings.provisioning.paths.machine.csr,
         &manifest.machine_id,
         &manifest.cert_signing_url,
     )
     .await
     {
-        Ok(s) => s,
-        Err(e) => bail!(e),
+        Ok(signed_cer) => {
+            debug!(
+                func = "provision_by_code",
+                package = PACKAGE_NAME,
+                "csr signed successfully"
+            );
+            signed_cer
+        }
+        Err(e) => {
+            error!(
+                func = "provision_by_code",
+                package = PACKAGE_NAME,
+                "error signing csr for machine_id - {}",
+                &manifest.machine_id
+            );
+            bail!(e)
+        }
     };
 
     // 5. Store the signed certificates in destination path
@@ -156,13 +206,52 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
         signed_certificates.intermediate_cert.as_bytes(),
         signed_certificates.cert.as_bytes(),
     ) {
-        Ok(v) => v,
-        Err(e) => bail!(e),
+        Ok(result) => {
+            debug!(
+                func = "provision_by_code",
+                package = PACKAGE_NAME,
+                "certificates written successfully, result - {}",
+                result
+            );
+            result
+        }
+        Err(e) => {
+            error!(
+                func = "provision_by_code",
+                package = PACKAGE_NAME,
+                "error writing certificates to path - {:?}",
+                &settings.provisioning.paths
+            );
+            bail!(e)
+        }
     };
-    let _ = event_tx.send(Event::Provisioning(events::ProvisioningEvent::Provisioned));
+
+    match event_tx.send(Event::Provisioning(events::ProvisioningEvent::Provisioned)) {
+        Ok(_) => debug!(
+            func = "provision_by_code",
+            package = PACKAGE_NAME,
+            "provisioning event sent successfully"
+        ),
+        Err(e) => {
+            error!(
+                func = "provision_by_code",
+                package = PACKAGE_NAME,
+                "error sending provisioning event - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::SendEventError,
+                format!(
+                    "error sending provisioning event, code: {}, error - {}",
+                    1001, e
+                ),
+                true
+            ));
+        }
+    }
     info!(
-        trace_id,
-        task = "provision_me",
+        func = "provision_by_code",
+        package = PACKAGE_NAME,
         result = "success",
         "machine provisioned successfully"
     );
@@ -170,30 +259,32 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
 }
 
 pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
-    let trace_id = find_current_trace_id();
-    tracing::info!(trace_id, task = "de_provision", "init",);
+    trace!(func = "de_provision", package = PACKAGE_NAME, "init",);
     let settings: AgentSettings = match read_settings_yml() {
         Ok(settings) => settings,
-        Err(_) => AgentSettings::default(),
+        Err(_) => {
+            warn!(
+                func = "de_provision",
+                package = PACKAGE_NAME,
+                "settings.yml not found, using default settings"
+            );
+            AgentSettings::default()
+        }
     };
     //1. Delete certs
     match remove_files(vec![
-        &settings.provisioning.paths.device.cert,
-        &settings.provisioning.paths.device.private_key,
-        &settings.provisioning.paths.device.csr,
+        &settings.provisioning.paths.machine.cert,
+        &settings.provisioning.paths.machine.private_key,
+        &settings.provisioning.paths.machine.csr,
         &settings.provisioning.paths.intermediate.cert,
         &settings.provisioning.paths.root.cert,
     ]) {
-        Ok(_) => tracing::info!(
-            trace_id,
-            task = "de_provision",
-            "certificates deleted successfully"
-        ),
+        Ok(_) => (),
         Err(e) => {
             error!(
-                trace_id,
-                task = "de_provision",
-                "error deleting certificates - {}",
+                func = "de_provision",
+                package = PACKAGE_NAME,
+                "error deleting certs - {}",
                 e
             );
             bail!(e)
@@ -201,32 +292,80 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
     }
 
     //2. Event to stop all services
-    let _ = event_tx.send(Event::Provisioning(
+    match event_tx.send(Event::Provisioning(
         events::ProvisioningEvent::Deprovisioned,
-    ));
-
-    //3. Delete database
-    match fs::remove_dir_all(&settings.settings.storage.path) {
-        Ok(_) => tracing::info!(trace_id, task = "de_provision", "db deleted successfully"),
+    )) {
+        Ok(_) => debug!(
+            func = "de_provision",
+            package = PACKAGE_NAME,
+            "de provisioning event sent successfully"
+        ),
         Err(e) => {
-            error!(trace_id, task = "de_provision", "error deleting db - {}", e);
-            bail!(e)
+            error!(
+                func = "de_provision",
+                package = PACKAGE_NAME,
+                "error sending de provisioning event - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::SendEventError,
+                format!(
+                    "error sending de provisioning event, code:{}, error - {}",
+                    1001, e
+                ),
+                true
+            ));
         }
     }
 
-    tracing::info!(trace_id, task = "de_provision", "de provisioned successful",);
+    //3. Delete database
+    match fs::remove_dir_all(&settings.settings.storage.path) {
+        Ok(_) => {
+            debug!(
+                func = "de_provision",
+                package = PACKAGE_NAME,
+                "db deleted successfully from path - {:?}",
+                &settings.settings.storage.path
+            )
+        }
+        Err(e) => {
+            error!(
+                func = "de_provision",
+                package = PACKAGE_NAME,
+                "error deleting db, from path {}, error - {}",
+                &settings.settings.storage.path,
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::DatabaseDeleteError,
+                format!("error deleting db, code: {}, error - {}", 1001, e),
+                true
+            ));
+        }
+    }
+
+    info!(
+        func = "de_provision",
+        package = PACKAGE_NAME,
+        result = "success",
+        "de provisioned successful",
+    );
     Ok(true)
 }
 async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<ProvisioningManifest> {
-    println!("settings: {:?}", settings);
-    let trace_id = find_current_trace_id();
+    trace!(
+        func = "lookup_manifest",
+        package = PACKAGE_NAME,
+        "init, code - {:?}",
+        code
+    );
     let url = format!(
         "{}/v1/provisioning/manifest/find?code={}",
         settings.provisioning.server_url, code
     );
-    tracing::debug!(
-        trace_id,
-        task = "lookup_manifest",
+    debug!(
+        func = "lookup_manifest",
+        package = PACKAGE_NAME,
         "looking for manifest at url - {:?}",
         url
     );
@@ -235,31 +374,74 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
     let lookup_result = match response {
         Ok(v) => v,
         Err(e) => match e.status() {
-            Some(StatusCode::INTERNAL_SERVER_ERROR) => bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::ManifestLookupServerError,
-                format!("manifest find endpoint url returned server error - {}", e),
-                true
-            )),
-            Some(StatusCode::BAD_REQUEST) => bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::ManifestLookupBadRequestError,
-                format!("manifest find endpoint url returned bad request - {}", e),
-                false // Not reporting bad request errors
-            )),
-            Some(StatusCode::NOT_FOUND) => bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::ManifestLookupNotFoundError,
-                format!("manifest find endpoint url not found - {}", e),
-                false // Not reporting not found errors
-            )),
-            Some(_) => bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::ManifestLookupUnknownError,
-                format!("manifest find endpoint url returned unknown error - {}", e),
-                true
-            )),
-            None => bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::ManifestLookupUnknownError,
-                format!("manifest find endpoint url returned unknown error - {}", e),
-                true
-            )),
+            Some(StatusCode::INTERNAL_SERVER_ERROR) => {
+                error!(
+                    func = "lookup_manifest",
+                    package = PACKAGE_NAME,
+                    "manifest find endpoint url returned internal server error for url - {}",
+                    e
+                );
+                bail!(ProvisioningError::new(
+                    ProvisioningErrorCodes::ManifestLookupServerError,
+                    format!("manifest find endpoint url returned server error - {}", e),
+                    true
+                ))
+            }
+            Some(StatusCode::BAD_REQUEST) => {
+                error!(
+                    func = "lookup_manifest",
+                    package = PACKAGE_NAME,
+                    "manifest find endpoint url returned bad request - {}",
+                    e
+                );
+                bail!(ProvisioningError::new(
+                    ProvisioningErrorCodes::ManifestLookupBadRequestError,
+                    format!("manifest find endpoint url returned bad request - {}", e),
+                    true
+                ))
+            }
+            Some(StatusCode::NOT_FOUND) => {
+                error!(
+                    func = "lookup_manifest",
+                    package = PACKAGE_NAME,
+                    "manifest find endpoint url not found - {}",
+                    e
+                );
+                bail!(ProvisioningError::new(
+                    ProvisioningErrorCodes::ManifestLookupNotFoundError,
+                    format!("manifest find endpoint url not found - {}", e),
+                    true
+                ))
+            }
+            Some(_) => {
+                error!(
+                    func = "lookup_manifest",
+                    package = PACKAGE_NAME,
+                    "manifest find endpoint url returned unknown error - {}",
+                    e
+                );
+                bail!(ProvisioningError::new(
+                    ProvisioningErrorCodes::ManifestLookupUnknownError,
+                    format!("manifest find endpoint url returned unknown error - {}", e),
+                    true
+                ))
+            }
+            None => {
+                error!(
+                    func = "lookup_manifest",
+                    package = PACKAGE_NAME,
+                    "manifest find endpoint url returned unknown error - {}",
+                    e
+                );
+                bail!(ProvisioningError::new(
+                    ProvisioningErrorCodes::ManifestLookupUnknownError,
+                    format!(
+                        "manifest find endpoint url returned unmatched error - {}",
+                        e
+                    ),
+                    true
+                ))
+            }
         },
     };
 
@@ -268,14 +450,36 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
         .json::<ProvisioningServerResponseGeneric<ProvisioningManifest>>()
         .await
     {
-        Ok(m) => m,
-        Err(e) => bail!(ProvisioningError::new(
-            ProvisioningErrorCodes::ManifestParseResponseError,
-            format!("error parsing lookup manifest response - {}", e),
-            true
-        )),
+        Ok(parse_manifest) => {
+            debug!(
+                func = "lookup_manifest",
+                package = PACKAGE_NAME,
+                "manifest lookup response - {:?}",
+                parse_manifest
+            );
+            parse_manifest
+        }
+        Err(e) => {
+            error!(
+                func = "lookup_manifest",
+                package = PACKAGE_NAME,
+                "error parsing manifest lookup response - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::ManifestParseResponseError,
+                format!("error parsing lookup manifest response - {}", e),
+                true
+            ))
+        }
     };
 
+    info!(
+        func = "lookup_manifest",
+        package = PACKAGE_NAME,
+        result = "success",
+        "manifest lookup successful"
+    );
     Ok(manifest_response.payload)
 }
 
@@ -285,63 +489,100 @@ fn write_certificates_to_path(
     intermediate_cert: &[u8],
     cert: &[u8],
 ) -> Result<bool> {
-    let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "write_certificates_to_path", "init");
+    trace!(
+        func = "write_certificates_to_path",
+        package = PACKAGE_NAME,
+        "cert path - {}",
+        certificate_paths.machine.cert,
+    );
 
-    // save the device certificate
-    match safe_write_to_path(&certificate_paths.device.cert, cert) {
-        Ok(_) => tracing::info!(
-            trace_id,
-            task = "write_file",
-            "device certificate saved in path - {}",
-            &certificate_paths.device.cert
+    // save the machine certificate
+    match safe_write_to_path(&certificate_paths.machine.cert, cert) {
+        Ok(_) => debug!(
+            func = "write_file",
+            package = PACKAGE_NAME,
+            "machine certificate saved in path - {}",
+            &certificate_paths.machine.cert
         ),
-        Err(e) => bail!(ProvisioningError::new(
-            ProvisioningErrorCodes::CertificateWriteError,
-            format!(
-                "error saving device certificate in path - {} - {}",
-                &certificate_paths.device.cert, e
-            ),
-            true
-        )),
+        Err(e) => {
+            error!(
+                func = "write_file",
+                package = PACKAGE_NAME,
+                "error saving machine certificate in path - {} - {}",
+                &certificate_paths.machine.cert,
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::CertificateWriteError,
+                format!(
+                    "error saving machine certificate in path - {} - {}",
+                    &certificate_paths.machine.cert, e
+                ),
+                true
+            ))
+        }
     }
 
     // save the intermediate certificate
     match safe_write_to_path(&certificate_paths.intermediate.cert, intermediate_cert) {
-        Ok(_) => tracing::info!(
-            trace_id,
-            task = "write_file",
+        Ok(_) => debug!(
+            func = "write_file",
+            package = PACKAGE_NAME,
             "intermediate certificate saved in path - {}",
             &certificate_paths.intermediate.cert
         ),
-        Err(e) => bail!(ProvisioningError::new(
-            ProvisioningErrorCodes::CertificateWriteError,
-            format!(
+        Err(e) => {
+            error!(
+                func = "write_file",
+                package = PACKAGE_NAME,
                 "error saving intermediate certificate in path - {} - {}",
-                &certificate_paths.intermediate.cert, e
-            ),
-            true
-        )),
+                &certificate_paths.intermediate.cert,
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::CertificateWriteError,
+                format!(
+                    "error saving intermediate certificate in path - {} - {}",
+                    &certificate_paths.intermediate.cert, e
+                ),
+                true
+            ))
+        }
     }
 
     // save the root certificate
     match safe_write_to_path(&certificate_paths.root.cert, root_cert) {
-        Ok(_) => tracing::info!(
-            trace_id,
-            task = "write_file",
+        Ok(_) => debug!(
+            func = "write_file",
+            package = PACKAGE_NAME,
             "root certificate saved in path - {}",
             &certificate_paths.root.cert
         ),
-        Err(e) => bail!(ProvisioningError::new(
-            ProvisioningErrorCodes::CertificateWriteError,
-            format!(
+        Err(e) => {
+            error!(
+                func = "write_file",
+                package = PACKAGE_NAME,
                 "error saving root certificate in path - {} - {}",
-                &certificate_paths.root.cert, e
-            ),
-            true
-        )),
+                &certificate_paths.root.cert,
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::CertificateWriteError,
+                format!(
+                    "error saving root certificate in path - {} - {}",
+                    &certificate_paths.root.cert, e
+                ),
+                true
+            ))
+        }
     }
 
+    info!(
+        func = "write_certificates_to_path",
+        package = PACKAGE_NAME,
+        result = "success",
+        "certificates written successfully"
+    );
     Ok(true)
 }
 
@@ -351,42 +592,79 @@ async fn sign_csr(
     machine_id: &str,
     cert_signing_url: &str,
 ) -> Result<SignedCertificates> {
-    let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "sign_csr", "init");
+    trace!(
+        func = "sign_csr",
+        package = PACKAGE_NAME,
+        "init, request_url {}, csr_sign_url {}",
+        request_url,
+        cert_signing_url
+    );
 
     let constructed_path = match construct_dir_path(csr_path) {
-        Ok(v) => v,
-        Err(e) => bail!(ProvisioningError::new(
-            ProvisioningErrorCodes::CSRSignReadFileError,
-            format!("error opening csr in path - {} - {}", csr_path, e),
-            true
-        )),
+        Ok(path) => {
+            debug!(
+                func = "sign_csr",
+                package = PACKAGE_NAME,
+                "csr path constructed {:?}",
+                path.display()
+            );
+            path
+        }
+        Err(e) => {
+            error!(
+                func = "sign_csr",
+                package = PACKAGE_NAME,
+                "error constructing csr path - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::CSRSignReadFileError,
+                format!("error opening csr in path - {} - {}", csr_path, e),
+                true
+            ))
+        }
     };
     let csr_pem = match fs::read_to_string(constructed_path) {
-        Ok(pem) => pem,
-        Err(e) => bail!(ProvisioningError::new(
-            ProvisioningErrorCodes::CSRSignReadFileError,
-            format!("error reading csr in path - {} - {}", csr_path, e),
-            true
-        )),
+        Ok(csr_str) => {
+            debug!(
+                func = "sign_csr",
+                package = PACKAGE_NAME,
+                "read csr as string - {:?}",
+                csr_str
+            );
+            csr_str
+        }
+        Err(e) => {
+            error!(
+                func = "sign_csr",
+                package = PACKAGE_NAME,
+                "error reading csr as string - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::CSRSignReadFileError,
+                format!("error reading csr in path - {} - {}", csr_path, e),
+                true
+            ))
+        }
     };
 
-    //construct payload for signing the csr
+    // Construct payload for signing the csr
     let sign_csr_request_body = SignCSRRequest {
         csr: csr_pem,
         machine_id: machine_id.to_string(),
     };
 
-    tracing::info!(
-        trace_id,
-        task = "sign_csr",
-        "sign csr request body formatted successfully"
-    );
-
-    // format url for signing the csr
+    // Format url for signing the csr
     let url = format!("{}{}", request_url, cert_signing_url);
 
-    //request to sign the csr
+    debug!(
+        func = "sign_csr",
+        package = PACKAGE_NAME,
+        "sign csr url formatted successfully - {:?}",
+        url
+    );
+    // Request to sign the csr
     let client = reqwest::Client::new();
     let csr_req = client
         .post(url)
@@ -398,29 +676,61 @@ async fn sign_csr(
     let csr_string = match csr_req.text().await {
         Ok(csr) => csr,
         Err(e) => match e.status() {
-            Some(StatusCode::INTERNAL_SERVER_ERROR) => bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::CSRSignServerError,
-                format!("csr sign url returned server error - {}", e),
-                true
-            )),
-            Some(StatusCode::BAD_REQUEST) => bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::CSRSignBadRequestError,
-                format!("csr sign url returned bad request - {}", e),
-                true // Not reporting bad request errors
-            )),
-            Some(StatusCode::NOT_FOUND) => bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::CSRSignNotFoundError,
-                format!("csr sign url not found - {}", e),
-                false // Not reporting not found errors
-            )),
-            Some(_) => bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::CSRSignUnknownError,
-                format!("csr sign url returned unknown error - {}", e),
-                true
-            )),
+            Some(StatusCode::INTERNAL_SERVER_ERROR) => {
+                error!(
+                    func = "sign_csr",
+                    package = PACKAGE_NAME,
+                    "csr sign url returned internal server error - {}",
+                    e
+                );
+                bail!(ProvisioningError::new(
+                    ProvisioningErrorCodes::CSRSignServerError,
+                    format!("csr sign url returned server error - {}", e),
+                    true
+                ))
+            }
+            Some(StatusCode::BAD_REQUEST) => {
+                error!(
+                    func = "sign_csr",
+                    package = PACKAGE_NAME,
+                    "csr sign url returned bad request - {}",
+                    e
+                );
+                bail!(ProvisioningError::new(
+                    ProvisioningErrorCodes::CSRSignBadRequestError,
+                    format!("csr sign url returned bad request - {}", e),
+                    true
+                ))
+            }
+            Some(StatusCode::NOT_FOUND) => {
+                error!(
+                    func = "sign_csr",
+                    package = PACKAGE_NAME,
+                    "csr sign url not found - {}",
+                    e
+                );
+                bail!(ProvisioningError::new(
+                    ProvisioningErrorCodes::CSRSignNotFoundError,
+                    format!("csr sign url not found - {}", e),
+                    true
+                ))
+            }
+            Some(_) => {
+                error!(
+                    func = "sign_csr",
+                    package = PACKAGE_NAME,
+                    "csr sign url returned unknown error - {}",
+                    e
+                );
+                bail!(ProvisioningError::new(
+                    ProvisioningErrorCodes::CSRSignUnknownError,
+                    format!("csr sign url returned unknown error - {}", e),
+                    true
+                ))
+            }
             None => bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::CSRSignUnknownError,
-                format!("csr sign url returned unknown error - {}", e),
+                format!("csr sign url returned unmatched error - {}", e),
                 true
             )),
         },
@@ -429,6 +739,12 @@ async fn sign_csr(
         match serde_json::from_str(&csr_string) {
             Ok(v) => v,
             Err(e) => {
+                error!(
+                    func = "sign_csr",
+                    package = PACKAGE_NAME,
+                    "error parsing csr sign response - {}",
+                    e
+                );
                 bail!(ProvisioningError::new(
                     ProvisioningErrorCodes::CSRSignResponseParseError,
                     format!("error parsing csr sign response - {}", e),
@@ -436,5 +752,11 @@ async fn sign_csr(
                 ));
             }
         };
+    info!(
+        func = "sign_csr",
+        package = PACKAGE_NAME,
+        result = "success",
+        "csr signed successfully"
+    );
     Ok(result.payload)
 }

@@ -43,7 +43,7 @@ impl NetworkingHandler {
             status: ServiceStatus::INACTIVE,
         }
     }
-    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<NetworkingMessage>) {
+    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<NetworkingMessage>) -> Result<()> {
         // Start the service
         let _ = &self.start().await;
         let mut event_rx = self.event_tx.subscribe();

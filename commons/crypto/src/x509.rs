@@ -6,7 +6,6 @@ use openssl::{pkey::PKey, sign::Signer, x509::X509};
 use serde::{Deserialize, Serialize};
 use std::{fmt, fs::File, io::Read, path::Path, process::Command};
 use tracing::info;
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 /**
  * Open SSL Commands Reference
@@ -71,8 +70,7 @@ pub struct DecodedCert {
 }
 
 pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Result<bool> {
-    let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "generate_ec_private_key", "init",);
+    tracing::trace!(task = "generate_ec_private_key", "init",);
     let file_path_buf = match construct_dir_path(file_path) {
         Ok(v) => v,
         Err(e) => bail!(e),
@@ -136,13 +134,11 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     tracing::info!(
-        trace_id,
         task = "generate_ec_private_key",
         result = "success",
         "openssl ec private key generated successfully",
     );
     tracing::trace!(
-        trace_id,
         task = "generate_ec_private_key",
         "openssl ec private key generate command stdout - {}",
         stdout,
@@ -157,8 +153,7 @@ pub fn generate_csr(
     private_key_path: &str,
     common_name: &str,
 ) -> Result<bool> {
-    let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "generate_csr", "init",);
+    tracing::trace!(task = "generate_csr", "init",);
 
     let subject = format!("/C=/ST=/L=/O=/OU=/CN={}", common_name);
     let private_key_path_buf = match construct_dir_path(private_key_path) {
@@ -170,8 +165,8 @@ pub fn generate_csr(
         Ok(v) => v,
         Err(e) => bail!(e),
     };
-    info!(trace_id, "csr_file_path_buf: {:?}", csr_file_path_buf);
-    info!(trace_id, "private_key_path_buf: {:?}", private_key_path_buf);
+    info!("csr_file_path_buf: {:?}", csr_file_path_buf);
+    info!("private_key_path_buf: {:?}", private_key_path_buf);
     // Command: openssl req -new -sha256 -key key.pem -subj "/C=/ST=/L=/O=/OU=/CN=" -out req.pem
     let output_result = Command::new("openssl")
         .arg("req")
@@ -197,13 +192,11 @@ pub fn generate_csr(
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         tracing::info!(
-            trace_id,
             task = "generate_csr",
             result = "success",
             "openssl csr generated successfully",
         );
         tracing::trace!(
-            trace_id,
             task = "generate_csr",
             "openssl csr generate command stdout - {}",
             stdout,
@@ -280,8 +273,7 @@ pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<
 }
 
 fn safe_create_dir(path: &str) -> Result<bool> {
-    let trace_id = find_current_trace_id();
-    tracing::info!(trace_id, task = "safe_create_dir", "init",);
+    tracing::info!(task = "safe_create_dir", "init",);
     let path_buf = match construct_dir_path(path) {
         Ok(v) => v,
         Err(e) => bail!(e),
@@ -299,6 +291,6 @@ fn safe_create_dir(path: &str) -> Result<bool> {
             };
         }
     }
-    tracing::info!(trace_id, task = "safe_create_dir", "file path created",);
+    tracing::info!(task = "safe_create_dir", "file path created",);
     Ok(true)
 }

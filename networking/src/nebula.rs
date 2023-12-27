@@ -8,7 +8,6 @@ use std::{
     process::{Command, Output},
 };
 use tracing::{debug, error, info};
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 use crate::utils::run_command;
 #[derive(Debug, Default, Clone, Copy)]
@@ -72,16 +71,13 @@ impl std::fmt::Display for NebulaError {
 
 impl NebulaError {
     pub fn new(code: NebulaErrorCodes, message: String, capture_error: bool) -> Self {
-        let trace_id = find_current_trace_id();
         error!(
             target = "Nebula",
             "error: (code: {:?}, message: {})", code, message
         );
         if capture_error {
-            let error = &anyhow::anyhow!(code).context(format!(
-                "error: (code: {:?}, message: {} trace:{:?})",
-                code, message, trace_id
-            ));
+            let error = &anyhow::anyhow!(code)
+                .context(format!("error: (code: {:?}, message: {})", code, message));
             capture_anyhow(error);
         }
         Self { code, message }
@@ -368,13 +364,12 @@ pub fn generate_nebula_key_cert(pub_path: &str, key_path: &str) -> Result<bool> 
 }
 
 pub fn start_nebula(binary_path: &str, config_path: &str) -> Result<bool> {
-    let trace_id = find_current_trace_id();
     let task = "start";
     let target = "start_nebula";
 
     let cmd = &format!("{}/nebula -config {}/config.yaml", binary_path, config_path);
 
-    debug!(task, target, trace_id, "start nebula command is {}", cmd);
+    debug!(task, target, "start nebula command is {}", cmd);
 
     let result = match run_command(cmd) {
         Ok(r) => r,
