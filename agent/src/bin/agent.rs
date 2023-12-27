@@ -1,13 +1,10 @@
 use agent_settings::{read_settings_yml, AgentSettings};
 use anyhow::{bail, Result};
-use grpc_server::GrpcServerOptions;
-use heartbeat::handler::{HeartbeatHandler, HeartbeatMessage, HeartbeatOptions};
-use identity::handler::{IdentityHandler, IdentityMessage, IdentityOptions};
 use init_tracing_opentelemetry::tracing_subscriber_ext::{
     build_logger_text, build_loglevel_filter_layer, build_otel_layer,
 };
 
-use mecha_agent::init::{init_services, AgentServices};
+use mecha_agent::init::init_services;
 use sentry_tracing::EventFilter;
 use std::path::Path;
 use tracing_appender::non_blocking;
@@ -29,7 +26,7 @@ async fn main() -> Result<()> {
             release: sentry::release_name!(),
             trim_backtraces: true,
             attach_stacktrace: true,
-            send_default_pii: true,
+            send_default_pii: false,
             server_name: Some("mecha-agent".to_string().into()),
             ..Default::default()
         },
@@ -69,10 +66,7 @@ async fn main() -> Result<()> {
         package = env!("CARGO_CRATE_NAME"),
         "tracing set up",
     );
-    let services_to_start = vec![
-        AgentServices::Heartbeat,
-        // Add other services to start
-    ];
-    let _ = init_services(services_to_start).await;
+
+    let _ = init_services().await;
     Ok(())
 }

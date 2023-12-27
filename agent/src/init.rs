@@ -14,82 +14,9 @@ use tokio::{
 };
 use tracing::{error, info};
 const CHANNEL_SIZE: usize = 32;
-// Define the AgentServices enum
-pub enum AgentServices {
-    Heartbeat,
-    Setting,
-    Networking,
-    Telemetry,
-    Grpc,
-}
-pub async fn init_services(services_to_start: Vec<AgentServices>) -> Result<bool> {
+
+pub async fn init_services() -> Result<bool> {
     let (event_tx, _) = broadcast::channel(CHANNEL_SIZE);
-
-    /* let (prov_t, prov_tx) = init_provisioning_service(ProvisioningOptions {
-        event_tx: event_tx.clone(),
-    })
-    .await;
-    prov_t.await.unwrap();
-
-    let (identity_t, identity_tx) = init_identity_service(IdentityOptions {
-        event_tx: event_tx.clone(),
-    })
-    .await;
-    identity_t.await.unwrap();
-    let (messaging_t, messaging_tx) = init_messaging_service(MessagingOptions {
-        event_tx: event_tx.clone(),
-        identity_tx: identity_tx.clone(),
-    })
-    .await;
-    messaging_t.await.unwrap();
-    for service in services_to_start {
-        match service {
-            AgentServices::Heartbeat => {
-                let (heartbeat_t, heartbeat_tx) = init_heartbeat_service(HeartbeatOptions {
-                    event_tx: event_tx.clone(),
-                    messaging_tx: messaging_tx.clone(),
-                    identity_tx: identity_tx.clone(),
-                })
-                .await;
-                heartbeat_t.await.unwrap();
-            }
-            AgentServices::Setting => {
-                let (setting_t, setting_tx) = init_setting_service(SettingOptions {
-                    event_tx: event_tx.clone(),
-                    messaging_tx: messaging_tx.clone(),
-                    identity_tx: identity_tx.clone(),
-                })
-                .await;
-            }
-            AgentServices::Networking => {
-                let (networking_t, networking_tx) = init_networking_service(NetworkingOptions {
-                    event_tx: event_tx.clone(),
-                    messaging_tx: messaging_tx.clone(),
-                    identity_tx: identity_tx.clone(),
-                    setting_tx: setting_tx.clone(),
-                })
-                .await;
-            }
-            AgentServices::Telemetry => {
-                let (telemetry_t, telemetry_tx) = init_telemetry_service(TelemetryOptions {
-                    event_tx: event_tx.clone(),
-                    messaging_tx: messaging_tx.clone(),
-                    identity_tx: identity_tx.clone(),
-                })
-                .await;
-            }
-            AgentServices::Grpc => {
-                let grpc_t = init_grpc_server(
-                    prov_tx.clone(),
-                    identity_tx.clone(),
-                    messaging_tx.clone(),
-                    setting_tx.clone(),
-                    telemetry_tx.clone(),
-                )
-                .await;
-            }
-        }
-    }  */
 
     // start services
     let (prov_t, prov_tx) = init_provisioning_service(ProvisioningOptions {

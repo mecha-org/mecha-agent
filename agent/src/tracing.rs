@@ -21,7 +21,7 @@ pub fn set_tracing() -> Result<bool> {
             release: sentry::release_name!(),
             trim_backtraces: true,
             attach_stacktrace: true,
-            send_default_pii: true,
+            send_default_pii: false,
             server_name: Some("mecha-agent".to_string().into()),
             ..Default::default()
         },
