@@ -107,7 +107,7 @@ impl NatsClient {
             "nats client is in connected status"
         );
         // Set headers
-        let version_detail = format!("mecha_agent_server@{}", env!("CARGO_PKG_VERSION"));
+        let version_detail = format!("mecha_agent@{}", env!("CARGO_PKG_VERSION"));
         let mut headers = async_nats::HeaderMap::new();
         headers.insert(
             "X-Agent",
