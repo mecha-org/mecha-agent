@@ -106,11 +106,19 @@ impl MessagingHandler {
                 }
                 match event.unwrap() {
                     Event::Provisioning(events::ProvisioningEvent::Provisioned) => {
-                        info!("Messaging service received provisioning event");
+                        info!(
+                            func = "run",
+                            package = env!("CARGO_PKG_NAME"),
+                            "messaging service received provisioning event"
+                        );
                         let _ = &self.start().await;
                     },
                     Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
-                        info!("Messaging service received deprovisioning event");
+                        info!(
+                            func = "run",
+                            package = env!("CARGO_PKG_NAME"),
+                            "messaging service received deprovisioning event"
+                        );
                         let _ = &self.stop().await;
                     },
                     Event::Messaging(_) => {},

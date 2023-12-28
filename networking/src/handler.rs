@@ -78,14 +78,18 @@ impl NetworkingHandler {
                         },
                         Event::Messaging(_) => {},
                         Event::Settings(events::SettingEvent::Synced) => {
-                            info!("networking handler: Settings synced");
+                            info!(
+                                func = "run",
+                                package = env!("CARGO_PKG_NAME"),
+                                "settings synced event received"
+                            );
                             let _ = start(self.setting_tx.clone(),
                                 self.identity_tx.clone(),
                                 self.messaging_tx.clone()
                             ).await;
                         },
                         Event::Settings(events::SettingEvent::Updated { settings }) => {
-                            info!("networking handler: Settings updated");
+
                         },
                     }
                 }

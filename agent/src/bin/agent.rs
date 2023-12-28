@@ -24,7 +24,6 @@ async fn main() -> Result<()> {
         settings.sentry.dsn,
         sentry::ClientOptions {
             release: sentry::release_name!(),
-            trim_backtraces: true,
             attach_stacktrace: true,
             send_default_pii: false,
             server_name: Some("mecha-agent".to_string().into()),

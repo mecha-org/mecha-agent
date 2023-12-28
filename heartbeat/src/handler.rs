@@ -77,14 +77,22 @@ impl HeartbeatHandler {
                         }
                         match event.unwrap() {
                             Event::Provisioning(events::ProvisioningEvent::Provisioned) => {
-                                info!("Heartbeat service received provisioning event");
+                                info!(
+                                    func = "run",
+                                    package = env!("CARGO_PKG_NAME"),
+                                    "Heartbeat service received provisioning event"
+                                );
                                 let _ = &self.start().await;
                             },
                             Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
                                 let _ = &self.stop().await;
                             },
                             Event::Messaging(events::MessagingEvent::Connected) => {
-                                info!("Heartbeat service received messaging connected event");
+                                info!(
+                                    func = "run",
+                                    package = env!("CARGO_PKG_NAME"),
+                                    "Heartbeat service received messaging event"
+                                );
                                 if !self.is_started().unwrap() {
                                     let _ = &self.start().await;
                                 }
@@ -100,7 +108,11 @@ impl HeartbeatHandler {
                                 identity_tx: self.identity_tx.clone(),
                             }).await;
                     } else {
-                        info!("heartbeat service is not started");
+                        info!(
+                            func = "run",
+                            package = env!("CARGO_PKG_NAME"),
+                            "Heartbeat service is not started"
+                        );
                     }
                 }
             }

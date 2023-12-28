@@ -89,7 +89,11 @@ impl TelemetryHandler {
                 }
                 match event.unwrap() {
                     Event::Provisioning(events::ProvisioningEvent::Provisioned) => {
-                        info!("Telemetry service received provisioning event");
+                        info!(
+                            func = "run",
+                            package = env!("CARGO_PKG_NAME"),
+                            "device provisioned event received"
+                        );
                         let _ = &self.start().await;
                     },
                     Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
@@ -98,7 +102,11 @@ impl TelemetryHandler {
                     Event::Messaging(_) => {},
                     Event::Settings(events::SettingEvent::Synced) => {},
                     Event::Settings(events::SettingEvent::Updated { settings }) => {
-                        info!("Telemetry service received settings event");
+                        info!(
+                            func = "run",
+                            package = env!("CARGO_PKG_NAME"),
+                            "settings updated event received"
+                        );
                         match settings.get("telemetry.enabled") {
                             Some(value) => {
                                 if value == "true" {
@@ -125,24 +133,18 @@ impl ServiceHandler for TelemetryHandler {
         match device_provision_status(self.identity_tx.clone()).await {
             Ok(provisioned) => {
                 if provisioned {
-                    info!("start telemetry service");
                     self.status = ServiceStatus::STARTED;
                     let _ = telemetry_init();
                     Ok(true)
                 } else {
-                    info!("device is not provisioned");
                     Ok(false)
                 }
             }
-            Err(err) => {
-                info!("device is not provisioned");
-                Ok(false)
-            }
+            Err(err) => Ok(false),
         }
     }
 
     async fn stop(&mut self) -> Result<bool> {
-        info!("stop telemetry service");
         self.status = ServiceStatus::STOPPED;
         Ok(true)
     }
