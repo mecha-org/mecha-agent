@@ -137,7 +137,6 @@ impl ServiceHandler for MessagingHandler {
         let machine_id = match get_machine_id(self.identity_tx.clone()).await {
             Ok(id) => id,
             Err(e) => {
-                println!("Error getting machine id: {:?}", e);
                 return Ok(false);
             }
         };

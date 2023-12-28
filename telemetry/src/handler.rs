@@ -48,7 +48,6 @@ impl TelemetryHandler {
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<TelemetryMessage>) -> Result<()> {
         // Start the service
-        let _ = &self.start().await;
         let mut event_rx = self.event_tx.subscribe();
         loop {
             select! {
@@ -100,7 +99,9 @@ impl TelemetryHandler {
                         let _ = &self.stop().await;
                     },
                     Event::Messaging(_) => {},
-                    Event::Settings(events::SettingEvent::Synced) => {},
+                    Event::Settings(events::SettingEvent::Synced) => {
+                        let _ = &self.start().await;
+                    },
                     Event::Settings(events::SettingEvent::Updated { settings }) => {
                         info!(
                             func = "run",
@@ -130,18 +131,20 @@ impl TelemetryHandler {
 #[async_trait]
 impl ServiceHandler for TelemetryHandler {
     async fn start(&mut self) -> Result<bool> {
-        match device_provision_status(self.identity_tx.clone()).await {
-            Ok(provisioned) => {
-                if provisioned {
-                    self.status = ServiceStatus::STARTED;
-                    let _ = telemetry_init();
-                    Ok(true)
-                } else {
-                    Ok(false)
-                }
-            }
-            Err(err) => Ok(false),
-        }
+        // match device_provision_status(self.identity_tx.clone()).await {
+        //     Ok(provisioned) => {
+        //         if provisioned {
+        //             self.status = ServiceStatus::STARTED;
+        //             let _ = telemetry_init();
+        //             Ok(true)
+        //         } else {
+        //             Ok(false)
+        //         }
+        //     }
+        //     Err(err) => Ok(false),
+        // }
+        let _ = telemetry_init();
+        Ok(true)
     }
 
     async fn stop(&mut self) -> Result<bool> {

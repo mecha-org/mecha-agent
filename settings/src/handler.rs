@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use tokio::select;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tonic::async_trait;
+use tracing::info;
 
 use crate::services::{get_settings_by_key, set_settings, start_consumer, sync_settings};
 
@@ -88,7 +89,11 @@ impl SettingHandler {
                     }
                     match event.unwrap() {
                         Event::Messaging(events::MessagingEvent::Connected) => {
-                            println!("Event: messaging connected");
+                            info!(
+                                func = "run",
+                                package = env!("CARGO_PKG_NAME"),
+                                "event received messaging service connected"
+                            );
                             let _ = sync_settings(self.event_tx.clone(), self.messaging_tx.clone(), self.identity_tx.clone()).await;
                             let _ = start_consumer(self.messaging_tx.clone(), self.identity_tx.clone()).await;
                         }
