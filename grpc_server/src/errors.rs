@@ -1,6 +1,5 @@
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
-use tracing::error;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub enum AgentServerErrorCodes {
@@ -42,10 +41,6 @@ impl std::fmt::Display for AgentServerError {
 
 impl AgentServerError {
     pub fn new(code: AgentServerErrorCodes, message: String, capture_error: bool) -> Self {
-        error!(
-            target = "agent_server",
-            "error: (code: {:?}, message: {})", code, message
-        );
         if capture_error {
             let error = &anyhow::anyhow!(code)
                 .context(format!("error: (code: {:?}, message: {})", code, message));

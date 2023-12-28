@@ -1,6 +1,5 @@
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
-use tracing::error;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub enum TelemetryErrorCodes {
@@ -11,12 +10,8 @@ pub enum TelemetryErrorCodes {
     MetricsSerializeFailed,
     LogsSeralizeFailed,
     TraceSeralizeFailed,
-    ChannelSendMessageError {
-        num: u32,
-    },
-    ChannelReceiveMessageError {
-        num: u32,
-    },
+    ChannelSendMessageError,
+    ChannelReceiveMessageError,
 }
 
 impl fmt::Display for TelemetryErrorCodes {
@@ -40,15 +35,11 @@ impl fmt::Display for TelemetryErrorCodes {
             TelemetryErrorCodes::TraceSeralizeFailed => {
                 write!(f, "TelemetryErrorCodes: TraceSeralizeFailed")
             }
-            TelemetryErrorCodes::ChannelSendMessageError { num } => {
-                write!(f, "TelemetryErrorCodes: ChannelSendMessageError({})", num)
+            TelemetryErrorCodes::ChannelSendMessageError => {
+                write!(f, "TelemetryErrorCodes: ChannelSendMessageError")
             }
-            TelemetryErrorCodes::ChannelReceiveMessageError { num } => {
-                write!(
-                    f,
-                    "TelemetryErrorCodes: ChannelReceiveMessageError({})",
-                    num
-                )
+            TelemetryErrorCodes::ChannelReceiveMessageError => {
+                write!(f, "TelemetryErrorCodes: ChannelReceiveMessageError")
             }
         }
     }
@@ -72,10 +63,6 @@ impl std::fmt::Display for TelemetryError {
 
 impl TelemetryError {
     pub fn new(code: TelemetryErrorCodes, message: String, capture_error: bool) -> Self {
-        error!(
-            target = "Telemetry",
-            "error: (code: {:?}, message: {})", code, message
-        );
         if capture_error {
             let error = &anyhow::anyhow!(code)
                 .context(format!("error: (code: {:?}, message: {})", code, message));

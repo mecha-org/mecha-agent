@@ -1,10 +1,9 @@
 use std::time::Duration;
 
 use anyhow::{bail, Result};
-use tokio::{
-    select,
-    time::{self, timeout_at, Instant},
-};
+use tokio::time::{self, timeout_at, Instant};
+use tracing::error;
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 static CHANNEL_RECV_TIMEOUT: u64 = 5000;
 pub async fn recv_with_timeout<T>(rx: tokio::sync::oneshot::Receiver<Result<T>>) -> Result<T> {
     let timeout_duration = Duration::from_millis(CHANNEL_RECV_TIMEOUT);
@@ -14,12 +13,28 @@ pub async fn recv_with_timeout<T>(rx: tokio::sync::oneshot::Receiver<Result<T>>)
         result = timeout_at(timeout, rx) => match result {
             Ok(msg) => match msg {
                 Ok(msg) => return msg,
-                Err(err) => bail!(err),
+                Err(err) => {
+                    error!(func = "recv_with_timeout",
+                    package = PACKAGE_NAME,
+                    "error while receiving message from channel - {}", err);
+                    bail!(err);
+                },
             },
-            Err(err) => bail!(err),
+            Err(err) => {
+                error!(
+                    func = "recv_with_timeout",
+                    package = PACKAGE_NAME,
+                    "error while receiving message from channel - {}", err
+                );
+                bail!(err)},
         },
         _ = interval.tick() => {
-            bail!("timeout")
+            error!(
+                func = "recv_with_timeout",
+                package = PACKAGE_NAME,
+                "timeout while receiving message from channel"
+            );
+            bail!("timeout while receiving message from channel");
         },
         // _ = tokio::time::sleep(timeout_duration) => bail!("timeout"),
     };

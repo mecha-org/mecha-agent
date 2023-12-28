@@ -1,6 +1,5 @@
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
-use tracing::error;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub enum DeviceSettingErrorCodes {
@@ -60,10 +59,6 @@ impl std::fmt::Display for DeviceSettingError {
 
 impl DeviceSettingError {
     pub fn new(code: DeviceSettingErrorCodes, message: String, capture_error: bool) -> Self {
-        error!(
-            target = "nats_client",
-            "error: (code: {:?}, message: {})", code, message
-        );
         if capture_error {
             let error = &anyhow::anyhow!(code)
                 .context(format!("error: (code: {:?}, message: {})", code, message));

@@ -17,4 +17,3 @@ async-nats = "0.33.0"
 nkeys = "0.4.0"
 sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
 tracing = "0.1"
-tracing-opentelemetry-instrumentation-sdk = "0.15.0"

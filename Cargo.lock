@@ -40,7 +40,6 @@ dependencies = [
  "serde_yaml",
  "tonic 0.10.2",
  "tracing",
- "tracing-opentelemetry-instrumentation-sdk",
 ]
 
 [[package]]
@@ -321,6 +320,7 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -443,7 +443,6 @@ dependencies = [
  "serde_json",
  "tonic 0.10.2",
  "tracing",
- "tracing-opentelemetry-instrumentation-sdk",
 ]
 
 [[package]]
@@ -731,6 +730,8 @@ dependencies = [
  "anyhow",
  "dirs",
  "mkdirp",
+ "sentry-anyhow",
+ "tracing",
 ]
 
 [[package]]
@@ -869,12 +870,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fb8d784f27acf97159b40fc4db5ecd8aa23b9ad5ef69cdd136d3bc80665f0c0"
 
 [[package]]
-name = "glob"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
-
-[[package]]
 name = "grpc_server"
 version = "1.0.0"
 dependencies = [
@@ -898,7 +893,6 @@ dependencies = [
  "tonic-build",
  "tonic-types",
  "tracing",
- "tracing-opentelemetry-instrumentation-sdk",
 ]
 
 [[package]]
@@ -953,7 +947,6 @@ dependencies = [
  "tokio",
  "tonic 0.10.2",
  "tracing",
- "tracing-opentelemetry-instrumentation-sdk",
 ]
 
 [[package]]
@@ -1122,7 +1115,6 @@ dependencies = [
  "tokio",
  "tonic 0.10.2",
  "tracing",
- "tracing-opentelemetry-instrumentation-sdk",
 ]
 
 [[package]]
@@ -1166,7 +1158,7 @@ dependencies = [
  "opentelemetry-semantic-conventions",
  "thiserror",
  "tracing",
- "tracing-opentelemetry 0.19.0",
+ "tracing-opentelemetry",
  "tracing-subscriber",
 ]
 
@@ -1251,7 +1243,6 @@ dependencies = [
  "sentry-anyhow",
  "sled",
  "tracing",
- "tracing-opentelemetry-instrumentation-sdk",
 ]
 
 [[package]]
@@ -1353,7 +1344,6 @@ dependencies = [
  "tonic-types",
  "tracing",
  "tracing-appender",
- "tracing-opentelemetry-instrumentation-sdk",
  "tracing-subscriber",
 ]
 
@@ -1392,7 +1382,6 @@ dependencies = [
  "tokio",
  "tonic 0.10.2",
  "tracing",
- "tracing-opentelemetry-instrumentation-sdk",
 ]
 
 [[package]]
@@ -1462,7 +1451,6 @@ dependencies = [
  "nkeys 0.4.0",
  "sentry-anyhow",
  "tracing",
- "tracing-opentelemetry-instrumentation-sdk",
 ]
 
 [[package]]
@@ -1494,7 +1482,6 @@ dependencies = [
  "tokio",
  "tonic 0.10.2",
  "tracing",
- "tracing-opentelemetry-instrumentation-sdk",
  "tracing-subscriber",
  "zip",
 ]
@@ -1713,7 +1700,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f4b8347cc26099d3aeee044065ecc3ae11469796b4d65d065a23a584ed92a6f"
 dependencies = [
  "opentelemetry_api",
- "opentelemetry_sdk 0.19.0",
+ "opentelemetry_sdk",
 ]
 
 [[package]]
@@ -1745,18 +1732,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "opentelemetry-http"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f51189ce8be654f9b5f7e70e49967ed894e84a06fc35c6c042e64ac1fc5399e"
-dependencies = [
- "async-trait",
- "bytes",
- "http",
- "opentelemetry 0.21.0",
-]
-
-[[package]]
 name = "opentelemetry-otlp"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1767,7 +1742,7 @@ dependencies = [
  "futures-util",
  "http",
  "opentelemetry 0.19.0",
- "opentelemetry-http 0.8.0",
+ "opentelemetry-http",
  "opentelemetry-proto",
  "prost 0.11.9",
  "thiserror",
@@ -1836,39 +1811,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "opentelemetry_sdk"
-version = "0.21.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "968ba3f2ca03e90e5187f5e4f46c791ef7f2c163ae87789c8ce5f5ca3b7b7de5"
-dependencies = [
- "async-trait",
- "crossbeam-channel",
- "futures-channel",
- "futures-executor",
- "futures-util",
- "glob",
- "once_cell",
- "opentelemetry 0.21.0",
- "ordered-float",
- "percent-encoding",
- "rand",
- "thiserror",
-]
-
-[[package]]
 name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
-
-[[package]]
-name = "ordered-float"
-version = "4.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a76df7075c7d4d01fdcb46c912dd17fba5b60c78ea480b475f2b6ab6f666584e"
-dependencies = [
- "num-traits",
-]
 
 [[package]]
 name = "os_info"
@@ -2179,7 +2125,6 @@ dependencies = [
  "tokio",
  "tonic 0.10.2",
  "tracing",
- "tracing-opentelemetry-instrumentation-sdk",
 ]
 
 [[package]]
@@ -2732,7 +2677,6 @@ dependencies = [
  "tokio",
  "tonic 0.10.2",
  "tracing",
- "tracing-opentelemetry-instrumentation-sdk",
 ]
 
 [[package]]
@@ -2945,7 +2889,6 @@ dependencies = [
  "tokio",
  "tonic 0.10.2",
  "tracing",
- "tracing-opentelemetry-instrumentation-sdk",
 ]
 
 [[package]]
@@ -3337,36 +3280,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-opentelemetry"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c67ac25c5407e7b961fafc6f7e9aa5958fd297aada2d20fa2ae1737357e55596"
-dependencies = [
- "js-sys",
- "once_cell",
- "opentelemetry 0.21.0",
- "opentelemetry_sdk 0.21.1",
- "smallvec",
- "tracing",
- "tracing-core",
- "tracing-log 0.2.0",
- "tracing-subscriber",
- "web-time",
-]
-
-[[package]]
-name = "tracing-opentelemetry-instrumentation-sdk"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b16403065e0fb78b4708ed0e7245024a5e2eaeeed043dcadba4f32af327a397"
-dependencies = [
- "opentelemetry 0.21.0",
- "opentelemetry-http 0.10.0",
- "tracing",
- "tracing-opentelemetry 0.22.0",
-]
-
-[[package]]
 name = "tracing-serde"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3601,16 +3514,6 @@ name = "web-sys"
 version = "0.3.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b85cbef8c220a6abc02aefd892dfc0fc23afb1c6a426316ec33253a3877249b"
-dependencies = [
- "js-sys",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "web-time"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57099a701fb3a8043f993e8228dc24229c7b942e2b009a1b962e54489ba1d3bf"
 dependencies = [
  "js-sys",
  "wasm-bindgen",

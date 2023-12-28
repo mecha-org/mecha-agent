@@ -14,3 +14,4 @@ homepage.workspace = true
 [dependencies]
 tokio = { version = "1.27.0", features = ["full"] }
 anyhow = { version = "1.0.71", features = ["backtrace"]}
+tracing = "0.1"

@@ -1,13 +1,14 @@
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use tracing::{info, trace};
-
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 /*
  * that allows you to generate random strings based on a given length.
  */
 pub fn generate_random_alphanumeric(length: usize) -> String {
     trace!(
-        task = "generate_random_alphanumeric",
-        "init length - {}",
+        func = "generate_random_alphanumeric",
+        package = PACKAGE_NAME,
+        "length - {}",
         length
     );
     let code: String = thread_rng()
@@ -15,6 +16,11 @@ pub fn generate_random_alphanumeric(length: usize) -> String {
         .take(length)
         .map(char::from)
         .collect();
-    info!(task = "generate_random_alphanumeric", "code generated");
+    info!(
+        func = "generate_random_alphanumeric",
+        package = PACKAGE_NAME,
+        "code - {}",
+        code
+    );
     code
 }

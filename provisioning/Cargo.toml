@@ -26,4 +26,3 @@ serde = { version  = "1.0.159", features = ["derive"]}
 tokio = { version = "1.27.0" }
 tonic = "0.10.2"
 tracing = "0.1"
-tracing-opentelemetry-instrumentation-sdk = "0.15.0"

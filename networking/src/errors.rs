@@ -1,6 +1,5 @@
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
-use tracing::error;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub enum NetworkingErrorCodes {
@@ -28,11 +27,14 @@ pub enum NetworkingErrorCodes {
     CertsGenerateError,
     MachineSettingsEnrollmentUrlFoundError,
     CertReadFileError,
-    SignCertError,
     SignCertDecodeError,
     SignCertConvertStringError,
     SignCertFileCreateError,
     SignCertFileSaveError,
+    SignCertRequestServerError,
+    SignCertRequestBadRequestError,
+    SignCertRequestNotFoundError,
+    SignCertRequestUnknownError,
     CaCertDecodeError,
     CaCertConvertStringError,
     CaCertFileCreateError,
@@ -145,9 +147,6 @@ impl fmt::Display for NetworkingErrorCodes {
             NetworkingErrorCodes::CertReadFileError => {
                 write!(f, "NetworkingErrorCodes: CertReadFileError")
             }
-            NetworkingErrorCodes::SignCertError => {
-                write!(f, "NetworkingErrorCodes: SignCertError")
-            }
             NetworkingErrorCodes::SignCertDecodeError => {
                 write!(f, "NetworkingErrorCodes: SignCertDecodeError")
             }
@@ -159,6 +158,18 @@ impl fmt::Display for NetworkingErrorCodes {
             }
             NetworkingErrorCodes::SignCertFileSaveError => {
                 write!(f, "NetworkingErrorCodes: SignCertFileSaveError")
+            }
+            NetworkingErrorCodes::SignCertRequestServerError => {
+                write!(f, "NetworkingErrorCodes: SignCertRequestServerError")
+            }
+            NetworkingErrorCodes::SignCertRequestBadRequestError => {
+                write!(f, "NetworkingErrorCodes: SignCertRequestBadRequestError")
+            }
+            NetworkingErrorCodes::SignCertRequestNotFoundError => {
+                write!(f, "NetworkingErrorCodes: SignCertRequestNotFoundError")
+            }
+            NetworkingErrorCodes::SignCertRequestUnknownError => {
+                write!(f, "NetworkingErrorCodes: SignCertRequestUnknownError")
             }
             NetworkingErrorCodes::NebulaBaseConfigParseError => {
                 write!(f, "NetworkingErrorCodes: NebulaBaseConfigParseError")
@@ -257,10 +268,6 @@ impl std::fmt::Display for NetworkingError {
 
 impl NetworkingError {
     pub fn new(code: NetworkingErrorCodes, message: String, capture_error: bool) -> Self {
-        error!(
-            target = "networking",
-            "error: (code: {:?}, message: {})", code, message
-        );
         if capture_error {
             let error = &anyhow::anyhow!(code)
                 .context(format!("error: (code: {:?}, message: {})", code, message));

@@ -1,6 +1,5 @@
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
-use tracing::error;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub enum KeyValueStoreErrorCodes {
@@ -52,10 +51,6 @@ impl std::fmt::Display for KeyValueStoreError {
 
 impl KeyValueStoreError {
     pub fn new(code: KeyValueStoreErrorCodes, message: String, capture_error: bool) -> Self {
-        error!(
-            target = "key_value_store",
-            "error: (code: {:?}, message: {})", code, message
-        );
         if capture_error {
             let error = &anyhow::anyhow!(code)
                 .context(format!("error: (code: {:?}, message: {})", code, message));

@@ -58,7 +58,8 @@ pub fn set_tracing() -> Result<bool> {
 
     tracing::info!(
         //sample log
-        task = "tracing_setup",
+        func = "set_tracing",
+        package = env!("CARGO_PKG_NAME"),
         result = "success",
         "tracing set up",
     );

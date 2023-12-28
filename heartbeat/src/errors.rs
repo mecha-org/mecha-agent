@@ -1,6 +1,5 @@
 use sentry_anyhow::capture_anyhow;
-use std::{fmt, u64};
-use tracing::error;
+use std::fmt;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub enum HeartbeatErrorCodes {
@@ -46,10 +45,6 @@ impl std::fmt::Display for HeartbeatError {
 
 impl HeartbeatError {
     pub fn new(code: HeartbeatErrorCodes, message: String, capture_error: bool) -> Self {
-        error!(
-            target = "heartbeat",
-            "error: (code: {:?}, message: {})", code, message
-        );
         if capture_error {
             let error = &anyhow::anyhow!(code)
                 .context(format!("error: (code: {:?}, message: {})", code, message));

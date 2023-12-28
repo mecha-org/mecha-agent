@@ -28,7 +28,7 @@ serde = { version  = "1.0.159", features = ["derive"]}
 serde_yaml = "0.9.27"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-opentelemetry-instrumentation-sdk = "0.15.0"
+
 tar = "0.4.40"
 flate2 = "1.0.28"
 sha256 = "1.1.2"

@@ -527,7 +527,7 @@ async fn process_message(
             );
             bail!(DeviceSettingError::new(
                 DeviceSettingErrorCodes::MessageHeaderEmptyError,
-                format!("Message doesn't contain any headers"),
+                format!("message doesn't contain any headers"),
                 false
             ))
         }
@@ -568,7 +568,7 @@ async fn process_message(
         );
         bail!(DeviceSettingError::new(
             DeviceSettingErrorCodes::AckHeaderNotFoundError,
-            format!("Ack header not found"),
+            format!("ack header not found"),
             true
         ));
     }
@@ -652,7 +652,7 @@ fn parse_message_payload(payload: Bytes) -> Result<AddTaskRequestPayload> {
             );
             bail!(DeviceSettingError::new(
                 DeviceSettingErrorCodes::ExtractAddTaskPayloadError,
-                format!("Error converting payload to AddTaskRequestPayload - {}", e),
+                format!("error converting payload to AddTaskRequestPayload - {}", e),
                 true
             ))
         }

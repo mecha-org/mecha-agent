@@ -5,10 +5,11 @@ use channel::recv_with_timeout;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
 use serde::{Deserialize, Serialize};
+use serde_json::error;
 use std::process::Command;
 use tokio::sync::{mpsc::Sender, oneshot};
-use tracing::{info, warn};
-
+use tracing::{error, info, warn};
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TelemetryResponseGeneric<T> {
@@ -28,14 +29,16 @@ pub struct EncodeData {
     machine_id: String,
 }
 
-pub fn telemetry_init() -> Result<String> {
-    tracing::info!(task = "telemetry_init", "init");
+pub fn telemetry_init() -> Result<bool> {
+    let fn_name = "telemetry_init";
     let settings = match read_settings_yml() {
         Ok(v) => v,
         Err(e) => {
             warn!(
-                task = "telemetry_init",
-                "Failed to read settings.yml - {}", e
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to read settings.yml - {}",
+                e
             );
             AgentSettings::default()
         }
@@ -46,25 +49,30 @@ pub fn telemetry_init() -> Result<String> {
             .arg(settings.telemetry.otel_collector.conf.clone())
             .spawn();
         match r {
-            Ok(_) => {
-                tracing::info!(task = "telemetry_init", "telemetry initialized");
-            }
+            Ok(_) => {}
             Err(e) => {
-                tracing::error!(
-                    task = "telemetry_init",
-                    "telemetry initialization failed - {}",
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "failed to initialize telemetry - {}",
                     e
                 );
                 bail!("Failed to initialize telemetry - {}", e);
             }
         };
 
-        Ok("success".to_string())
+        info!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "telemetry initialized"
+        );
+        Ok(true)
     } else {
+        info!(func = fn_name, package = PACKAGE_NAME, "telemetry disabled");
         bail!(TelemetryError::new(
             TelemetryErrorCodes::DataCollectionDisabled,
-            format!("telemetry data collection is diabled"),
-            true
+            format!("telemetry data collection is disabled"),
+            false
         ))
     }
 }
@@ -75,20 +83,30 @@ pub async fn process_metrics(
     identity_tx: Sender<IdentityMessage>,
     messaging_tx: Sender<MessagingMessage>,
 ) -> Result<bool> {
-    tracing::trace!(task = "process metrics", "init");
+    let fn_name = "process_metrics";
     let settings = match read_settings_yml() {
         Ok(v) => v,
         Err(e) => {
             warn!(
-                task = "process_metrics",
-                "failed to read settings.yml - {}", e
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to read settings.yml - {}",
+                e
             );
             AgentSettings::default()
         }
     };
     let machine_id = match get_machine_id(identity_tx.clone()).await {
         Ok(v) => v,
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to get machine id - {}",
+                e
+            );
+            bail!(e)
+        }
     };
 
     // Construct message payload
@@ -98,43 +116,66 @@ pub async fn process_metrics(
         machine_id: machine_id.clone(),
     }) {
         Ok(k) => k,
-        Err(e) => bail!(TelemetryError::new(
-            TelemetryErrorCodes::MetricsSerializeFailed,
-            format!("Failed to serialize metrics - {}", e),
-            true
-        )),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to serialize metrics - {}",
+                e
+            );
+            bail!(TelemetryError::new(
+                TelemetryErrorCodes::MetricsSerializeFailed,
+                format!("failed to serialize metrics - {}", e),
+                true
+            ))
+        }
     };
 
     if settings.telemetry.collect.user {
         let subject = format!("machine.{}.telemetry.metrics", sha256::digest(machine_id));
         let (tx, rx) = oneshot::channel();
         // Publish data on the subject
-        let send_output = messaging_tx
+        match messaging_tx
             .send(MessagingMessage::Send {
                 reply_to: tx,
                 message: payload.into(),
                 subject: subject.clone(),
             })
-            .await;
-        if send_output.is_err() {
-            bail!(TelemetryError::new(
-                TelemetryErrorCodes::ChannelSendMessageError { num: 1001 },
-                format!("Failed to send message - {}", send_output.err().unwrap()),
-                true
-            ))
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "failed to send message - {}",
+                    e
+                );
+                bail!(TelemetryError::new(
+                    TelemetryErrorCodes::ChannelSendMessageError,
+                    format!("failed to send metrics message - {}", e),
+                    true
+                ))
+            }
         }
         match recv_with_timeout(rx).await {
             Ok(_) => return Ok(true),
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "failed to receive message - {}",
+                    e
+                );
                 bail!(TelemetryError::new(
-                    TelemetryErrorCodes::ChannelReceiveMessageError { num: 1001 },
-                    format!("Failed to receive message - {}", e),
+                    TelemetryErrorCodes::ChannelReceiveMessageError,
+                    format!("failed to receive message - {}", e),
                     true
                 ))
             }
         }
     }
-    Ok(false)
+    Ok(true)
 }
 
 pub async fn process_logs(
@@ -143,18 +184,32 @@ pub async fn process_logs(
     identity_tx: Sender<IdentityMessage>,
     messaging_tx: Sender<MessagingMessage>,
 ) -> Result<bool> {
+    let fn_name = "process_logs";
     let settings = match read_settings_yml() {
         Ok(v) => v,
         Err(e) => {
-            warn!(task = "process_logs", "failed to read settings.yml - {}", e);
+            warn!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to read settings.yml - {}",
+                e
+            );
             AgentSettings::default()
         }
     };
     let machine_id = match get_machine_id(identity_tx.clone()).await {
         Ok(v) => v,
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to get machine id - {}",
+                e
+            );
+            bail!(e)
+        }
     };
-    println!("PROCESSING LOGS");
+
     // Construct message payload
     let payload: String = match serde_json::to_string(&EncodeData {
         encoded: content,
@@ -162,61 +217,100 @@ pub async fn process_logs(
         machine_id: machine_id.clone(),
     }) {
         Ok(k) => k,
-        Err(e) => bail!(TelemetryError::new(
-            TelemetryErrorCodes::LogsSeralizeFailed,
-            format!("Failed to serialize logs - {}", e),
-            true
-        )),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to serialize logs - {}",
+                e
+            );
+            bail!(TelemetryError::new(
+                TelemetryErrorCodes::LogsSeralizeFailed,
+                format!("failed to serialize logs - {}", e),
+                true
+            ))
+        }
     };
 
     if settings.telemetry.collect.user {
         let subject = format!("machine.{}.telemetry.logs", sha256::digest(machine_id));
         let (tx, rx) = oneshot::channel();
         // Publish data on the subject
-        let send_output = messaging_tx
+        match messaging_tx
             .send(MessagingMessage::Send {
                 reply_to: tx,
                 message: payload.into(),
                 subject: subject.clone(),
             })
-            .await;
-        if send_output.is_err() {
-            bail!(TelemetryError::new(
-                TelemetryErrorCodes::ChannelSendMessageError { num: 1002 },
-                format!("Failed to send message - {}", send_output.err().unwrap()),
-                true
-            ))
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "failed to send message - {}",
+                    e
+                );
+                bail!(TelemetryError::new(
+                    TelemetryErrorCodes::ChannelSendMessageError,
+                    format!("failed to send logs message - {}", e),
+                    true
+                ))
+            }
         }
+
         match recv_with_timeout(rx).await {
             Ok(_) => return Ok(true),
             Err(e) => {
-                println!("ERROR RECEIVING MESSAGE");
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "failed to receive message - {}",
+                    e
+                );
                 bail!(TelemetryError::new(
-                    TelemetryErrorCodes::ChannelReceiveMessageError { num: 1002 },
-                    format!("Failed to receive message - {}", e),
+                    TelemetryErrorCodes::ChannelReceiveMessageError,
+                    format!("failed to receive message - {}", e),
                     true
                 ))
             }
         }
     }
-    Ok(false)
+    Ok(true)
 }
 
 async fn get_machine_id(identity_tx: Sender<IdentityMessage>) -> Result<String> {
     let (tx, rx) = oneshot::channel();
-    let send_output = identity_tx
+    match identity_tx
         .send(IdentityMessage::GetMachineId { reply_to: tx })
-        .await;
-    if send_output.is_err() {
-        bail!(TelemetryError::new(
-            TelemetryErrorCodes::ChannelSendMessageError { num: 1000 },
-            format!("get machine id error: {}", send_output.err().unwrap()),
-            true
-        ));
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
+                "failed to send message - {}",
+                e
+            );
+            bail!(TelemetryError::new(
+                TelemetryErrorCodes::ChannelSendMessageError,
+                format!("failed to send message - {}", e),
+                true
+            ))
+        }
     }
+
     let machine_id = match recv_with_timeout(rx).await {
         Ok(machine_id) => machine_id,
         Err(err) => {
+            error!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
+                "failed to receive message - {}",
+                err
+            );
             bail!(err);
         }
     };
@@ -225,19 +319,35 @@ async fn get_machine_id(identity_tx: Sender<IdentityMessage>) -> Result<String> 
 
 pub async fn device_provision_status(identity_tx: Sender<IdentityMessage>) -> Result<bool> {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    let send_output = identity_tx
+    match identity_tx
         .send(IdentityMessage::GetProvisionStatus { reply_to: tx })
-        .await;
-    if send_output.is_err() {
-        bail!(TelemetryError::new(
-            TelemetryErrorCodes::ChannelSendMessageError { num: 1000 },
-            format!("get machine id error: {}", send_output.err().unwrap()),
-            true
-        ));
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                func = "device_provision_status",
+                package = PACKAGE_NAME,
+                "failed to send message - {}",
+                e
+            );
+            bail!(TelemetryError::new(
+                TelemetryErrorCodes::ChannelSendMessageError,
+                format!("failed to send message - {}", e),
+                true
+            ))
+        }
     }
+
     let status = match recv_with_timeout(rx).await {
         Ok(status) => status,
         Err(err) => {
+            error!(
+                func = "device_provision_status",
+                package = PACKAGE_NAME,
+                "failed to receive message - {}",
+                err
+            );
             bail!(err);
         }
     };

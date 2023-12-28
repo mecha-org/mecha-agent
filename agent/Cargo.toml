@@ -28,7 +28,7 @@ sentry-tracing = {version= "0.32.1"}
 sentry = { version = "0.32.1",features = ["backtrace", "anyhow"] }
 init-tracing-opentelemetry = { version = "0.12.0", features = ["otlp", "tracing_subscriber_ext"] }
 sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
-tracing-opentelemetry-instrumentation-sdk = "0.15.0"
+
 anyhow = { version= "1.0.71", features = ["backtrace"]}
 protobuf = "3.2.0"
 tonic = "0.10.2"

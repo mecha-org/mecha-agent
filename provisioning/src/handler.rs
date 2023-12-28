@@ -45,12 +45,6 @@ impl ProvisioningHandler {
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<ProvisioningMessage>) -> Result<()> {
         // start the service
         let res = &self.start().await;
-        debug!(
-            task = "run",
-            package = PACKAGE_NAME,
-            "Provisioning service started: {:?}",
-            res
-        );
 
         loop {
             select! {
@@ -86,11 +80,6 @@ impl ProvisioningHandler {
 impl ServiceHandler for ProvisioningHandler {
     async fn start(&mut self) -> Result<bool> {
         self.status = ServiceStatus::STARTED;
-        info!(
-            task = "start",
-            package = PACKAGE_NAME,
-            "Provisioning service started"
-        );
         Ok(true)
     }
 

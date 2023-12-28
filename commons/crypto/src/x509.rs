@@ -2,11 +2,11 @@ use crate::errors::{CryptoError, CryptoErrorCodes};
 use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use fs::{construct_dir_path, safe_open_file};
-use openssl::{pkey::PKey, sign::Signer, x509::X509};
+use openssl::{pkey::PKey, sign::Signer};
 use serde::{Deserialize, Serialize};
-use std::{fmt, fs::File, io::Read, path::Path, process::Command};
-use tracing::info;
-
+use std::{fmt, io::Read, path::Path, process::Command};
+use tracing::{debug, error, info, trace};
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 /**
  * Open SSL Commands Reference
  *
@@ -70,10 +70,25 @@ pub struct DecodedCert {
 }
 
 pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Result<bool> {
-    tracing::trace!(task = "generate_ec_private_key", "init",);
+    let fn_name = "generate_ec_private_key";
+    tracing::trace!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "file_path - {}, key_size - {:?}",
+        file_path,
+        key_size
+    );
     let file_path_buf = match construct_dir_path(file_path) {
         Ok(v) => v,
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to construct file path - {}",
+                e
+            );
+            bail!(e)
+        }
     };
     let elliptic_curve = match key_size {
         PrivateKeySize::EcP256 => String::from("secp256r1"),
@@ -89,11 +104,19 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
     // Check if the directory of file_path exists, and create it if it doesn't.
     let parent_directory = match Path::new(&file_path_buf).parent() {
         Some(v) => v,
-        None => bail!(CryptoError::new(
-            CryptoErrorCodes::FilePathError,
-            format!("invalid file path - {}", file_path),
-            true
-        )),
+        None => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "invalid file path - {}",
+                file_path
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::FilePathError,
+                format!("invalid file path - {}", file_path),
+                false
+            ))
+        }
     };
     println!("parent_directory: {:?}", parent_directory);
     if !parent_directory.exists() {
@@ -113,15 +136,35 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
 
     let output = match output_result {
         Ok(v) => v,
-        Err(e) => bail!(CryptoError::new(
-            CryptoErrorCodes::GeneratePrivateKeyError,
-            format!("openssl private key generate command failed - {}", e),
-            true
-        )),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "openssl ec private key generate command failed - {}",
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::GeneratePrivateKeyError,
+                format!("openssl private key generate command failed - {}", e),
+                true
+            ))
+        }
     };
 
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "openssl ec private key generate command output - {:?}",
+        output
+    );
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        error!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "openssl error in generating private key, stderr - {}",
+            stderr
+        );
         bail!(CryptoError::new(
             CryptoErrorCodes::GeneratePrivateKeyError,
             format!(
@@ -132,17 +175,7 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
         ))
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    tracing::info!(
-        task = "generate_ec_private_key",
-        result = "success",
-        "openssl ec private key generated successfully",
-    );
-    tracing::trace!(
-        task = "generate_ec_private_key",
-        "openssl ec private key generate command stdout - {}",
-        stdout,
-    );
+    let _stdout = String::from_utf8_lossy(&output.stdout).to_string();
 
     // TODO: Update permissions of keypath to 400
     Ok(true)
@@ -153,20 +186,44 @@ pub fn generate_csr(
     private_key_path: &str,
     common_name: &str,
 ) -> Result<bool> {
-    tracing::trace!(task = "generate_csr", "init",);
+    trace!(
+        func = "generate_csr",
+        package = PACKAGE_NAME,
+        "csr_file_path - {}, private_key_path - {}, common_name - {}",
+        csr_file_path,
+        private_key_path,
+        common_name
+    );
 
     let subject = format!("/C=/ST=/L=/O=/OU=/CN={}", common_name);
-    let private_key_path_buf = match construct_dir_path(private_key_path) {
+    let private_key_path_buf = match construct_dir_path(&private_key_path) {
         Ok(v) => v,
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(
+                func = "generate_csr",
+                package = PACKAGE_NAME,
+                "failed to construct private key path - {}, error - {}",
+                &private_key_path,
+                e
+            );
+            bail!(e)
+        }
     };
 
     let csr_file_path_buf = match construct_dir_path(csr_file_path) {
         Ok(v) => v,
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(
+                func = "generate_csr",
+                package = PACKAGE_NAME,
+                "failed to construct csr file path - {}, error - {}",
+                csr_file_path,
+                e
+            );
+            bail!(e)
+        }
     };
-    info!("csr_file_path_buf: {:?}", csr_file_path_buf);
-    info!("private_key_path_buf: {:?}", private_key_path_buf);
+
     // Command: openssl req -new -sha256 -key key.pem -subj "/C=/ST=/L=/O=/OU=/CN=" -out req.pem
     let output_result = Command::new("openssl")
         .arg("req")
@@ -180,30 +237,46 @@ pub fn generate_csr(
         .arg(csr_file_path_buf.to_str().unwrap())
         .output();
 
+    debug!(
+        func = "generate_csr",
+        package = PACKAGE_NAME,
+        "openssl csr generate command output - {:?}",
+        output_result
+    );
     let output = match output_result {
         Ok(v) => v,
-        Err(e) => bail!(CryptoError::new(
-            CryptoErrorCodes::GenerateCSRError,
-            format!("openssl csr generate command failed - {}", e),
-            true
-        )),
+        Err(e) => {
+            error!(
+                func = "generate_csr",
+                package = PACKAGE_NAME,
+                "openssl csr generate command failed - {}",
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::GenerateCSRError,
+                format!("openssl csr generate command failed - {}", e),
+                true
+            ))
+        }
     };
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        tracing::info!(
-            task = "generate_csr",
-            result = "success",
-            "openssl csr generated successfully",
-        );
-        tracing::trace!(
-            task = "generate_csr",
-            "openssl csr generate command stdout - {}",
-            stdout,
+        info!(
+            func = "generate_csr",
+            package = PACKAGE_NAME,
+            "openssl csr generate command output - {}",
+            stdout
         );
         Ok(true)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        error!(
+            func = "generate_csr",
+            package = PACKAGE_NAME,
+            "openssl error in generating csr, stderr - {}",
+            stderr
+        );
         bail!(CryptoError::new(
             CryptoErrorCodes::GenerateCSRError,
             format!("openssl error in generating csr, stderr - {}", stderr),
@@ -273,10 +346,24 @@ pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<
 }
 
 fn safe_create_dir(path: &str) -> Result<bool> {
-    tracing::info!(task = "safe_create_dir", "init",);
+    trace!(
+        func = "safe_create_dir",
+        package = PACKAGE_NAME,
+        "path - {}",
+        path
+    );
     let path_buf = match construct_dir_path(path) {
         Ok(v) => v,
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(
+                func = "safe_create_dir",
+                package = PACKAGE_NAME,
+                "failed to construct path - {}, error - {}",
+                path,
+                e
+            );
+            bail!(e)
+        }
     };
 
     // Extract the file name (the last component of the path)
@@ -291,6 +378,11 @@ fn safe_create_dir(path: &str) -> Result<bool> {
             };
         }
     }
-    tracing::info!(task = "safe_create_dir", "file path created",);
+    info!(
+        func = "safe_create_dir",
+        package = PACKAGE_NAME,
+        "directory created - {}",
+        path
+    );
     Ok(true)
 }

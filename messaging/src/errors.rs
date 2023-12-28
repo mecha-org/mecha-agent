@@ -1,6 +1,5 @@
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
-use tracing::error;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub enum MessagingErrorCodes {
@@ -86,10 +85,6 @@ impl std::fmt::Display for MessagingError {
 
 impl MessagingError {
     pub fn new(code: MessagingErrorCodes, message: String, capture_error: bool) -> Self {
-        error!(
-            target = "messaging",
-            "error: (code: {:?}, message: {})", code, message
-        );
         if capture_error {
             let error = &anyhow::anyhow!(code)
                 .context(format!("error: (code: {:?}, message: {})", code, message));

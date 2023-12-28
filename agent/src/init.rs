@@ -6,13 +6,15 @@ use identity::handler::{IdentityHandler, IdentityMessage, IdentityOptions};
 use messaging::handler::{MessagingHandler, MessagingMessage, MessagingOptions};
 use networking::handler::{NetworkingHandler, NetworkingMessage, NetworkingOptions};
 use provisioning::handler::{ProvisioningHandler, ProvisioningMessage, ProvisioningOptions};
+use serde_json::error;
 use settings::handler::{SettingHandler, SettingMessage, SettingOptions};
 use telemetry::handler::{TelemetryHandler, TelemetryMessage, TelemetryOptions};
 use tokio::{
     sync::{broadcast, mpsc},
     task,
 };
-use tracing::{error, info};
+use tracing::error;
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 const CHANNEL_SIZE: usize = 32;
 
 pub async fn init_services() -> Result<bool> {
@@ -95,9 +97,8 @@ async fn init_provisioning_service(
             Ok(_) => (),
             Err(e) => {
                 error!(
-                    task = "init_provisioning_service",
-                    result = "error",
-                    package = env!("CARGO_CRATE_NAME"),
+                    func = "init_provisioning_service",
+                    package = PACKAGE_NAME,
                     "error init/run provisioning service: {:?}",
                     e
                 );
@@ -124,9 +125,8 @@ async fn init_identity_service(
             Ok(_) => (),
             Err(e) => {
                 error!(
-                    task = "init_identity_service",
-                    result = "error",
-                    package = env!("CARGO_CRATE_NAME"),
+                    func = "init_identity_service",
+                    package = PACKAGE_NAME,
                     "error init/run identity service: {:?}",
                     e
                 );
@@ -153,9 +153,8 @@ async fn init_messaging_service(
             Ok(_) => (),
             Err(e) => {
                 error!(
-                    task = "init_messaging_service",
-                    result = "error",
-                    package = env!("CARGO_CRATE_NAME"),
+                    func = "init_messaging_service",
+                    package = PACKAGE_NAME,
                     "error init/run messaging service: {:?}",
                     e
                 );
@@ -181,9 +180,8 @@ async fn init_heartbeat_service(
             Ok(_) => (),
             Err(e) => {
                 error!(
-                    task = "init_heartbeat_service",
-                    result = "error",
-                    package = env!("CARGO_CRATE_NAME"),
+                    func = "init_heartbeat_service",
+                    package = PACKAGE_NAME,
                     "error init/run heartbeat service: {:?}",
                     e
                 );
@@ -209,9 +207,8 @@ async fn init_setting_service(
             Ok(_) => (),
             Err(e) => {
                 error!(
-                    task = "init_setting_service",
-                    result = "error",
-                    package = env!("CARGO_CRATE_NAME"),
+                    func = "init_setting_service",
+                    package = PACKAGE_NAME,
                     "error init/run settings service: {:?}",
                     e
                 );
@@ -241,9 +238,8 @@ async fn init_networking_service(
             Ok(_) => (),
             Err(e) => {
                 error!(
-                    task = "init_networking_service",
-                    result = "error",
-                    package = env!("CARGO_CRATE_NAME"),
+                    func = "init_networking_service",
+                    package = PACKAGE_NAME,
                     "error init/run networking service: {:?}",
                     e
                 );
@@ -269,9 +265,8 @@ async fn init_telemetry_service(
             Ok(_) => (),
             Err(e) => {
                 error!(
-                    task = "init_telemetry_service",
-                    result = "error",
-                    package = env!("CARGO_CRATE_NAME"),
+                    func = "init_telemetry_service",
+                    package = PACKAGE_NAME,
                     "error init/run telemetry service: {:?}",
                     e
                 );
