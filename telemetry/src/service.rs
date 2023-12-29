@@ -5,7 +5,6 @@ use channel::recv_with_timeout;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
 use serde::{Deserialize, Serialize};
-use serde_json::error;
 use std::process::Command;
 use tokio::sync::{mpsc::Sender, oneshot};
 use tracing::{error, info, warn};
