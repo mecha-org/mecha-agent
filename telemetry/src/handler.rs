@@ -131,18 +131,7 @@ impl TelemetryHandler {
 #[async_trait]
 impl ServiceHandler for TelemetryHandler {
     async fn start(&mut self) -> Result<bool> {
-        // match device_provision_status(self.identity_tx.clone()).await {
-        //     Ok(provisioned) => {
-        //         if provisioned {
-        //             self.status = ServiceStatus::STARTED;
-        //             let _ = telemetry_init();
-        //             Ok(true)
-        //         } else {
-        //             Ok(false)
-        //         }
-        //     }
-        //     Err(err) => Ok(false),
-        // }
+        self.status = ServiceStatus::STARTED;
         let _ = telemetry_init();
         Ok(true)
     }
