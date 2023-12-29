@@ -20,7 +20,7 @@ serde = { version  = "1.0.159", features = ["derive"]}
 tracing = "0.1"
 sentry = { version = "0.32.1",features = ["backtrace", "anyhow"] }
 sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
-tracing-opentelemetry-instrumentation-sdk = "0.15.0"
+
 anyhow = { version= "1.0.71", features = ["backtrace"]}
 protobuf = "3.2.0"
 tonic = "0.10.2"

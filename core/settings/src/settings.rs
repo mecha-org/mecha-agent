@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
-pub struct DeviceSettings {
+pub struct Settings {
     pub storage: StorageSettings,
 }
 
@@ -12,7 +12,7 @@ pub struct StorageSettings {
     pub path: String,
 }
 
-impl Default for DeviceSettings {
+impl Default for Settings {
     fn default() -> Self {
         Self {
             storage: StorageSettings {

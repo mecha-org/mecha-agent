@@ -16,6 +16,7 @@ agent_settings = { path = "../core/settings" }
 events = { path = "../core/events" }
 messaging = { path = "../messaging" }
 identity = { path = "../identity" }
+channel = { path = "../commons/channel" }
 nats_client = { path = "../commons/nats_client" }
 services = { path = "../core/services" }
 kv_store = { path = "../commons/kv_store" }
@@ -26,7 +27,7 @@ serde_json = "1.0.33"
 serde = { version  = "1.0.159", features = ["derive"]}
 tonic = "0.10.2"
 tracing = "0.1"
-tracing-opentelemetry-instrumentation-sdk = "0.15.0"
+
 tokio = { version = "1.27.0", features = ["full"] }
 futures = "0.3.28"
 sha256 = "1.1.2"

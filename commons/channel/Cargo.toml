@@ -1,8 +1,10 @@
 [package]
-name = "nats_client"
+name = "channel"
 version.workspace = true
-edition.workspace = true
 authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -10,10 +12,6 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-crypto = { path = "../crypto" }
+tokio = { version = "1.27.0", features = ["full"] }
 anyhow = { version = "1.0.71", features = ["backtrace"]}
-bytes = "1.5.0"
-async-nats = "0.33.0"
-nkeys = "0.4.0"
-sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
 tracing = "0.1"

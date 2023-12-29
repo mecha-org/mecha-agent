@@ -17,5 +17,5 @@ serde_yaml = "0.9.21"
 serde = { version  = "1.0.159", features = ["derive"]}
 tonic = "0.10.2"
 tracing = "0.1"
-tracing-opentelemetry-instrumentation-sdk = "0.15.0"
+
 dotenv = "0.15.0"

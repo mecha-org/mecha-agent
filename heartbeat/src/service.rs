@@ -1,14 +1,16 @@
 use agent_settings::{read_settings_yml, AgentSettings};
 use anyhow::{bail, Result};
+use channel::recv_with_timeout;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha256::digest;
 use tokio::sync::mpsc::Sender;
-use tracing::{info, trace};
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
+use tracing::{debug, error, info, trace, warn};
 
+const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
+use crate::errors::{HeartbeatError, HeartbeatErrorCodes};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HeartbeatPublishPayload {
     pub time: String,
@@ -21,50 +23,79 @@ pub struct SendHeartbeatOptions {
 pub fn get_time_interval() -> u64 {
     let settings = match read_settings_yml() {
         Ok(settings) => settings,
-        Err(_) => AgentSettings::default(),
+        Err(err) => {
+            warn!(
+                func = "get_time_interval",
+                package = PACKAGE_NAME,
+                "failed to get machine id: {:?}",
+                err
+            );
+            AgentSettings::default()
+        }
     };
+    debug!(
+        func = "get_time_interval",
+        package = PACKAGE_NAME,
+        "time_interval_sec: {}",
+        settings.heartbeat.time_interval_sec
+    );
     settings.heartbeat.time_interval_sec
 }
 pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<bool> {
-    let trace_id = find_current_trace_id();
-    tracing::info!(
-        task = "start",
-        trace_id = trace_id,
-        "starting heartbeat service"
-    );
+    let fn_name = "send_heartbeat";
+    // Get machine id
     let (tx, rx) = tokio::sync::oneshot::channel();
     let (publish_result_tx, publish_result_rx) = tokio::sync::oneshot::channel();
-    let mut machine_id = String::new();
-    let _ = heartbeat_options
+    let send_output = heartbeat_options
         .identity_tx
         .send(IdentityMessage::GetMachineId { reply_to: tx })
         .await;
-    match rx.await {
-        Ok(machine_id_result) => {
-            if machine_id_result.is_ok() {
-                match machine_id_result {
-                    Ok(machine_id_value) => {
-                        machine_id = machine_id_value;
-                    }
-                    Err(_) => {
-                        bail!("Error getting machine ID");
-                    }
-                }
-            } else {
-                bail!("Error getting machine ID");
-            }
-        }
+
+    match send_output {
+        Ok(_) => (),
         Err(err) => {
-            bail!("Error getting machine ID: {:?}", err);
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error send identity message to get machine_id: {:?}",
+                err
+            );
+            bail!(HeartbeatError::new(
+                HeartbeatErrorCodes::ChannelSendMessageError,
+                format!("error send identity message to get machine_id: {:?}", err),
+                false
+            ));
         }
     }
+    let machine_id = match recv_with_timeout(rx).await {
+        Ok(machine_id) => machine_id,
+        Err(err) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error receiving message from identity service {:?}",
+                err
+            );
+            bail!(err);
+        }
+    };
+
+    // Construct payload
     let current_utc_time = chrono::Utc::now();
     let formatted_utc_time = current_utc_time.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
+    trace!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "formatted utc time - {}",
+        formatted_utc_time
+    );
     let publish_payload = HeartbeatPublishPayload {
         time: formatted_utc_time,
         machine_id: machine_id.clone(),
     };
-    let _ = heartbeat_options
+
+    // Publish message
+    let send_output = heartbeat_options
         .messaging_tx
         .send(MessagingMessage::Send {
             reply_to: publish_result_tx,
@@ -72,65 +103,74 @@ pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<b
             subject: format!("machine.{}.heartbeat", digest(machine_id.clone())),
         })
         .await;
-
-    match publish_result_rx.await {
-        Ok(publish_result) => {
-            if publish_result.is_ok() {
-                match publish_result {
-                    Ok(true) => {
-                        info!(
-                            task = "send_heartbeat",
-                            trace_id = trace_id,
-                            "heartbeat published"
-                        );
-                        // Handle the case where the result is Ok(true)
-                        // Do something when the result is true
-                    }
-                    Ok(false) => {
-                        println!("Heartbeat not published");
-                        // Handle the case where the result is Ok(false)
-                        // Do something when the result is false
-                    }
-                    Err(err) => {
-                        println!("Error publishing heartbeat: {:?}", err);
-                        // Handle the case where there's an error
-                        // You can use the 'err' variable to access the error details
-                    }
-                }
-            } else {
-                bail!("Error publishing heartbeat");
-            }
-        }
-        Err(_) => {
-            bail!("Error publishing heartbeat");
+    match send_output {
+        Ok(_) => (),
+        Err(err) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error send heartbeat message {:?}",
+                err
+            );
+            bail!(HeartbeatError::new(
+                HeartbeatErrorCodes::ChannelSendMessageError,
+                "error send heartbeat message".to_string(),
+                false
+            ));
         }
     }
+    match recv_with_timeout(publish_result_rx).await {
+        Ok(_) => {}
+        Err(err) => {
+            error!(
+                func = "provision_by_code",
+                package = PACKAGE_NAME,
+                "error looking up manifest - {}",
+                err
+            );
+            bail!(HeartbeatError::new(
+                HeartbeatErrorCodes::ChannelRecvTimeoutError,
+                format!("error receiving message: {}", err),
+                false
+            ));
+        }
+    }
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "heartbeat message published!"
+    );
     Ok(true)
 }
 
 pub async fn device_provision_status(identity_tx: Sender<IdentityMessage>) -> bool {
-    let trace_id = find_current_trace_id();
-    info!(
-        task = "device_provision_status",
-        trace_id = trace_id,
-        "init"
-    );
+    let fn_name = "device_provision_status";
     let (tx, rx) = tokio::sync::oneshot::channel();
-    let _ = identity_tx
+    match identity_tx
         .send(IdentityMessage::GetProvisionStatus { reply_to: tx })
-        .await;
-    let status = match rx.await {
-        Ok(provisioning_status_result) => {
-            if provisioning_status_result.is_ok() {
-                match provisioning_status_result {
-                    Ok(provisioning_status_value) => provisioning_status_value,
-                    Err(_) => false,
-                }
-            } else {
-                false
-            }
+        .await
+    {
+        Ok(_) => {}
+        Err(err) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error send provision status message to identity service - {}",
+                err
+            );
         }
-        Err(_err) => false,
     };
-    status
+
+    match recv_with_timeout(rx).await {
+        Ok(provision_status) => provision_status,
+        Err(err) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error receive provision status from identity service - {}",
+                err
+            );
+            false
+        }
+    }
 }

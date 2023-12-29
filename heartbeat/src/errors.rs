@@ -1,54 +1,53 @@
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
-use tracing::error;
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 #[derive(Debug, Default, Clone, Copy)]
-pub enum HeatbeatErrorCodes {
+pub enum HeartbeatErrorCodes {
     #[default]
     UnknownError,
     InitMessagingClientError,
+    ChannelSendMessageError,
+    ChannelRecvTimeoutError,
 }
 
-impl fmt::Display for HeatbeatErrorCodes {
+impl fmt::Display for HeartbeatErrorCodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            HeatbeatErrorCodes::UnknownError => write!(f, "HeatbeatErrorCodes: UnknownError"),
-            HeatbeatErrorCodes::InitMessagingClientError => {
-                write!(f, "HeatbeatErrorCodes: InitMessagingClientError")
+            HeartbeatErrorCodes::UnknownError => write!(f, "HeartbeatErrorCodes: UnknownError"),
+            HeartbeatErrorCodes::InitMessagingClientError => {
+                write!(f, "HeartbeatErrorCodes: InitMessagingClientError")
+            }
+            HeartbeatErrorCodes::ChannelSendMessageError => {
+                write!(f, "HeartbeatErrorCodes: ChannelSendMessageError")
+            }
+            HeartbeatErrorCodes::ChannelRecvTimeoutError => {
+                write!(f, "HeartbeatErrorCodes: ChannelRecvTimeoutError",)
             }
         }
     }
 }
 
 #[derive(Debug)]
-pub struct HeatbeatError {
-    pub code: HeatbeatErrorCodes,
+pub struct HeartbeatError {
+    pub code: HeartbeatErrorCodes,
     pub message: String,
 }
 
-impl std::fmt::Display for HeatbeatError {
+impl std::fmt::Display for HeartbeatError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "HeatbeatErrorCodes:(code: {:?}, message: {})",
+            "HeartbeatErrorCodes:(code: {:?}, message: {})",
             self.code, self.message
         )
     }
 }
 
-impl HeatbeatError {
-    pub fn new(code: HeatbeatErrorCodes, message: String, capture_error: bool) -> Self {
-        let trace_id = find_current_trace_id();
-        error!(
-            target = "heartbeat",
-            "error: (code: {:?}, message: {})", code, message
-        );
+impl HeartbeatError {
+    pub fn new(code: HeartbeatErrorCodes, message: String, capture_error: bool) -> Self {
         if capture_error {
-            let error = &anyhow::anyhow!(code).context(format!(
-                "error: (code: {:?}, message: {} trace:{:?})",
-                code, message, trace_id
-            ));
+            let error = &anyhow::anyhow!(code)
+                .context(format!("error: (code: {:?}, message: {})", code, message));
             capture_anyhow(error);
         }
         Self { code, message }

@@ -2,7 +2,7 @@ use crate::errors::NetworkingError;
 use crate::errors::NetworkingErrorCodes;
 use crate::nebula::generate_nebula_key_cert;
 use crate::nebula::is_cert_valid;
-use crate::nebula::is_cert_verifed;
+use crate::nebula::is_cert_verified;
 use crate::nebula::start_nebula;
 use crate::nebula::FirewallRule;
 use crate::nebula::NebulaSettings;
@@ -11,11 +11,12 @@ use crate::utils::extract_zip_file;
 use crate::utils::is_sudo;
 use crate::utils::sha256_file;
 use anyhow::{bail, Result};
+use channel::recv_with_timeout;
 use crypto::base64::b64_decode;
 use identity::handler::IdentityMessage;
 use ipaddress::IPAddress;
 use messaging::handler::MessagingMessage;
-use messaging::Bytes;
+use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -32,9 +33,10 @@ use std::path::PathBuf;
 use std::str;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
+use tracing::trace;
 use tracing::{debug, error, info};
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkingServerResponseGeneric<T> {
@@ -103,42 +105,53 @@ pub struct OverrideConfigurations {
 pub async fn get_provider_info(
     settings_tx: Sender<SettingMessage>,
 ) -> Result<ProviderMetadataPayload> {
-    let trace_id = find_current_trace_id();
-    let task = "get_provider_info";
-    let target = "networking";
+    let fn_name = "get_provider_info";
     let (tx, rx) = oneshot::channel();
-    let _ = settings_tx
+    match settings_tx
         .clone()
         .send(SettingMessage::GetSettingsByKey {
             reply_to: tx,
             key: String::from("networking.provider.name"),
         })
-        .await;
-    let mut app_name = String::new();
-    match rx.await {
-        Ok(settings_result) => {
-            if settings_result.is_ok() {
-                match settings_result {
-                    Ok(settings_value) => {
-                        println!("get settings result {}", settings_value);
-                        app_name = settings_value;
-                    }
-                    Err(_) => {
-                        println!("Error getting machine ID");
-                    }
-                }
-            } else {
-                println!("Error getting machine ID: {:?}", settings_result.err());
-            }
-        }
-        Err(_) => {
-            println!("Error receiving machine ID {:?}", task);
+        .await
+    {
+        Ok(_) => (),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error sending message to get provider name - {}",
+                e.to_string()
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelSendMessageError,
+                format!(
+                    "error sending message to get provider name - {}",
+                    e.to_string()
+                ),
+                true
+            ))
         }
     }
 
-    let arch = std::env::consts::ARCH.to_lowercase();
+    let app_name = match recv_with_timeout(rx).await {
+        Ok(r) => r,
+        Err(e) => {
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelReceiveMessageError,
+                format!(
+                    "error receiving message to get provider name - {}",
+                    e.to_string()
+                ),
+                true
+            ))
+        }
+    };
 
+    let arch = std::env::consts::ARCH.to_lowercase();
+    debug!(func = fn_name, package = PACKAGE_NAME, "arch is {}", arch);
     if arch.is_empty() {
+        error!(func = fn_name, package = PACKAGE_NAME, "arch not found");
         bail!(NetworkingError::new(
             NetworkingErrorCodes::SystemArchNotFoundError,
             format!("arch not found",),
@@ -147,8 +160,9 @@ pub async fn get_provider_info(
     };
 
     let os = std::env::consts::OS.to_lowercase();
-
+    debug!(func = fn_name, package = PACKAGE_NAME, "os is {}", os);
     if os.is_empty() {
+        error!(func = fn_name, package = PACKAGE_NAME, "os name not found");
         bail!(NetworkingError::new(
             NetworkingErrorCodes::SystemOsNotFoundError,
             format!("os name not found",),
@@ -157,10 +171,11 @@ pub async fn get_provider_info(
     };
 
     let provider_metadata_payload = ProviderMetadataPayload { app_name, os, arch };
-
     debug!(
-        task,
-        target, trace_id, "provider config in device settings is {:?}", provider_metadata_payload
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "provider metadata payload is {:?}",
+        provider_metadata_payload
     );
 
     Ok(provider_metadata_payload)
@@ -171,57 +186,79 @@ pub async fn get_provider_configs(
     topic_to_publish: &str,
     provider_metadata_payload: &ProviderMetadataPayload,
 ) -> Result<ProviderMetadataReply> {
-    let trace_id = find_current_trace_id();
-    let task = "get_provider_configs";
-    let target = "networking";
+    let fn_name = "get_provider_configs";
     let (tx, rx) = oneshot::channel();
     let payload_payload_json = json!(provider_metadata_payload);
-    let _ = messaging_tx
+    match messaging_tx
         .clone()
         .send(MessagingMessage::Request {
             subject: topic_to_publish.to_string(),
             message: payload_payload_json.to_string(),
             reply_to: tx,
         })
-        .await;
-    debug!(
-        task,
-        target, trace_id, "topic is, payload is {} {}", topic_to_publish, payload_payload_json
-    );
-    let mut response_bytes = Bytes::new();
-    match rx.await {
-        Ok(publish_response) => {
-            if publish_response.is_ok() {
-                match publish_response {
-                    Ok(result) => response_bytes = result,
-                    Err(_) => {
-                        println!("Error getting machine ID");
-                    }
-                }
-            } else {
-                println!(
-                    "Error getting machine ID: {:?}",
-                    publish_response.err().unwrap()
-                );
-            }
-        }
-        Err(_) => {
-            println!("Error receiving machine ID");
-        }
-    };
-    //todo: Confirm with akshay
-    let provider_metadata_reply: ProviderMetadataReply = match parse_message_payload(response_bytes)
+        .await
     {
+        Ok(_) => (),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error sending message to get provider config - {}",
+                e.to_string()
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelSendMessageError,
+                format!(
+                    "error sending message to get provider config - {}",
+                    e.to_string()
+                ),
+                true
+            ))
+        }
+    }
+
+    let response_bytes = match recv_with_timeout(rx).await {
         Ok(r) => r,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error receiving message to get provider config - {}",
+                e.to_string()
+            );
             bail!(NetworkingError::new(
-                NetworkingErrorCodes::MessagingRequestProviderConfigError,
-                format!("unable to parse provider config, error - {}", e.to_string()),
+                NetworkingErrorCodes::ChannelReceiveMessageError,
+                format!(
+                    "unable to receive provider config, error - {}",
+                    e.to_string()
+                ),
                 true
             ))
         }
     };
-
+    let provider_metadata_reply: ProviderMetadataReply = match parse_message_payload(response_bytes)
+    {
+        Ok(r) => r,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error parsing provider config - {}",
+                e.to_string()
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::MessagingRequestProviderConfigError,
+                format!("unable to parse provider config, error - {}", e.to_string()),
+                false
+            ))
+        }
+    };
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "provider metadata reply is {:?}",
+        provider_metadata_reply
+    );
     Ok(provider_metadata_reply)
 }
 
@@ -229,32 +266,33 @@ pub async fn extract_provider_package(
     provider_dir: &str,
     provider_config: &ProviderMetadataReply,
 ) -> Result<bool> {
-    let trace_id = find_current_trace_id();
-    let task = "extract_provider_package";
-    let target = "networking";
-
-    info!(task, target, trace_id, "init");
-
-    debug!(
-        task,
-        target, trace_id, "checking if provider directory {} exists", provider_dir
+    let fn_name = "extract_provider_package";
+    trace!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "provider dir is {}",
+        provider_dir
     );
     let provider_dir_exists = Path::new(&provider_dir).is_dir();
 
-    debug!(
-        task,
-        target, trace_id, "provider directory exists is {}", provider_dir_exists
-    );
-
     if !provider_dir_exists {
         match create_dir_all(&provider_dir) {
-            Ok(_) => {
-                info!(task, target, trace_id, "provider directory created");
-            }
+            Ok(_) => (),
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while creating provider directory, path - {}, error - {}",
+                    provider_dir,
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::ProviderDirectoryCreateError,
-                    format!("provider directory create error - {}", e.to_string()),
+                    format!(
+                        "provider directory create error, path - {},  - {}",
+                        provider_dir,
+                        e.to_string()
+                    ),
                     true
                 ))
             }
@@ -263,16 +301,18 @@ pub async fn extract_provider_package(
 
     let package_file_path = format!("{}/{}", provider_dir, provider_config.file_name);
     debug!(
-        task,
-        target, trace_id, "checking if package {} exists", package_file_path
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "package file path is {}",
+        package_file_path
     );
     let package_exists = Path::new(&package_file_path).is_file();
-
-    info!(
-        task,
-        target, trace_id, "package exists is {}", package_exists
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "package exists is {}",
+        package_exists
     );
-
     let mut package_checksum_mismatch = false;
 
     if package_exists {
@@ -280,39 +320,37 @@ pub async fn extract_provider_package(
             Ok(v) => v,
             Err(e) => {
                 error!(
-                    task,
-                    target, trace_id, "error while calculating sha256 of package {}", e
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while calculating package checksum, path - {}, error - {}",
+                    package_file_path,
+                    e.to_string()
                 );
                 String::from("")
             }
         };
 
         debug!(
-            task,
-            target,
-            trace_id,
-            "package checksum is {} and package checksum calculated is {}",
-            provider_config.checksum,
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "package checksum is {}",
             package_checksum
         );
 
         package_checksum_mismatch = package_checksum.ne(&provider_config.checksum);
     }
 
-    debug!(
-        task,
-        target, trace_id, "package checksum mismatch is {}", package_checksum_mismatch
-    );
-
     //Download provider file using download url
     if !package_exists || package_checksum_mismatch {
-        info!(
-            task,
-            target, trace_id, "downloading package from {}", provider_config.download_url
-        );
         let response = match reqwest::get(&provider_config.download_url).await {
             Ok(r) => r,
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while downloading provider package - {}",
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::ProviderDownloadError,
                     format!(
@@ -326,6 +364,12 @@ pub async fn extract_provider_package(
         let mut file = match File::create(&package_file_path) {
             Ok(r) => r,
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while creating package file - {}",
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::ProviderFileCreateError,
                     format!("error while creating package file - {}", e.to_string()),
@@ -336,6 +380,12 @@ pub async fn extract_provider_package(
         match copy(&mut response.bytes().await?.as_ref(), &mut file) {
             Ok(_) => (),
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while writing package file - {}",
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::ProviderFileWriteError,
                     format!("error while writing package file - {}", e.to_string()),
@@ -343,24 +393,27 @@ pub async fn extract_provider_package(
                 ))
             }
         };
-        info!(
-            task,
-            target, trace_id, "provider package downloaded, saved at {}", package_file_path
-        );
+        debug!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "package file downloaded successfully, saved at {}",
+            package_file_path
+        )
     }
-
-    info!(task, target, trace_id = trace_id, "extracting package");
 
     //Extract provider package in temp
     let extract_to_path: PathBuf = temp_dir();
 
     let package_extracted = match provider_config.file_type.as_str() {
         "zip" => match extract_zip_file(&package_file_path, &extract_to_path).await {
-            Ok(r) => {
-                info!(task, target, trace_id = trace_id, "extracted package");
-                r
-            }
+            Ok(r) => r,
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while extracting package file - {}",
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::ProviderFileExtractError,
                     format!("error while extracting package file - {}", e.to_string()),
@@ -369,11 +422,14 @@ pub async fn extract_provider_package(
             }
         },
         "tar.gz" => match extract_tar_file(&package_file_path, &extract_to_path).await {
-            Ok(r) => {
-                info!(task, target, trace_id = trace_id, "extracted package");
-                r
-            }
+            Ok(r) => r,
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while extracting package file - {}",
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::ProviderFileExtractError,
                     format!("error while extracting package file - {}", e.to_string()),
@@ -381,13 +437,25 @@ pub async fn extract_provider_package(
                 ))
             }
         },
-        _ => bail!(NetworkingError::new(
-            NetworkingErrorCodes::InvalidProviderFileType,
-            format!("error while extracting package file - provider file type invalid"),
-            true
-        )),
+        _ => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while extracting package file - provider file type invalid"
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::InvalidProviderFileType,
+                format!("error while extracting package file - provider file type invalid"),
+                true
+            ))
+        }
     };
-
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "package file extracted successfully, saved at {}",
+        package_extracted
+    );
     Ok(package_extracted)
 }
 
@@ -396,30 +464,34 @@ pub async fn validate_or_create_certs(
     certs_dir: &str,
     provider_config: &ProviderMetadataReply,
 ) -> Result<bool> {
-    let trace_id = find_current_trace_id();
-    let task = "validate_or_create_certs";
-    let target = "networking";
-
-    info!(task, target, trace_id, "init");
-
-    debug!(
-        task,
-        target, trace_id, "checking if certs directory {} exists", certs_dir
+    let fn_name = "validate_or_create_certs";
+    trace!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "certs dir is {}",
+        certs_dir
     );
 
     let certs_dir_exists = Path::new(&certs_dir).is_dir();
 
     debug!(
-        task,
-        target, trace_id, "certs directory exists is {}", certs_dir_exists
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "certs dir exists is {}",
+        certs_dir_exists
     );
 
     if !certs_dir_exists {
         match create_dir_all(&certs_dir) {
-            Ok(_) => {
-                info!(task, target, trace_id, "certs directory created");
-            }
+            Ok(_) => (),
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while creating certs directory, path - {}, error - {}",
+                    certs_dir,
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::CertsDirectoryCreateError,
                     format!("certs directory create error - {}", e.to_string()),
@@ -435,28 +507,31 @@ pub async fn validate_or_create_certs(
     let signed_cert_path = format!("{}/machine.crt", certs_dir);
     let ca_path = format!("{}/ca.crt", certs_dir);
 
-    let are_certs_valid = match check_existig_certs_valid(&ca_path, &signed_cert_path, &key_path) {
+    let are_certs_valid = match check_existing_certs_valid(&ca_path, &signed_cert_path, &key_path) {
         Ok(v) => v,
         Err(e) => {
             error!(
-                task,
-                target, trace_id, "error while checking existing certs {}", e
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while validating existing certs - {}",
+                e.to_string()
             );
             false
         }
     };
-    info!(
-        task,
-        target, trace_id, "existing certs valid is {}", are_certs_valid
-    );
 
     if !are_certs_valid {
         //Enrollment process
         match generate_nebula_key_cert(&unsigned_cert_path, &key_path) {
-            Ok(_) => {
-                info!(task, target, trace_id, "certs generated successfully");
-            }
+            Ok(_) => (),
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while generating certs to path - {}, error - {}",
+                    &key_path,
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::CertsGenerateError,
                     format!("error while generating certs {}", e.to_string()),
@@ -470,6 +545,12 @@ pub async fn validate_or_create_certs(
             {
                 Ok(v) => v,
                 Err(e) => {
+                    error!(
+                        func = fn_name,
+                        package = PACKAGE_NAME,
+                        "error while reading enrollment url - {}",
+                        e.to_string()
+                    );
                     bail!(NetworkingError::new(
                         NetworkingErrorCodes::MachineSettingsEnrollmentUrlFoundError,
                         format!("error while reading enrollment url {}", e.to_string()),
@@ -499,31 +580,40 @@ pub async fn validate_or_create_certs(
         };
 
         debug!(
-            task,
-            target, trace_id, "sign cert req is {:?}", sign_cert_req
+            fn_name,
+            package = PACKAGE_NAME,
+            "sign cert request is {:?}",
+            sign_cert_req
         );
 
         let sign_cert_res = match sign_cert(&enrollment_url, sign_cert_req).await {
             Ok(r) => r,
             Err(e) => {
-                bail!(NetworkingError::new(
-                    NetworkingErrorCodes::SignCertError,
-                    format!("error in signing cert - {}", e.to_string()),
-                    true
-                ))
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while signing cert - {}",
+                    e.to_string()
+                );
+                bail!(e);
             }
         };
-
-        info!(task, target, trace_id, "cert signed successfully");
-
         debug!(
-            task,
-            target, trace_id, "sign cert response is {:?}", sign_cert_res
+            fn_name,
+            package = PACKAGE_NAME,
+            "sign cert successfully, response is {:?}",
+            sign_cert_res
         );
 
         let decoded_cert_bytes = match b64_decode(&sign_cert_res.cert) {
             Ok(v) => v,
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while decoding signed cert - {}",
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::SignCertDecodeError,
                     format!("error in decoding signed cert - {}", e.to_string()),
@@ -536,6 +626,12 @@ pub async fn validate_or_create_certs(
         let decoded_cert_str = match str::from_utf8(&decoded_cert_bytes) {
             Ok(v) => v,
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while converting signed cert to string - {}",
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::SignCertDecodeError,
                     format!(
@@ -547,11 +643,18 @@ pub async fn validate_or_create_certs(
             }
         };
 
-        debug!(task, target, trace_id, "sign cert decoded successfully ");
+        debug!(fn_name, package = PACKAGE_NAME, "cert decoded successfully");
 
         let mut file = match File::create(format!("{}/machine.crt", certs_dir)) {
             Ok(v) => v,
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while creating signed cert file to path - {}, error - {}",
+                    &certs_dir,
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::SignCertFileCreateError,
                     format!("error while creating signed cert file- {}", e.to_string()),
@@ -562,6 +665,13 @@ pub async fn validate_or_create_certs(
         match file.write_all(decoded_cert_str.as_bytes()) {
             Ok(_) => (),
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while saving signed cert file to path - {}, error - {}",
+                    &certs_dir,
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::SignCertFileSaveError,
                     format!("error while saving signed cert file- {}", e.to_string()),
@@ -572,6 +682,12 @@ pub async fn validate_or_create_certs(
         let decoded_ca_cert_bytes = match b64_decode(&sign_cert_res.ca_cert) {
             Ok(v) => v,
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while decoding ca cert - {}",
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::CaCertDecodeError,
                     format!("error in decoding ca cert - {}", e.to_string()),
@@ -584,6 +700,12 @@ pub async fn validate_or_create_certs(
         let decoded_ca_cert_str = match str::from_utf8(&decoded_ca_cert_bytes) {
             Ok(v) => v,
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while converting ca cert to string - {}",
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::CaCertConvertStringError,
                     format!(
@@ -595,11 +717,22 @@ pub async fn validate_or_create_certs(
             }
         };
 
-        debug!(task, target, trace_id, "ca cert decoded successfully ");
+        debug!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "ca cert decoded successfully"
+        );
 
         let mut ca_cert_file = match File::create(format!("{}/ca.crt", certs_dir)) {
             Ok(v) => v,
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while creating ca cert file to path - {}, error - {}",
+                    &certs_dir,
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::CaCertFileCreateError,
                     format!("error while creating ca cert file- {}", e.to_string()),
@@ -610,6 +743,13 @@ pub async fn validate_or_create_certs(
         match ca_cert_file.write_all(decoded_ca_cert_str.as_bytes()) {
             Ok(_) => (),
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while saving ca cert file to path - {}, error - {}",
+                    &certs_dir,
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::CaCertFileSaveError,
                     format!("error while saving ca cert file- {}", e.to_string()),
@@ -617,10 +757,12 @@ pub async fn validate_or_create_certs(
                 ))
             }
         };
-
-        info!(task, target, trace_id, "certs created successfully");
     }
-
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "certs are valid and available"
+    );
     Ok(true)
 }
 
@@ -691,16 +833,17 @@ pub async fn generate_nebula_configuartion_file(
     encoded_base_config: &str,
     overide_configurations: OverrideConfigurations,
 ) -> Result<bool> {
-    let trace_id = find_current_trace_id();
-    let task = "generate_nebula_configuartion_file";
-    let target = "networking";
+    let fn_name = "generate_nebula_configuartion_file";
 
-    info!(task, target, trace_id, "init");
-
-    debug!(task, target, trace_id, "decoding base config");
     let decoded_bytes = match b64_decode(encoded_base_config) {
         Ok(v) => v,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while decoding base config - {}",
+                e.to_string()
+            );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::NebulaBaseConfigParseError,
                 format!("unable to decode nebula base config {}", e.to_string()),
@@ -713,6 +856,12 @@ pub async fn generate_nebula_configuartion_file(
     let decoded_str = match str::from_utf8(&decoded_bytes) {
         Ok(v) => v,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while converting base config to string - {}",
+                e.to_string()
+            );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::NebulaBaseConfigParseError,
                 format!("failed to convert bytes to string {}", e.to_string()),
@@ -721,11 +870,16 @@ pub async fn generate_nebula_configuartion_file(
         }
     };
 
-    info!(task, target, trace_id, "base config decoded successfully");
     // Deserialize the string into the NebulaSettings struct
     let mut nebula_settings: NebulaSettings = match serde_yaml::from_str(decoded_str) {
         Ok(v) => v,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while deserializing base config - {}",
+                e.to_string()
+            );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::NebulaConfigDeSerializeError,
                 format!("failed to deserialize {}", e.to_string()),
@@ -733,11 +887,6 @@ pub async fn generate_nebula_configuartion_file(
             ))
         }
     };
-
-    debug!(
-        task,
-        target, trace_id, "base nebula settings is {:?}", nebula_settings
-    );
 
     nebula_settings.pki.cert = overide_configurations.cert.to_string();
     nebula_settings.pki.key = overide_configurations.key.to_string();
@@ -749,15 +898,16 @@ pub async fn generate_nebula_configuartion_file(
     nebula_settings.firewall.inbound = inbound_firewall_roles;
     nebula_settings.firewall.outbound = outbound_firewall_roles;
 
-    info!(
-        task,
-        target, trace_id, "nebula settings overrided and crated successfully"
-    );
-
     // Serialize NebulaSettings into a YAML-formatted string
     let yaml_string = match serde_yaml::to_string(&nebula_settings) {
         Ok(v) => v,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while serializing base config - {}",
+                e.to_string()
+            );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::NebulaConfigSerializeError,
                 format!("failed to serialize to YAML {}", e.to_string()),
@@ -770,9 +920,15 @@ pub async fn generate_nebula_configuartion_file(
     temp_dir.push("config.yaml");
 
     // Write the YAML string to a file named "config.yaml"
-    let mut file = match File::create(temp_dir) {
+    let mut file = match File::create(&temp_dir) {
         Ok(v) => v,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while creating file - {}",
+                e.to_string()
+            );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::NebulaConfigFileCreateError,
                 format!("failed to create file {}", e.to_string()),
@@ -783,6 +939,13 @@ pub async fn generate_nebula_configuartion_file(
     match file.write_all(yaml_string.as_bytes()) {
         Ok(v) => v,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while writing file on dir - {:?}, error - {}",
+                &temp_dir,
+                e.to_string()
+            );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::NebulaConfigFileCreateError,
                 format!("failed to save nebula config file {}", e.to_string()),
@@ -790,12 +953,10 @@ pub async fn generate_nebula_configuartion_file(
             ))
         }
     }
-
-    info!(task, target, trace_id, "nebula config file crated ");
-
     info!(
-        task,
-        target, trace_id, "nebula config file crated successfully",
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "nebula config file created successfully"
     );
     Ok(true)
 }
@@ -803,15 +964,17 @@ pub async fn generate_nebula_configuartion_file(
 pub async fn get_networking_firewall_rules(
     settings_tx: Sender<SettingMessage>,
 ) -> Result<Vec<NetworkingFirewallRules>> {
-    let trace_id = find_current_trace_id();
-    let task = "start";
-    let target = "get_networking_firewall_rules";
-
-    info!(task, target, trace_id,);
+    let fn_name = "get_networking_firewall_rules";
     let networking_firewall_rules_str =
         match get_settings_by_key(settings_tx, String::from("networking.firewall.rules")).await {
             Ok(v) => v,
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while reading firewall rules - {}",
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::MachineSettingsNetworkingFirewallRulesNotFoundError,
                     format!("error while reading firewall rules {}", e.to_string()),
@@ -824,10 +987,16 @@ pub async fn get_networking_firewall_rules(
         match serde_json::from_str(&networking_firewall_rules_str) {
             Ok(s) => s,
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while parsing firewall rules - {}",
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::ExtractNetworkingFirewallRulesPayloadError,
                     format!(
-                        "Error converting payload to NetworkingFirewallRules - {}",
+                        "error converting payload to NetworkingFirewallRules - {}",
                         e
                     ),
                     true
@@ -843,16 +1012,18 @@ pub async fn start(
     identity_tx: Sender<IdentityMessage>,
     messaging_tx: Sender<MessagingMessage>,
 ) -> Result<bool> {
-    let trace_id = find_current_trace_id();
-    let task = "start";
-    let target = "networking_service_start";
-
-    info!(task, target, trace_id, "starting netwoking service",);
+    let fn_name = "start";
 
     //Get provider info from settings
     let provider_metadata_payload = match get_provider_info(setting_tx.clone()).await {
         Ok(r) => r,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while getting provider info - {}",
+                e.to_string()
+            );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ProviderMetadataPayloadCreateError,
                 format!(
@@ -863,16 +1034,23 @@ pub async fn start(
             ))
         }
     };
-
     debug!(
-        task,
-        target, trace_id, "provider metadata payload is {:?}", provider_metadata_payload
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "provider metadata payload is {:?}",
+        provider_metadata_payload
     );
 
     // Get machine id
     let machine_id = match get_machine_id(identity_tx).await {
         Ok(r) => r,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while getting machine id - {}",
+                e.to_string()
+            );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::MachineSettingsMachineIdNotFoundError,
                 format!("unable to get machine id, error - {}", e.to_string()),
@@ -880,12 +1058,17 @@ pub async fn start(
             ))
         }
     };
-    debug!(task, target, trace_id, "machine id is {}", machine_id);
 
     //Get provider config
     let topic_to_publish = format!(
         "machine.{}.networking.provider.metadata",
         digest(machine_id.to_string())
+    );
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "topic to publish is - {}",
+        topic_to_publish
     );
     let provider_config: ProviderMetadataReply =
         match get_provider_configs(messaging_tx, &topic_to_publish, &provider_metadata_payload)
@@ -893,6 +1076,12 @@ pub async fn start(
         {
             Ok(r) => r,
             Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while getting provider config - {}",
+                    e.to_string()
+                );
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::GetProviderConfigsError,
                     format!("unable to get provider configs, error - {}", e.to_string()),
@@ -901,22 +1090,18 @@ pub async fn start(
             }
         };
 
-    debug!(
-        task,
-        target, trace_id, "provider config is {:?}", provider_config
-    );
-
-    //Save provider package binaries in temp
+    // Save provider package binaries in temp
     let home_dir = std::env::var("HOME").unwrap();
     let provider_dir = format!("{}/.mecha/networking/{}", home_dir, provider_config.name);
     match extract_provider_package(&provider_dir, &provider_config).await {
-        Ok(_) => {
-            debug!(
-                task,
-                target, trace_id, "provider package binaries extracted successfully"
-            );
-        }
+        Ok(_) => (),
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while extracting provider package - {}",
+                e.to_string()
+            );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ProviderBinariesSaveError,
                 format!(
@@ -928,21 +1113,15 @@ pub async fn start(
         }
     };
 
-    info!(
-        task,
-        target,
-        trace_id = trace_id,
-        "provider package binaries saved successfully",
-    );
-
     let certs_dir = format!("{}/certs", provider_dir);
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "certs dir is {}",
+        certs_dir
+    );
     match validate_or_create_certs(setting_tx.clone(), &certs_dir, &provider_config).await {
-        Ok(_) => {
-            debug!(
-                task,
-                target, trace_id, "certs validated or created successfully"
-            );
-        }
+        Ok(_) => (),
         Err(e) => {
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::CertsValidateOrCreateError,
@@ -954,33 +1133,29 @@ pub async fn start(
             ))
         }
     };
-    info!(task, target, trace_id = trace_id, "certs are available",);
-
-    info!(
-        task,
-        target,
-        trace_id = trace_id,
-        "checking sudo permissions",
-    );
 
     if !is_sudo() {
+        error!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "thread does not have sudo permissions"
+        );
         bail!(NetworkingError::new(
             NetworkingErrorCodes::SudoCheckFailed,
             format!("sudo check failed",),
-            true
+            false
         ))
     }
 
-    info!(
-        task = "start",
-        target = "networking_service_start",
-        trace_id = trace_id,
-        "thread have sudo permissions",
-    );
-
     let networking_firewall_rules = match get_networking_firewall_rules(setting_tx.clone()).await {
         Ok(v) => v,
-        Err(_) => {
+        Err(err) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while getting networking firewall rules - {}",
+                err.to_string()
+            );
             vec![]
         }
     };
@@ -992,16 +1167,23 @@ pub async fn start(
         networking_firewall_rules,
     };
 
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "overide configurations are {:?}",
+        overide_configurations
+    );
     match generate_nebula_configuartion_file(&provider_config.base_config, overide_configurations)
         .await
     {
-        Ok(_) => {
-            debug!(
-                task,
-                target, trace_id, "nebula config file created successfully"
-            );
-        }
+        Ok(_) => {}
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while generating nebula config file - {}",
+                e.to_string()
+            );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::NebulaConfigFileGenerateError,
                 format!("unable to nebula config file - {}", e.to_string()),
@@ -1010,14 +1192,19 @@ pub async fn start(
         }
     }
 
-    info!(task, target, trace_id, "starting nebula");
-
     let binary_path = format!("{}", temp_dir().display());
     let config_path = format!("{}", temp_dir().display());
 
     match start_nebula(&binary_path, &config_path) {
         Ok(_) => (),
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while starting nebula on config path - {}, error - {}",
+                &config_path,
+                e.to_string()
+            );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::NebulaStartError,
                 format!("nebula start error - {}", e.to_string()),
@@ -1027,44 +1214,76 @@ pub async fn start(
     };
 
     info!(
-        task,
-        target, trace_id, "networking service started successfully"
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "nebula started successfully"
     );
-
     Ok(true)
 }
 
-pub fn check_existig_certs_valid(ca_path: &str, cert_path: &str, key_path: &str) -> Result<bool> {
+pub fn check_existing_certs_valid(ca_path: &str, cert_path: &str, key_path: &str) -> Result<bool> {
+    let fn_name = "check_existing_certs_valid";
+    trace!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "ca path is {}, cert path is {}, key path is {}",
+        ca_path,
+        cert_path,
+        key_path
+    );
+
     let cert_exists = Path::new(&cert_path).is_file();
 
     if !cert_exists {
+        error!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "cert not found in - {}",
+            cert_path
+        );
         bail!(NetworkingError::new(
             NetworkingErrorCodes::CertNotFoundError,
             format!("cert not found in - {}", cert_path),
-            true
+            false
         ))
     };
 
     let key_exists = Path::new(&key_path).is_file();
 
     if !key_exists {
+        error!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "key not found in - {}",
+            key_path
+        );
         bail!(NetworkingError::new(
             NetworkingErrorCodes::KeyNotFoundError,
             format!("key not found in - {}", key_path),
-            true
+            false
         ))
     }
 
     let is_cert_valid = match is_cert_valid(&cert_path) {
         Ok(v) => v,
-        Err(e) => bail!(NetworkingError::new(
-            NetworkingErrorCodes::CertValidityCheckError,
-            format!("cert validity check failed failed {}", e.to_string()),
-            true
-        )),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while checking cert validity, cert_path - {}, error - {}",
+                &cert_path,
+                e.to_string()
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::CertValidityCheckError,
+                format!("cert validity check failed failed {}", e.to_string()),
+                false
+            ))
+        }
     };
 
     if !is_cert_valid {
+        error!(func = fn_name, package = PACKAGE_NAME, "cert expired error");
         bail!(NetworkingError::new(
             NetworkingErrorCodes::CertExpiredError,
             format!("cert expired error",),
@@ -1072,69 +1291,149 @@ pub fn check_existig_certs_valid(ca_path: &str, cert_path: &str, key_path: &str)
         ))
     };
 
-    let is_cert_verified = match is_cert_verifed(&ca_path, &cert_path) {
-        Ok(v) => v,
-        Err(e) => bail!(NetworkingError::new(
-            NetworkingErrorCodes::CertVerificationCheckError,
-            format!("cert verification check failed {}", e.to_string()),
-            true
-        )),
+    match is_cert_verified(&ca_path, &cert_path) {
+        Ok(verified) => {
+            if !verified {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "cert not verified error"
+                );
+                bail!(NetworkingError::new(
+                    NetworkingErrorCodes::CertVerifyError,
+                    format!("cert not verified error",),
+                    true
+                ))
+            }
+        }
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while checking cert verification, cert_path - {}, error - {}",
+                &cert_path,
+                e.to_string()
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::CertVerificationCheckError,
+                format!("cert verification check failed {}", e.to_string()),
+                true
+            ))
+        }
     };
-
-    if !is_cert_verified {
-        bail!(NetworkingError::new(
-            NetworkingErrorCodes::CertVerifyError,
-            format!("cert not verified error",),
-            true
-        ))
-    };
-
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "certs are valid and available"
+    );
     Ok(true)
 }
 
 pub async fn sign_cert(enrollment_url: &str, body: IssueCertReq) -> Result<IssueCertRes> {
-    let trace_id = find_current_trace_id();
-    let task = "start";
-    let target = "sign_cert";
-    info!(task, target, trace_id, "init");
+    let fn_name = "sign_cert";
+    trace!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "enrollment url is {}, body is {:?}",
+        enrollment_url,
+        body
+    );
 
     let client = reqwest::Client::new();
-
-    debug!(
-        task,
-        target,
-        trace_id,
-        "raw request is {} {}",
-        enrollment_url,
-        json!(&body)
-    );
-    let sign_cert_req = client
+    let sign_cert_res = client
         .post(enrollment_url)
         .json(&body)
         .header("CONTENT_TYPE", "application/json")
         .send()
-        .await?;
-
-    let sign_cert_res: String = match sign_cert_req.text().await {
-        Ok(csr) => csr,
-        Err(e) => {
-            bail!(e)
-        }
+        .await;
+    let response = match sign_cert_res {
+        Ok(res) => res,
+        Err(e) => match e.status() {
+            Some(StatusCode::INTERNAL_SERVER_ERROR) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "sign cert request internal server error - {}",
+                    e
+                );
+                bail!(NetworkingError::new(
+                    NetworkingErrorCodes::SignCertRequestServerError,
+                    format!("sign cert request returned server error - {}", e),
+                    true
+                ))
+            }
+            Some(StatusCode::BAD_REQUEST) => {
+                error!(
+                    func = "lookup_manifest",
+                    package = PACKAGE_NAME,
+                    "cert sign request returned bad request - {}",
+                    e
+                );
+                bail!(NetworkingError::new(
+                    NetworkingErrorCodes::SignCertRequestBadRequestError,
+                    format!("sign cert request returned bad request - {}", e),
+                    true
+                ))
+            }
+            Some(StatusCode::NOT_FOUND) => {
+                error!(
+                    func = "lookup_manifest",
+                    package = PACKAGE_NAME,
+                    "sign cert request not found - {}",
+                    e
+                );
+                bail!(NetworkingError::new(
+                    NetworkingErrorCodes::SignCertRequestNotFoundError,
+                    format!("sign cert request not found - {}", e),
+                    true
+                ))
+            }
+            Some(_) => {
+                error!(
+                    func = "lookup_manifest",
+                    package = PACKAGE_NAME,
+                    "sign cert request returned unknown error - {}",
+                    e
+                );
+                bail!(NetworkingError::new(
+                    NetworkingErrorCodes::SignCertRequestUnknownError,
+                    format!("cert sign request returned unknown error - {}", e),
+                    true
+                ))
+            }
+            None => {
+                error!(
+                    func = "lookup_manifest",
+                    package = PACKAGE_NAME,
+                    "cert sign request returned unknown error - {}",
+                    e
+                );
+                bail!(NetworkingError::new(
+                    NetworkingErrorCodes::SignCertRequestUnknownError,
+                    format!("sign cert request returned unmatched error - {}", e),
+                    true
+                ))
+            }
+        },
     };
 
-    debug!(
-        task,
-        target, trace_id, "raw sign cert res {}", sign_cert_res
-    );
-
-    let result: NetworkingServerResponseGeneric<IssueCertRes> =
-        match serde_json::from_str(&sign_cert_res) {
-            Ok(v) => v,
-            Err(e) => {
-                bail!(e);
-            }
-        };
-    Ok(result.payload)
+    // parse the manifest lookup result
+    let issue_cert_response = match response
+        .json::<NetworkingServerResponseGeneric<IssueCertRes>>()
+        .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while parsing sign cert response - {}",
+                e.to_string()
+            );
+            bail!(e);
+        }
+    };
+    Ok(issue_cert_response.payload)
 }
 
 fn parse_message_payload<T>(payload: messaging::Bytes) -> Result<T>
@@ -1144,9 +1443,15 @@ where
     let payload_value = match std::str::from_utf8(&payload) {
         Ok(s) => s,
         Err(e) => {
+            error!(
+                fn_name = "parse_message_payload",
+                package = PACKAGE_NAME,
+                "Error converting payload to string - {}",
+                e
+            );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ExtractMessagePayloadError,
-                format!("Error converting payload to string - {}", e),
+                format!("error converting payload to string - {}", e),
                 true
             ))
         }
@@ -1154,9 +1459,15 @@ where
     let payload: T = match serde_json::from_str(payload_value) {
         Ok(s) => s,
         Err(e) => {
+            error!(
+                fn_name = "parse_message_payload",
+                package = PACKAGE_NAME,
+                "Error serializing payload - {}",
+                e
+            );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ExtractMessagePayloadError,
-                format!("Error converting payload to AddTaskRequestPayload - {}", e),
+                format!("error error serializing payload - {}", e),
                 true
             ))
         }
@@ -1168,69 +1479,95 @@ pub async fn get_settings_by_key(
     settings_tx: Sender<SettingMessage>,
     key: String,
 ) -> Result<String> {
-    let trace_id = find_current_trace_id();
-    let task = "get_settings_by_key";
-    let target = "networking";
+    let fn_name = "get_settings_by_key";
     let (tx, rx) = oneshot::channel();
-    let _ = settings_tx
+    match settings_tx
         .clone()
         .send(SettingMessage::GetSettingsByKey {
             reply_to: tx,
             key: key.clone(),
         })
-        .await;
-    let mut settings = String::new();
-    match rx.await {
-        Ok(settings_result) => {
-            if settings_result.is_ok() {
-                match settings_result {
-                    Ok(settings_value) => {
-                        println!("get settings result {}", settings_value);
-                        settings = settings_value;
-                    }
-                    Err(_) => {
-                        println!("Error getting machine ID");
-                    }
-                }
-            } else {
-                println!("Error getting machine ID: {:?}", settings_result.err());
-            }
-        }
-        Err(_) => {
-            println!("Error receiving machine ID");
+        .await
+    {
+        Ok(_) => (),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while sending message to settings channel - {}",
+                e.to_string()
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelSendMessageError,
+                format!(
+                    "error while sending message to settings channel - {}",
+                    e.to_string()
+                ),
+                true
+            ))
         }
     }
+    let settings = match recv_with_timeout(rx).await {
+        Ok(settings) => settings,
+        Err(err) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error receiving settings message - {:?}",
+                err
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelReceiveMessageError,
+                format!("error receiving settings message - {:?}", err),
+                true
+            ))
+        }
+    };
+
     Ok(settings)
 }
 
 async fn get_machine_id(identity_tx: Sender<IdentityMessage>) -> Result<String> {
     let (tx, rx) = oneshot::channel();
-    let mut machine_id = String::new();
-    let _ = identity_tx
+
+    match identity_tx
         .send(IdentityMessage::GetMachineId { reply_to: tx })
-        .await;
-    match rx.await {
-        Ok(machine_id_result) => {
-            if machine_id_result.is_ok() {
-                match machine_id_result {
-                    Ok(machine_id_value) => {
-                        println!("Machine ID: {}", machine_id_value);
-                        machine_id = machine_id_value;
-                    }
-                    Err(_) => {
-                        println!("Error getting machine ID");
-                    }
-                }
-            } else {
-                println!(
-                    "Error getting machine ID: {:?}",
-                    machine_id_result.err().unwrap()
-                );
-            }
-        }
-        Err(_) => {
-            println!("Error receiving machine ID");
+        .await
+    {
+        Ok(_) => {}
+        Err(err) => {
+            error!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
+                "unable to send get machine id request error - {:?}",
+                err.to_string()
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelSendMessageError,
+                format!(
+                    "unable to receive get machine id, error - {}",
+                    err.to_string()
+                ),
+                true
+            ))
         }
     }
+
+    let machine_id = match recv_with_timeout(rx).await {
+        Ok(r) => r,
+        Err(e) => {
+            error!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
+                "unable to receive machine id, error - {}",
+                e
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelReceiveMessageError,
+                format!("unable to receive machine ID, error - {}", e.to_string()),
+                true
+            ))
+        }
+    };
     Ok(machine_id)
 }

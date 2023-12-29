@@ -1,8 +1,7 @@
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
-use tracing::error;
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
+const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 #[derive(Debug, Default, Clone, Copy)]
 pub enum ProvisioningErrorCodes {
     #[default]
@@ -18,6 +17,8 @@ pub enum ProvisioningErrorCodes {
     CSRSignBadRequestError,
     CSRSignResponseParseError,
     CertificateWriteError,
+    SendEventError,
+    DatabaseDeleteError,
 }
 
 impl fmt::Display for ProvisioningErrorCodes {
@@ -59,6 +60,12 @@ impl fmt::Display for ProvisioningErrorCodes {
             ProvisioningErrorCodes::CertificateWriteError => {
                 write!(f, "ProvisioningErrorCodes: CertificateWriteError")
             }
+            ProvisioningErrorCodes::SendEventError => {
+                write!(f, "ProvisioningErrorCodes: SendEventError")
+            }
+            ProvisioningErrorCodes::DatabaseDeleteError => {
+                write!(f, "ProvisioningErrorCodes: DatabaseDeleteError")
+            }
         }
     }
 }
@@ -81,15 +88,10 @@ impl std::fmt::Display for ProvisioningError {
 
 impl ProvisioningError {
     pub fn new(code: ProvisioningErrorCodes, message: String, capture_error: bool) -> Self {
-        let trace_id = find_current_trace_id();
-        error!(
-            target = "provisioning",
-            "error: (code: {:?}, message: {})", code, message
-        );
         if capture_error {
             let error = &anyhow::anyhow!(code).context(format!(
-                "error: (code: {:?}, message: {} trace:{:?})",
-                code, message, trace_id
+                "error: (code: {:?}, message: {}, package: {})",
+                code, message, PACKAGE_NAME
             ));
             capture_anyhow(error);
         }

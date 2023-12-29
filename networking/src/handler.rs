@@ -43,7 +43,7 @@ impl NetworkingHandler {
             status: ServiceStatus::INACTIVE,
         }
     }
-    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<NetworkingMessage>) {
+    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<NetworkingMessage>) -> Result<()> {
         // Start the service
         let _ = &self.start().await;
         let mut event_rx = self.event_tx.subscribe();
@@ -78,14 +78,18 @@ impl NetworkingHandler {
                         },
                         Event::Messaging(_) => {},
                         Event::Settings(events::SettingEvent::Synced) => {
-                            info!("networking handler: Settings synced");
+                            info!(
+                                func = "run",
+                                package = env!("CARGO_PKG_NAME"),
+                                "settings synced event received"
+                            );
                             let _ = start(self.setting_tx.clone(),
                                 self.identity_tx.clone(),
                                 self.messaging_tx.clone()
                             ).await;
                         },
                         Event::Settings(events::SettingEvent::Updated { settings }) => {
-                            info!("networking handler: Settings updated");
+
                         },
                     }
                 }

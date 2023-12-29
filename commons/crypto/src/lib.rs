@@ -1,12 +1,13 @@
 use std::io::Read;
 
+use agent_settings::AgentSettings;
 use anyhow::{bail, Result};
 use base64::b64_encode;
 use fs::safe_open_file;
 use openssl::{hash::MessageDigest, x509::X509};
 use serde::{Deserialize, Serialize};
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
-
+use tracing::{error, info, warn};
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 use crate::errors::{CryptoError, CryptoErrorCodes};
 pub mod base64;
 pub mod errors;
@@ -23,17 +24,30 @@ pub struct MachineCert {
     pub root_cert: String,
 }
 pub fn get_machine_id() -> Result<String> {
-    let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "get_machine_id", "init");
     let settings = match agent_settings::read_settings_yml() {
         Ok(v) => v,
-        Err(e) => bail!(e),
+        Err(e) => {
+            warn!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
+                "error reading settings.yml - {}",
+                e
+            );
+            AgentSettings::default()
+        }
     };
     let mut public_key_buf = Vec::new();
-    let public_key_path = settings.provisioning.paths.device.cert.clone();
+    let public_key_path = settings.provisioning.paths.machine.cert.clone();
     let mut file = match safe_open_file(public_key_path.as_str()) {
         Ok(v) => v,
         Err(e) => {
+            error!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
+                "failed to open private key file on path - {}, error - {}",
+                public_key_path,
+                e
+            );
             bail!(CryptoError::new(
                 CryptoErrorCodes::ReadPrivateKeyError,
                 format!("failed to open private key file - {}", e),
@@ -44,18 +58,26 @@ pub fn get_machine_id() -> Result<String> {
 
     match file.read_to_end(&mut public_key_buf) {
         Ok(v) => v,
-        Err(e) => bail!(CryptoError::new(
-            CryptoErrorCodes::ReadPrivateKeyError,
-            format!("failed to read private key file - {}", e),
-            true
-        )),
+        Err(e) => {
+            error!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
+                "failed to read private key file - {}",
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::ReadPrivateKeyError,
+                format!("failed to read private key file - {}", e),
+                true
+            ))
+        }
     };
     let cert = match X509::from_pem(public_key_buf.as_slice()) {
         Ok(cert) => cert,
         Err(err) => {
-            tracing::error!(
-                trace_id,
-                task = "issue_token",
+            error!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
                 "error deserializing pem -{}",
                 err
             );
@@ -70,6 +92,11 @@ pub fn get_machine_id() -> Result<String> {
     let sub_entries = match cert.subject_name().entries().next() {
         Some(sub) => sub,
         None => {
+            error!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
+                "error in getting subject name entries"
+            );
             bail!(CryptoError::new(
                 CryptoErrorCodes::ExtractSubjectNameError,
                 format!("error in getting subject name entries",),
@@ -83,7 +110,12 @@ pub fn get_machine_id() -> Result<String> {
             return Ok(str);
         }
         Err(err) => {
-            tracing::error!("error extracting subject name: {:?}", err);
+            error!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
+                "error extracting subject name -{}",
+                err
+            );
             bail!(CryptoError::new(
                 CryptoErrorCodes::ExtractSubjectNameError,
                 format!("error extracting subject name",),
@@ -94,19 +126,32 @@ pub fn get_machine_id() -> Result<String> {
 }
 
 pub fn get_machine_cert() -> Result<MachineCert> {
-    let trace_id = find_current_trace_id();
-    tracing::trace!(trace_id, task = "get_machine_cert", "init");
     let settings = match agent_settings::read_settings_yml() {
         Ok(v) => v,
-        Err(e) => bail!(e),
+        Err(e) => {
+            warn!(
+                func = "get_machine_cert",
+                package = PACKAGE_NAME,
+                "error reading settings.yml - {}",
+                e
+            );
+            AgentSettings::default()
+        }
     };
     let mut public_key_buf = Vec::new();
 
     // Read public key
-    let public_key_path = settings.provisioning.paths.device.cert.clone();
+    let public_key_path = settings.provisioning.paths.machine.cert.clone();
     let mut pub_key_file = match safe_open_file(public_key_path.as_str()) {
         Ok(v) => v,
         Err(e) => {
+            error!(
+                func = "get_machine_cert",
+                package = PACKAGE_NAME,
+                "failed to open private key file on path - {}, error - {}",
+                public_key_path,
+                e
+            );
             bail!(CryptoError::new(
                 CryptoErrorCodes::ReadPrivateKeyError,
                 format!("failed to open private key file - {}", e),
@@ -124,19 +169,27 @@ pub fn get_machine_cert() -> Result<MachineCert> {
 
     match pub_key_file.read_to_end(&mut public_key_buf) {
         Ok(v) => v,
-        Err(e) => bail!(CryptoError::new(
-            CryptoErrorCodes::ReadPrivateKeyError,
-            format!("failed to read private key file - {}", e),
-            true
-        )),
+        Err(e) => {
+            error!(
+                func = "get_machine_cert",
+                package = PACKAGE_NAME,
+                "failed to read private key file - {}",
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::ReadPrivateKeyError,
+                format!("failed to read private key file - {}", e),
+                true
+            ))
+        }
     };
 
     let cert = match X509::from_pem(public_key_buf.as_slice()) {
         Ok(cert) => cert,
         Err(err) => {
-            tracing::error!(
-                trace_id,
-                task = "issue_token",
+            error!(
+                func = "get_machine_cert",
+                package = PACKAGE_NAME,
                 "error deserializing pem -{}",
                 err
             );
@@ -150,11 +203,19 @@ pub fn get_machine_cert() -> Result<MachineCert> {
 
     let fingerprint_bytes = match cert.digest(MessageDigest::sha256()) {
         Ok(v) => v.to_vec(),
-        Err(e) => bail!(CryptoError::new(
-            CryptoErrorCodes::GenerateFingerprintError,
-            format!("error while generating fingerprint - {}", e),
-            true
-        )),
+        Err(e) => {
+            error!(
+                func = "get_machine_cert",
+                package = PACKAGE_NAME,
+                "error while generating fingerprint - {}",
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::GenerateFingerprintError,
+                format!("error while generating fingerprint - {}", e),
+                true
+            ))
+        }
     };
     let fingerprint = String::from_utf8_lossy(&fingerprint_bytes).to_string();
     let response = MachineCert {
@@ -183,13 +244,35 @@ fn read_certificates(
 ) -> Result<(String, String)> {
     let intermediate_cert = match read_file_to_string(&intermediate_cert_path) {
         Ok(v) => v,
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(
+                func = "read_certificates",
+                package = PACKAGE_NAME,
+                "failed to read intermediate certificate file on path - {}, error - {}",
+                &intermediate_cert_path,
+                e
+            );
+            bail!(e)
+        }
     };
     let root_cert = match read_file_to_string(&root_cert_path) {
         Ok(v) => v,
-        Err(e) => bail!(e),
+        Err(e) => {
+            error!(
+                func = "read_certificates",
+                package = PACKAGE_NAME,
+                "failed to read root certificate file on path - {}, error - {}",
+                &root_cert_path,
+                e
+            );
+            bail!(e)
+        }
     };
-
+    info!(
+        func = "read_certificates",
+        package = PACKAGE_NAME,
+        "read intermediate and root certificates"
+    );
     Ok((intermediate_cert, root_cert))
 }
 
@@ -197,9 +280,16 @@ fn read_file_to_string(file_path: &str) -> Result<String> {
     let mut file = match safe_open_file(file_path) {
         Ok(v) => v,
         Err(e) => {
+            error!(
+                func = "read_file_to_string",
+                package = PACKAGE_NAME,
+                "failed to open file on path - {}, error - {}",
+                file_path,
+                e
+            );
             bail!(CryptoError::new(
                 CryptoErrorCodes::ReadCertFileError,
-                format!("failed to open private key file - {}", e),
+                format!("failed to open file on path - {}, error - {}", file_path, e),
                 true
             ))
         }

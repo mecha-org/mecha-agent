@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+package.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,6 +14,7 @@ homepage.workspace = true
 events = { path = "../core/events" }
 services = { path = "../core/services" }
 crypto = { path = "../commons/crypto" }
+channel = { path = "../commons/channel" }
 agent_settings = { path = "../core/settings" }
 nats_client = { path = "../commons/nats_client" }
 identity = { path = "../identity" }
@@ -24,5 +26,5 @@ serde = { version  = "1.0.159", features = ["derive"]}
 tonic = "0.10.2"
 tokio = { version = "1.27.0" }
 tracing = "0.1"
-tracing-opentelemetry-instrumentation-sdk = "0.15.0"
+
 sha256 = "1.1.2"

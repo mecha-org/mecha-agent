@@ -1,17 +1,16 @@
 pub mod errors;
 extern crate sled;
 use anyhow::{bail, Result};
-use fs::construct_dir_path;
 use lazy_static::lazy_static;
 use sled::Db;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-use tracing::info;
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
+use tracing::{debug, error, info, trace};
 
 use crate::errors::{KeyValueStoreError, KeyValueStoreErrorCodes};
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 static DATABASE_STORE_FIILE_PATH: &str = "~/.mecha/agent/db";
 // Singleton database connection
 lazy_static! {
@@ -29,60 +28,96 @@ impl KeyValueStoreClient {
         KeyValueStoreClient
     }
     pub fn set(&mut self, settings: HashMap<String, String>) -> Result<bool> {
-        let trace_id = find_current_trace_id();
-        info!(trace_id, target = "key_value_store", task = "set", "init");
+        trace!(
+            func = "set",
+            package = PACKAGE_NAME,
+            "init - settings: {:?}",
+            settings
+        );
         let db = match DATABASE.lock() {
             Ok(d) => d,
-            Err(e) => bail!(KeyValueStoreError::new(
-                KeyValueStoreErrorCodes::DbAcquireLockError,
-                format!("Error acquiring lock on set - {}", e),
-                true
-            )),
+            Err(e) => {
+                error!(
+                    func = "set",
+                    package = PACKAGE_NAME,
+                    "failed to acquire lock on db - {}",
+                    e
+                );
+                bail!(KeyValueStoreError::new(
+                    KeyValueStoreErrorCodes::DbAcquireLockError,
+                    format!("error acquiring lock on set - {}", e),
+                    true
+                ))
+            }
         };
 
         for (key, value) in settings {
+            debug!(
+                func = "set",
+                package = PACKAGE_NAME,
+                "inserting key: {}, value: {}",
+                key,
+                value
+            );
             match db.insert(key, value.as_str()) {
                 Ok(_) => {}
-                Err(e) => bail!(KeyValueStoreError::new(
-                    KeyValueStoreErrorCodes::InsertError,
-                    format!("Error inserting value into db - {}", e),
-                    true
-                )),
+                Err(e) => {
+                    error!(
+                        func = "set",
+                        package = PACKAGE_NAME,
+                        "failed to insert value into db - {}",
+                        e
+                    );
+                    bail!(KeyValueStoreError::new(
+                        KeyValueStoreErrorCodes::InsertError,
+                        format!("error inserting value into db - {}", e),
+                        true
+                    ))
+                }
             };
         }
         info!(
-            trace_id,
-            target = "key_value_store",
-            task = "set",
-            "completed"
+            func = "set",
+            package = PACKAGE_NAME,
+            "settings stored to database!",
         );
         Ok(true)
     }
     pub fn get(&self, key: &str) -> Result<Option<String>> {
-        let trace_id = find_current_trace_id();
-        info!(trace_id, target = "key_value_store", task = "get", "init");
+        trace!(func = "get", package = PACKAGE_NAME, " key: {}", key);
         let db = match DATABASE.lock() {
             Ok(d) => d,
-            Err(e) => bail!(KeyValueStoreError::new(
-                KeyValueStoreErrorCodes::DbAcquireLockError,
-                format!("Error acquiring lock on get - {}", e),
-                true
-            )),
+            Err(e) => {
+                error!(
+                    func = "get",
+                    package = PACKAGE_NAME,
+                    "failed to acquire lock on db - {}",
+                    e
+                );
+                bail!(KeyValueStoreError::new(
+                    KeyValueStoreErrorCodes::DbAcquireLockError,
+                    format!("error acquiring lock on get - {}", e),
+                    true
+                ))
+            }
         };
         let last_inserted = db.get(key);
         match last_inserted {
             Ok(s) => {
                 info!(
-                    trace_id,
-                    target = "key_value_store",
-                    task = "get",
-                    "completed"
+                    func = "get",
+                    package = PACKAGE_NAME,
+                    "retrieved value from db key - {}",
+                    key
                 );
                 Ok(s.map(|s| String::from_utf8(s.to_vec()).unwrap()))
             }
             Err(e) => bail!(KeyValueStoreError::new(
                 KeyValueStoreErrorCodes::RetrieveValueError,
-                format!("Error retrieving value from db - {}", e),
+                format!(
+                    "Error retrieving value from db key - {}, error - {}",
+                    key, e
+                ),
                 true
             )),
         }

@@ -17,5 +17,5 @@ sled = "0.34.7"
 anyhow = { version = "1.0.71", features = ["backtrace"]}
 sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
 tracing = "0.1"
-tracing-opentelemetry-instrumentation-sdk = "0.15.0"
+
 lazy_static = "1.4.0"

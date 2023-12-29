@@ -46,9 +46,8 @@ impl TelemetryHandler {
             status: ServiceStatus::INACTIVE,
         }
     }
-    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<TelemetryMessage>) {
+    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<TelemetryMessage>) -> Result<()> {
         // Start the service
-        let _ = &self.start().await;
         let mut event_rx = self.event_tx.subscribe();
         loop {
             select! {
@@ -89,16 +88,26 @@ impl TelemetryHandler {
                 }
                 match event.unwrap() {
                     Event::Provisioning(events::ProvisioningEvent::Provisioned) => {
-                        info!("Telemetry service received provisioning event");
+                        info!(
+                            func = "run",
+                            package = env!("CARGO_PKG_NAME"),
+                            "device provisioned event received"
+                        );
                         let _ = &self.start().await;
                     },
                     Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
                         let _ = &self.stop().await;
                     },
                     Event::Messaging(_) => {},
-                    Event::Settings(events::SettingEvent::Synced) => {},
+                    Event::Settings(events::SettingEvent::Synced) => {
+                        let _ = &self.start().await;
+                    },
                     Event::Settings(events::SettingEvent::Updated { settings }) => {
-                        info!("Telemetry service received settings event");
+                        info!(
+                            func = "run",
+                            package = env!("CARGO_PKG_NAME"),
+                            "settings updated event received"
+                        );
                         match settings.get("telemetry.enabled") {
                             Some(value) => {
                                 if value == "true" {
@@ -122,18 +131,23 @@ impl TelemetryHandler {
 #[async_trait]
 impl ServiceHandler for TelemetryHandler {
     async fn start(&mut self) -> Result<bool> {
-        info!("start telemetry service");
-        if device_provision_status(self.identity_tx.clone()).await {
-            self.status = ServiceStatus::STARTED;
-            let _ = telemetry_init();
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        // match device_provision_status(self.identity_tx.clone()).await {
+        //     Ok(provisioned) => {
+        //         if provisioned {
+        //             self.status = ServiceStatus::STARTED;
+        //             let _ = telemetry_init();
+        //             Ok(true)
+        //         } else {
+        //             Ok(false)
+        //         }
+        //     }
+        //     Err(err) => Ok(false),
+        // }
+        let _ = telemetry_init();
+        Ok(true)
     }
 
     async fn stop(&mut self) -> Result<bool> {
-        info!("stop telemetry service");
         self.status = ServiceStatus::STOPPED;
         Ok(true)
     }

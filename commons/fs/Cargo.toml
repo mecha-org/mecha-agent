@@ -15,3 +15,5 @@ homepage.workspace = true
 anyhow = { version = "1.0.71", features = ["backtrace"]}
 mkdirp = "1.0.0"
 dirs = "5.0.1"
+tracing = "0.1"
+sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
