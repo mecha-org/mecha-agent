@@ -637,6 +637,7 @@ name = "events"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "async-nats",
  "async-trait",
  "tokio",
 ]
@@ -1448,8 +1449,10 @@ dependencies = [
  "async-nats",
  "bytes",
  "crypto",
+ "events",
  "nkeys 0.4.0",
  "sentry-anyhow",
+ "tokio",
  "tracing",
 ]
 

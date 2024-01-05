@@ -158,7 +158,7 @@ impl Messaging {
             .nats_client
             .as_mut()
             .unwrap()
-            .connect(&auth_token, &inbox_prefix)
+            .connect(&auth_token, &inbox_prefix, event_tx.clone())
             .await
         {
             Ok(c) => c,

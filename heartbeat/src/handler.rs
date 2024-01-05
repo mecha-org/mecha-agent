@@ -98,6 +98,7 @@ impl HeartbeatHandler {
                                 }
                             },
                             Event::Settings(_) => {},
+                            Event::Nats(_) => {},
                         }
                     }
 

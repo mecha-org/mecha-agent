@@ -10,7 +10,7 @@ use tokio::{
 use tonic::async_trait;
 use tracing::info;
 
-use crate::service::{device_provision_status, process_logs, process_metrics, telemetry_init};
+use crate::service::{process_logs, process_metrics, telemetry_init};
 
 pub struct TelemetryHandler {
     event_tx: broadcast::Sender<Event>,
@@ -121,6 +121,7 @@ impl TelemetryHandler {
                             None => {},
                         }
                     },
+                    Event::Nats(_) => {},
                 }
             }
             }
