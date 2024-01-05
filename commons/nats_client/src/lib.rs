@@ -2,13 +2,16 @@ use crate::errors::{NatsClientError, NatsClientErrorCodes};
 use anyhow::{bail, Result};
 pub use async_nats::Subscriber;
 pub use bytes::Bytes;
+use events::Event;
 use nkeys::KeyPair;
-use std::{error, str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc};
+use tokio::sync::broadcast::Sender;
 use tracing::{debug, error, info, trace};
 
 pub mod errors;
 pub mod jetstream;
 pub use async_nats::jetstream::message::Message;
+pub use async_nats::Event as NatsEvent;
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 #[derive(Clone)]
 pub struct NatsClient {
@@ -29,7 +32,12 @@ impl NatsClient {
         }
     }
 
-    pub async fn connect(&mut self, token: &str, inbox_prefix: &str) -> Result<bool> {
+    pub async fn connect(
+        &mut self,
+        token: &str,
+        inbox_prefix: &str,
+        event_tx: Sender<Event>,
+    ) -> Result<bool> {
         trace!(
             func = "connect",
             package = PACKAGE_NAME,
@@ -39,6 +47,22 @@ impl NatsClient {
         // Connect to nats
         let key_pair = self.user_key_pair.clone();
         self.client = match async_nats::ConnectOptions::new()
+            .event_callback(move |event: async_nats::Event| {
+                let tx = event_tx.clone();
+                async move {
+                    match tx.clone().send(Event::Nats(event)) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!(
+                                func = "connect",
+                                package = PACKAGE_NAME,
+                                "error sending messaging service event on nats disconnect- {}",
+                                e
+                            );
+                        }
+                    }
+                }
+            })
             .jwt(String::from(token), move |nonce| {
                 let signing_key = KeyPair::from_seed(&key_pair.seed().unwrap()).unwrap();
                 async move { signing_key.sign(&nonce).map_err(async_nats::AuthError::new) }

@@ -123,9 +123,14 @@ impl MessagingHandler {
                     },
                     Event::Messaging(_) => {},
                     Event::Settings(_) => {},
+                    Event::Nats(nats_client::NatsEvent::Disconnected) => {
+                        let _ = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
+                    },
+                    Event::Nats(_) => {
+                    },
                 }
             }
-                        }
+            }
         }
     }
 }

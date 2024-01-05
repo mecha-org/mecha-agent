@@ -1,3 +1,4 @@
+use async_nats::Event as NatsEvent;
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -16,9 +17,11 @@ pub enum SettingEvent {
     Synced,
     Updated { settings: HashMap<String, String> },
 }
+
 #[derive(Clone)]
 pub enum Event {
     Provisioning(ProvisioningEvent),
     Messaging(MessagingEvent),
     Settings(SettingEvent),
+    Nats(NatsEvent),
 }

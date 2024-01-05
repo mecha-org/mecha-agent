@@ -11,9 +11,11 @@ homepage.workspace = true
 
 [dependencies]
 crypto = { path = "../crypto" }
+events = { path = "../../core/events" }
 anyhow = { version = "1.0.71", features = ["backtrace"]}
 bytes = "1.5.0"
 async-nats = "0.33.0"
 nkeys = "0.4.0"
 sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
 tracing = "0.1"
+tokio = { version = "1.27.0" }

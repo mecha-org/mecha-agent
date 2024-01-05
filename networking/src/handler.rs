@@ -88,9 +88,8 @@ impl NetworkingHandler {
                                 self.messaging_tx.clone()
                             ).await;
                         },
-                        Event::Settings(events::SettingEvent::Updated { settings }) => {
-
-                        },
+                        Event::Settings(events::SettingEvent::Updated { settings }) => {},
+                        Event::Nats(_) => {},
                     }
                 }
             }
