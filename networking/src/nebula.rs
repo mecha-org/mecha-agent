@@ -2,6 +2,7 @@ use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use sentry_anyhow::capture_anyhow;
 use serde::{Deserialize, Serialize};
+use std::env::temp_dir;
 use std::fmt;
 use std::{
     collections::HashMap,
@@ -231,7 +232,8 @@ pub fn decode_cert(cert_path: &str) -> Result<NebulaCert> {
         "cert path is {}",
         cert_path
     );
-    let output: Output = match Command::new("nebula-cert")
+    let nebula_cert_bin_path = format!("{}/nebula-cert", temp_dir().display());
+    let output: Output = match Command::new(nebula_cert_bin_path)
         .arg("print")
         .arg("-path")
         .arg(cert_path)
@@ -305,7 +307,8 @@ pub fn verify_cert(ca_path: &str, cert_path: &str) -> Result<bool> {
         ca_path,
         cert_path
     );
-    let output: Output = match Command::new("nebula-cert")
+    let nebula_cert_bin_path = format!("{}/nebula-cert", temp_dir().display());
+    let output: Output = match Command::new(nebula_cert_bin_path)
         .arg("verify")
         .arg("-ca")
         .arg(ca_path)
@@ -416,7 +419,8 @@ pub fn is_cert_verified(ca_path: &str, cert_path: &str) -> Result<bool> {
 }
 
 pub fn generate_nebula_key_cert(pub_path: &str, key_path: &str) -> Result<bool> {
-    let mut command = Command::new("nebula-cert");
+    let nebula_cert_bin_path = format!("{}/nebula-cert", temp_dir().display());
+    let mut command = Command::new(nebula_cert_bin_path);
     command.arg("keygen");
     command.arg("-out-key");
     command.arg(key_path);
