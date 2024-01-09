@@ -10,6 +10,9 @@ use crate::utils::extract_tar_file;
 use crate::utils::extract_zip_file;
 use crate::utils::is_sudo;
 use crate::utils::sha256_file;
+use ::fs::construct_dir_path;
+use agent_settings::read_settings_yml;
+use agent_settings::AgentSettings;
 use anyhow::{bail, Result};
 use channel::recv_with_timeout;
 use crypto::base64::b64_decode;
@@ -34,6 +37,7 @@ use std::str;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
 use tracing::trace;
+use tracing::warn;
 use tracing::{debug, error, info};
 
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -1014,6 +1018,18 @@ pub async fn start(
 ) -> Result<bool> {
     let fn_name = "start";
 
+    let agent_settings: AgentSettings = match read_settings_yml() {
+        Ok(settings) => settings,
+        Err(_) => {
+            warn!(
+                func = "networking_start",
+                package = PACKAGE_NAME,
+                "settings.yml not found, using default settings"
+            );
+            AgentSettings::default()
+        }
+    };
+
     //Get provider info from settings
     let provider_metadata_payload = match get_provider_info(setting_tx.clone()).await {
         Ok(r) => r,
@@ -1091,8 +1107,18 @@ pub async fn start(
         };
 
     // Save provider package binaries in temp
-    let home_dir = std::env::var("HOME").unwrap();
-    let provider_dir = format!("{}/.mecha/networking/{}", home_dir, provider_config.name);
+    let provider_dir = format!(
+        "{}/{}",
+        &agent_settings.networking.data_dir, provider_config.name
+    );
+
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "provider dir is {}",
+        provider_dir
+    );
+
     match extract_provider_package(&provider_dir, &provider_config).await {
         Ok(_) => (),
         Err(e) => {
