@@ -1467,6 +1467,7 @@ dependencies = [
  "crypto",
  "events",
  "flate2",
+ "fs",
  "identity",
  "ipaddress",
  "messaging",
