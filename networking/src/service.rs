@@ -10,6 +10,7 @@ use crate::utils::extract_tar_file;
 use crate::utils::extract_zip_file;
 use crate::utils::is_sudo;
 use crate::utils::sha256_file;
+use ::fs::construct_dir_path;
 use anyhow::{bail, Result};
 use channel::recv_with_timeout;
 use crypto::base64::b64_decode;
@@ -1091,8 +1092,24 @@ pub async fn start(
         };
 
     // Save provider package binaries in temp
-    let home_dir = std::env::var("HOME").unwrap();
-    let provider_dir = format!("{}/.mecha/networking/{}", home_dir, provider_config.name);
+    let home_dir = match construct_dir_path("~") {
+        Ok(v) => v,
+        Err(e) => bail!(e),
+    };
+
+    let provider_dir = format!(
+        "{}/.mecha/networking/{}",
+        home_dir.display(),
+        provider_config.name
+    );
+
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "provider dir is {}",
+        provider_dir
+    );
+
     match extract_provider_package(&provider_dir, &provider_config).await {
         Ok(_) => (),
         Err(e) => {

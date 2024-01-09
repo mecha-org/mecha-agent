@@ -17,6 +17,7 @@ messaging = { path = "../messaging" }
 settings = { path = "../settings" }
 channel = { path = "../commons/channel" }
 crypto = { path = "../commons/crypto" }
+fs = { path = "../commons/fs" }
 agent_settings = { path = "../core/settings" }
 anyhow = { version = "1.0.71", features = ["backtrace"]}
 reqwest = { version = "0.11", features = ["json"] }
