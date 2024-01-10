@@ -9,30 +9,6 @@
 # End
 # Extensions
 extensions:
-  # Extensions: zPages (an HTTP endpoint that provides live data for debugging different components)
-  zpages:
-    endpoint: 0.0.0.0:55679
-  # Extension: Memory Ballast (sets a pre-sized heap for lower GC cycles)
-  memory_ballast:
-    size_mib: 50
-  basicauth/grafana:
-    client_auth: 
-      username: <USERNAME>
-      password: <PASSWORD>
-  basicauth/tempo:
-    client_auth: 
-      username: <USERNAME>
-      password: <PASSWORD>
-  # Extension: Healthcheck
-  health_check:
-    endpoint: 0.0.0.0:13133
-    path: "/health/status"
-    # check_collector_pipeline:
-    #   enabled: true
-    #   interval: "5m"
-  pprof:
-    endpoint: 0.0.0.0:1777
-    save_to_file: ./cpu_usage.txt
 # Receivers
 receivers:
   hostmetrics/memory:
@@ -44,6 +20,92 @@ receivers:
           system.memory.usage: # Bytes of memory usage
             enabled: true
           system.memory.utilization: # Percentage of memory bytes in use
+            enabled: true
+  # HostMetrics: CPU
+  hostmetrics/cpu:
+    collection_interval: 60s
+    # root_path: / # RootFS to check
+    scrapers: ## Scrapers for different metrics
+      cpu:
+        metrics:
+          system.cpu.time: # Total CPU seconds broken down by different states
+            enabled: true
+          system.cpu.utilization: # Percentage of CPU time broken down by different states.
+            enabled: true
+  # HostMetrics: Disk
+  hostmetrics/disk:
+    collection_interval: 60s
+    # root_path: /
+    scrapers:
+      disk:
+        # <include|exclude>:
+        #   devices: [ <device name>, ... ]
+        #   match_type: <strict|regexp>
+        metrics:
+          system.disk.io: # Disk bytes transferred.
+            enabled: true
+          system.disk.io_time: # Time disk spent activated. 
+            enabled: true
+          system.disk.merged: # The number of disk reads/writes merged into single physical disk access operations.
+            enabled: true
+          system.disk.operation_time: # Time spent in disk operations.
+            enabled: true
+          system.disk.operations: # Disk operations count.
+            enabled: true
+          system.disk.pending_operations: # The queue size of pending I/O operations.
+            enabled: true
+          system.disk.weighted_io_time: # Time disk spent activated multiplied by the queue length.
+            enabled: true
+  # HostMetrics: Load
+  hostmetrics/load:
+    collection_interval: 60s
+    # root_path: /
+    scrapers:
+      load:
+        cpu_average: false # specifies whether to divide the average load by the reported number of logical CPUs (default: false).
+        metrics:
+          system.cpu.load_average.1m: # Average CPU Load over 1 minute.
+            enabled: true
+          system.cpu.load_average.5m: # Average CPU Load 
+            enabled: true
+          system.cpu.load_average.15m: # Average CPU Load 
+            enabled: true
+  # HostMetrics: Filesystem
+  hostmetrics/filesystem:
+    collection_interval: 60s
+    # root_path: /
+    scrapers:
+      filesystem:
+        metrics:
+          system.filesystem.inodes.usage: # Filesystem inodes used
+            enabled: true
+          system.filesystem.usage: # Filesystem bytes used
+            enabled: true
+          system.filesystem.utilization: # Fraction of filesystem bytes used
+            enabled: true
+  # HostMetrics: Network
+  hostmetrics/network:
+    collection_interval: 60s
+    # root_path: /
+    scrapers:
+      network:
+        # <include|exclude>:
+          # interfaces: [ <interface name>, ... ]
+          # match_type: <strict|regexp>
+        metrics:
+          system.network.connections: # The number of connections.
+            enabled: true
+          system.network.dropped: # The number of packets dropped.
+            enabled: true
+          system.network.errors: # The number of errors encountered
+            enabled: true
+          system.network.io: # The number of bytes transmitted and received
+            enabled: true
+          system.network.packets: # The number of packets transferred
+            enabled: true
+          system.network.conntrack.count: # The count of entries in conntrack table
+            enabled: true
+          system.network.conntrack.max: # The limit for entries in the conntrack table
             enabled: true
   otlp:
     protocols:
@@ -61,80 +123,20 @@ receivers:
         timestamp:
           parse_from: attributes.time
           layout: '%Y-%m-%d %H:%M:%S'
-  hostmetrics/cpu:
-    collection_interval: 60s
-    # root_path: / # RootFS to check
-    scrapers: ## Scrapers for different metrics
-      cpu:
-        metrics:
-          system.cpu.time: # Total CPU seconds broken down by different states
-            enabled: true
-          system.cpu.utilization: # Percentage of CPU time broken down by different states.
-            enabled: true
-  # HostMetrics: Load
-  hostmetrics/load:
-    collection_interval: 60s
-    # root_path: / # RootFS to check
-    scrapers: ## Scrapers for different metrics
-      cpu:
-        metrics:
-          system.cpu.time: # Total CPU seconds broken down by different states
-            enabled: true
-          system.cpu.utilization: # Percentage of CPU time broken down by different states.
-            enabled: true
-  # HostMetrics: Processes
-  hostmetrics/processes:
-    collection_interval: 60s
-    # root_path: /
-    scrapers:
-      processes:
-        metrics:
-          system.processes.count: # Total number of processes in each state
-            enabled: true
-          system.processes.created: # Total number of created processes
-            enabled: true
   # Filelog: /var/log/syslog
   filelog/syslog:
-    include: [ /var/log/syslog ]
-    resource:
-      - machine_id: mecha_comet-m
-      - stream_name: syslog
-  # Not working
-  syslog:
-    udp:
-      listen_address: "localhost:514"
-    protocol: rfc5424
-    location: UTC
+    include: [ /var/log/mecha-agent.log ]
+    attributes:
+      - stream_name: log_stream
 # Processors
 processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 64
+    spike_limit_mib: 32
   batch:
-  attributes:
-    actions:
-      - action: insert
-        key: event_domain
-        from_attribute: event.domain
-      - action: insert
-        key: loki.attribute.labels
-        value: event_domain
-
-  resource:
-    attributes:
-      - action: insert
-        key: loki.resource.labels
-        value: machine_id, stream_name      
 # Exporters
 exporters:
-  file/no_rotation:
-    path: ./foo1
-  prometheusremotewrite:
-    endpoint: <PROM_ENDPOINT>
-    auth:
-      authenticator: basicauth/grafana
-    headers: # Pass extra headers
-    external_labels: # Pass extra labels
-      machine_id: example-machine-id
-    resource_to_telemetry_conversion: # Convert resource attributes
-      enabled: true
   otlp:
     endpoint: 0.0.0.0:3001
     compression: none
@@ -144,13 +146,6 @@ exporters:
       insecure: true
     headers:
       user: "User"
-  otlp/2:
-    endpoint: 0.0.0.0:3001
-    compression: none
-    tls:
-      insecure: true
-    headers:
-      user: "System"
   # Logging: Prints Otelcol logs to console
   logging:
     verbosity: detailed # can be detailed|normal|basic
@@ -159,9 +154,10 @@ service:
   pipelines:
     logs:
       receivers: [filelog/syslog]
-      processors: [attributes,resource]
+      processors: [memory_limiter]
       exporters: [otlp]
     metrics:
-      receivers: [hostmetrics/memory]
+      receivers: [hostmetrics/memory, hostmetrics/cpu, hostmetrics/disk, hostmetrics/load, hostmetrics/filesystem, hostmetrics/network]
+      processors: [memory_limiter]
       exporters: [otlp]  
-  extensions: [basicauth/tempo]
+  extensions: []

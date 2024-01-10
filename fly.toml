@@ -26,3 +26,7 @@ kill_timeout = "5s"
     port = "443"
     [services.ports.tls_options]
     alpn = ["h2"]
+
+[mounts]
+  source="agent_data"
+  destination="/data"
