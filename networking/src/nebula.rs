@@ -10,7 +10,7 @@ use std::{
 };
 use tracing::{debug, error, info, trace};
 
-use crate::utils::run_command;
+use crate::utils::spawn_command;
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 #[derive(Debug, Default, Clone, Copy)]
 pub enum NebulaErrorCodes {
@@ -480,7 +480,7 @@ pub fn start_nebula(binary_path: &str, config_path: &str) -> Result<bool> {
         cmd
     );
 
-    let result = match run_command(cmd) {
+    let result = match spawn_command(cmd) {
         Ok(r) => r,
         Err(e) => {
             error!(
