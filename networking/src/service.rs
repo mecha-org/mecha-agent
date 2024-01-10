@@ -33,6 +33,7 @@ use std::io::copy;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Child;
 use std::str;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
@@ -104,6 +105,11 @@ pub struct OverrideConfigurations {
     pub key: String,
     pub ca: String,
     pub networking_firewall_rules: Vec<NetworkingFirewallRules>,
+}
+
+#[derive(Debug)]
+pub struct StartRes {
+    pub nebula_process: tokio::process::Child,
 }
 
 pub async fn get_provider_info(
@@ -1015,7 +1021,7 @@ pub async fn start(
     setting_tx: Sender<SettingMessage>,
     identity_tx: Sender<IdentityMessage>,
     messaging_tx: Sender<MessagingMessage>,
-) -> Result<bool> {
+) -> Result<StartRes> {
     let fn_name = "start";
 
     let agent_settings: AgentSettings = match read_settings_yml() {
@@ -1221,8 +1227,8 @@ pub async fn start(
     let binary_path = format!("{}", temp_dir().display());
     let config_path = format!("{}", temp_dir().display());
 
-    match start_nebula(&binary_path, &config_path) {
-        Ok(_) => (),
+    let nebula_child_process = match start_nebula(&binary_path, &config_path) {
+        Ok(v) => v,
         Err(e) => {
             error!(
                 func = fn_name,
@@ -1244,7 +1250,9 @@ pub async fn start(
         package = PACKAGE_NAME,
         "nebula started successfully"
     );
-    Ok(true)
+    Ok(StartRes {
+        nebula_process: nebula_child_process,
+    })
 }
 
 pub fn check_existing_certs_valid(ca_path: &str, cert_path: &str, key_path: &str) -> Result<bool> {
