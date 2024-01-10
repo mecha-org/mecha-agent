@@ -95,6 +95,7 @@ impl NetworkingHandler {
                             match settings.get("networking.enabled") {
                                 Some(value) => {
                                     if value == "true" {
+                                        let _ = &self.stop().await;
                                         let _ = &self.start().await;
                                     } else if value == "false" {
                                         let _ = &self.stop().await;
