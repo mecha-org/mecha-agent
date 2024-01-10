@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use flate2::read::GzDecoder;
 use nix::unistd::Uid;
 use sha256::try_digest;
-use std::process::Command;
+use std::process::{Child, Command};
 use std::{
     fs::File,
     path::{Path, PathBuf},
@@ -94,7 +94,7 @@ pub fn run_command(cmd: &str) -> Result<bool> {
     Ok(res)
 }
 
-pub fn spawn_command(cmd: &str) -> Result<bool> {
+pub fn spawn_command(cmd: &str) -> Result<Child> {
     let mut parts = cmd.split_whitespace();
     let program = parts.next().unwrap();
     let args = parts.collect::<Vec<_>>();
@@ -102,8 +102,8 @@ pub fn spawn_command(cmd: &str) -> Result<bool> {
     let mut binding = Command::new(program);
     let spawn_result = binding.args(&args).spawn();
 
-    match spawn_result {
-        Ok(_) => (),
+    let spawn_child = match spawn_result {
+        Ok(v) => v,
         Err(e) => {
             error!(
                 func = "spawn_command",
@@ -116,5 +116,5 @@ pub fn spawn_command(cmd: &str) -> Result<bool> {
         }
     };
 
-    Ok(true)
+    Ok(spawn_child)
 }

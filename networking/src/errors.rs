@@ -57,6 +57,7 @@ pub enum NetworkingErrorCodes {
     ExtractNetworkingFirewallRulesPayloadError,
     ChannelSendMessageError,
     ChannelReceiveMessageError,
+    CleanupNebulaProcessError,
 }
 
 impl fmt::Display for NetworkingErrorCodes {
@@ -245,6 +246,9 @@ impl fmt::Display for NetworkingErrorCodes {
             }
             NetworkingErrorCodes::ChannelReceiveMessageError => {
                 write!(f, "NetworkingErrorCodes: ChannelReceiveMessageError")
+            }
+            NetworkingErrorCodes::CleanupNebulaProcessError => {
+                write!(f, "NetworkingErrorCodes: CleanupNebulaProcessError")
             }
         }
     }

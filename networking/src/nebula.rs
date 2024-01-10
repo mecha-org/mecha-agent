@@ -4,6 +4,7 @@ use sentry_anyhow::capture_anyhow;
 use serde::{Deserialize, Serialize};
 use std::env::temp_dir;
 use std::fmt;
+use std::process::Child;
 use std::{
     collections::HashMap,
     process::{Command, Output},
@@ -462,7 +463,7 @@ pub fn generate_nebula_key_cert(pub_path: &str, key_path: &str) -> Result<bool> 
     }
 }
 
-pub fn start_nebula(binary_path: &str, config_path: &str) -> Result<bool> {
+pub fn start_nebula(binary_path: &str, config_path: &str) -> Result<Child> {
     let fn_name = "start_nebula";
     trace!(
         func = fn_name,
@@ -503,7 +504,7 @@ pub fn start_nebula(binary_path: &str, config_path: &str) -> Result<bool> {
         func = fn_name,
         package = PACKAGE_NAME,
         "nebula started - {}",
-        result
+        result.id()
     );
     Ok(result)
 }
