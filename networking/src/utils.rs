@@ -94,12 +94,12 @@ pub fn run_command(cmd: &str) -> Result<bool> {
     Ok(res)
 }
 
-pub fn spawn_command(cmd: &str) -> Result<Child> {
+pub fn spawn_command(cmd: &str) -> Result<tokio::process::Child> {
     let mut parts = cmd.split_whitespace();
     let program = parts.next().unwrap();
     let args = parts.collect::<Vec<_>>();
 
-    let mut binding = Command::new(program);
+    let mut binding = tokio::process::Command::new(program);
     let spawn_result = binding.args(&args).spawn();
 
     let spawn_child = match spawn_result {
