@@ -902,8 +902,35 @@ pub async fn generate_nebula_configuartion_file(
     nebula_settings.pki.key = overide_configurations.key.to_string();
     nebula_settings.pki.ca = overide_configurations.ca.to_string();
 
-    let (inbound_firewall_roles, outbound_firewall_roles) =
+    let (mut inbound_firewall_roles, mut outbound_firewall_roles) =
         get_firewall_rules(&overide_configurations.networking_firewall_rules);
+
+    if inbound_firewall_roles.len() == 0 {
+        inbound_firewall_roles.push(FirewallRule {
+            port: "any".to_string(),
+            proto: "icmp".to_string(),
+            host: Some("any".to_string()),
+            cidr: None,
+            group: None,
+        });
+        inbound_firewall_roles.push(FirewallRule {
+            port: "8080".to_string(),
+            proto: "tcp".to_string(),
+            host: Some("any".to_string()),
+            cidr: None,
+            group: None,
+        });
+    }
+
+    if outbound_firewall_roles.len() == 0 {
+        outbound_firewall_roles.push(FirewallRule {
+            port: "any".to_string(),
+            proto: "any".to_string(),
+            host: Some("any".to_string()),
+            cidr: None,
+            group: None,
+        });
+    }
 
     nebula_settings.firewall.inbound = inbound_firewall_roles;
     nebula_settings.firewall.outbound = outbound_firewall_roles;
