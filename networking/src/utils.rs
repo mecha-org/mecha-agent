@@ -93,3 +93,28 @@ pub fn run_command(cmd: &str) -> Result<bool> {
     );
     Ok(res)
 }
+
+pub fn spawn_command(cmd: &str) -> Result<bool> {
+    let mut parts = cmd.split_whitespace();
+    let program = parts.next().unwrap();
+    let args = parts.collect::<Vec<_>>();
+
+    let mut binding = Command::new(program);
+    let spawn_result = binding.args(&args).spawn();
+
+    match spawn_result {
+        Ok(_) => (),
+        Err(e) => {
+            error!(
+                func = "spawn_command",
+                package = PACKAGE_NAME,
+                "failed to spawn command {}, error - {}",
+                cmd,
+                e
+            );
+            bail!("failed to spawn command {}, error - {}", cmd, e);
+        }
+    };
+
+    Ok(true)
+}
