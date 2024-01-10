@@ -1,61 +1,51 @@
 use sentry_anyhow::capture_anyhow;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 #[derive(Debug, Default, Clone, Copy)]
 pub enum ProvisioningErrorCodes {
     #[default]
-    ManifestLookupUnknownError,
-    ManifestLookupServerError,
-    ManifestLookupNotFoundError,
-    ManifestLookupBadRequestError,
-    ManifestParseResponseError,
+    UnknownError,
+    UnauthorizedError,
+    NotFoundError,
+    BadRequestError,
+    UnreachableError,
+    InternalServerError,
     CSRSignReadFileError,
-    CSRSignUnknownError,
-    CSRSignServerError,
-    CSRSignNotFoundError,
-    CSRSignBadRequestError,
-    CSRSignResponseParseError,
     CertificateWriteError,
     SendEventError,
     DatabaseDeleteError,
+    ParseResponseError,
+    ChannelSendMessageError,
+    ChannelReceiveMessageError,
+    MachineIdError,
+    ExtractMessagePayloadError,
 }
 
 impl fmt::Display for ProvisioningErrorCodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ProvisioningErrorCodes::ManifestLookupUnknownError => {
-                write!(f, "ProvisioningErrorCodes: ManifestLookupUnknownError")
+            ProvisioningErrorCodes::UnknownError => {
+                write!(f, "ProvisioningErrorCodes: UnknownError")
             }
-            ProvisioningErrorCodes::ManifestLookupServerError => {
-                write!(f, "ProvisioningErrorCodes: ManifestLookupServerError")
+            ProvisioningErrorCodes::UnauthorizedError => {
+                write!(f, "ProvisioningErrorCodes: UnauthorizedError")
             }
-            ProvisioningErrorCodes::ManifestLookupNotFoundError => {
-                write!(f, "ProvisioningErrorCodes: ManifestLookupNotFoundError")
+            ProvisioningErrorCodes::NotFoundError => {
+                write!(f, "ProvisioningErrorCodes: NotFoundError")
             }
-            ProvisioningErrorCodes::ManifestLookupBadRequestError => {
-                write!(f, "ProvisioningErrorCodes: ManifestLookupBadRequestError")
+            ProvisioningErrorCodes::BadRequestError => {
+                write!(f, "ProvisioningErrorCodes: BadRequestError")
             }
-            ProvisioningErrorCodes::ManifestParseResponseError => {
-                write!(f, "ProvisioningErrorCodes: ManifestParseResponseError")
+            ProvisioningErrorCodes::UnreachableError => {
+                write!(f, "ProvisioningErrorCodes: UnreachableError")
+            }
+            ProvisioningErrorCodes::InternalServerError => {
+                write!(f, "ProvisioningErrorCodes: InternalServerError")
             }
             ProvisioningErrorCodes::CSRSignReadFileError => {
                 write!(f, "ProvisioningErrorCodes: CSRSignReadFileError")
-            }
-            ProvisioningErrorCodes::CSRSignUnknownError => {
-                write!(f, "ProvisioningErrorCodes: CSRSignUnknownError")
-            }
-            ProvisioningErrorCodes::CSRSignServerError => {
-                write!(f, "ProvisioningErrorCodes: CSRSignServerError")
-            }
-            ProvisioningErrorCodes::CSRSignNotFoundError => {
-                write!(f, "ProvisioningErrorCodes: CSRSignNotFoundError")
-            }
-            ProvisioningErrorCodes::CSRSignBadRequestError => {
-                write!(f, "ProvisioningErrorCodes: CSRSignBadRequestError")
-            }
-            ProvisioningErrorCodes::CSRSignResponseParseError => {
-                write!(f, "ProvisioningErrorCodes: CSRSignResponseParseError")
             }
             ProvisioningErrorCodes::CertificateWriteError => {
                 write!(f, "ProvisioningErrorCodes: CertificateWriteError")
@@ -65,6 +55,21 @@ impl fmt::Display for ProvisioningErrorCodes {
             }
             ProvisioningErrorCodes::DatabaseDeleteError => {
                 write!(f, "ProvisioningErrorCodes: DatabaseDeleteError")
+            }
+            ProvisioningErrorCodes::ParseResponseError => {
+                write!(f, "ProvisioningErrorCodes: ParseResponseError")
+            }
+            ProvisioningErrorCodes::ChannelSendMessageError => {
+                write!(f, "ProvisioningErrorCodes: ChannelSendMessageError")
+            }
+            ProvisioningErrorCodes::ChannelReceiveMessageError => {
+                write!(f, "ProvisioningErrorCodes: ChannelReceiveMessageError")
+            }
+            ProvisioningErrorCodes::MachineIdError => {
+                write!(f, "ProvisioningErrorCodes: MachineIdError")
+            }
+            ProvisioningErrorCodes::ExtractMessagePayloadError => {
+                write!(f, "ProvisioningErrorCodes: ExtractMessagePayloadError")
             }
         }
     }

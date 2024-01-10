@@ -13,26 +13,27 @@ use tokio::{
     sync::{broadcast, mpsc},
     task,
 };
-use tracing::error;
+use tracing::{error, info};
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 const CHANNEL_SIZE: usize = 32;
 
 pub async fn init_services() -> Result<bool> {
     let (event_tx, _) = broadcast::channel(CHANNEL_SIZE);
-
-    // start services
-    let (prov_t, prov_tx) = init_provisioning_service(ProvisioningOptions {
-        event_tx: event_tx.clone(),
-    })
-    .await;
-
     let (identity_t, identity_tx) = init_identity_service(IdentityOptions {
         event_tx: event_tx.clone(),
     })
     .await;
+
     let (messaging_t, messaging_tx) = init_messaging_service(MessagingOptions {
         event_tx: event_tx.clone(),
         identity_tx: identity_tx.clone(),
+    })
+    .await;
+
+    let (prov_t, prov_tx) = init_provisioning_service(ProvisioningOptions {
+        identity_tx: identity_tx.clone(),
+        messaging_tx: messaging_tx.clone(),
+        event_tx: event_tx.clone(),
     })
     .await;
 
@@ -72,10 +73,11 @@ pub async fn init_services() -> Result<bool> {
         telemetry_tx.clone(),
     )
     .await;
+
     // wait on all join handles
-    prov_t.await.unwrap();
     identity_t.await.unwrap();
     messaging_t.await.unwrap();
+    prov_t.await.unwrap();
     heartbeat_t.await.unwrap();
     setting_t.await.unwrap();
     networking_t.await.unwrap();

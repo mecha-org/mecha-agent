@@ -11,8 +11,11 @@ homepage.workspace = true
 
 [dependencies]
 events = { path = "../core/events" }
+messaging = { path = "../messaging" }
+identity = { path = "../identity" }
 crypto = { path = "../commons/crypto" }
 services = { path = "../core/services" }
+channel = { path = "../commons/channel" }
 agent_settings = { path = "../core/settings" }
 fs = { path = "../commons/fs" }
 async-trait = "0.1.74"
@@ -26,3 +29,5 @@ serde = { version  = "1.0.159", features = ["derive"]}
 tokio = { version = "1.27.0" }
 tonic = "0.10.2"
 tracing = "0.1"
+sha256 = "1.1.2"
+futures = "0.3.28"

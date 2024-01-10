@@ -7,23 +7,44 @@ use agent_settings::provisioning::CertificatePaths;
 use agent_settings::read_settings_yml;
 use agent_settings::AgentSettings;
 use anyhow::{bail, Result};
+use channel::recv_with_timeout;
 use crypto::random::generate_random_alphanumeric;
 use crypto::x509::generate_csr;
 use crypto::x509::generate_ec_private_key;
 use crypto::x509::PrivateKeyAlgorithm;
 use crypto::x509::PrivateKeySize;
 use events::Event;
+use futures::StreamExt;
+use identity::handler::IdentityMessage;
+use messaging::handler::MessagingMessage;
+use messaging::Bytes;
 use reqwest::Client as RequestClient;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::str;
 use tokio::sync::broadcast::Sender;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 use tracing::error;
 use tracing::{debug, info, trace, warn};
 
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ErrorResponse {
+    status: i32,
+    message: String,
+}
+#[derive(Debug)]
+pub struct PingResponse {
+    pub code: String,
+    pub message: String,
+}
+#[derive(Deserialize, Debug)]
+struct DeprovisionRequest {
+    pub machine_id: String,
+}
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvisioningServerResponseGeneric<T> {
@@ -57,6 +78,216 @@ pub struct SignedCertificates {
     pub cert: String,
     pub intermediate_cert: String,
     pub root_cert: String,
+}
+pub async fn start_service(
+    identity_tx: mpsc::Sender<IdentityMessage>,
+    messaging_tx: mpsc::Sender<MessagingMessage>,
+    event_tx: Sender<Event>,
+) -> Result<()> {
+    // Get machine id
+    let machine_id = match get_machine_id(identity_tx).await {
+        Ok(id) => id,
+        Err(e) => {
+            error!(
+                func = "start_service",
+                package = PACKAGE_NAME,
+                "error getting machine id - {}",
+                e
+            );
+            bail!(e)
+        }
+    };
+    let (tx, rx) = oneshot::channel();
+    match messaging_tx
+        .send(MessagingMessage::Subscriber {
+            reply_to: tx,
+            subject: format!("machine.{}.deprovision", sha256::digest(machine_id.clone())),
+        })
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                func = "start_service",
+                package = PACKAGE_NAME,
+                "error sending subscriber message - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::ChannelSendMessageError,
+                format!("error sending subscriber message - {}", e),
+                true
+            ));
+        }
+    }
+    let mut subscriber = match recv_with_timeout(rx).await {
+        Ok(id) => id,
+        Err(e) => {
+            error!(
+                func = "start_service",
+                package = PACKAGE_NAME,
+                "error receiving get machine id message - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::ChannelReceiveMessageError,
+                format!("error receiving get machine id message - {}", e),
+                true
+            ));
+        }
+    };
+    while let Some(message) = subscriber.next().await {
+        // Parse payload and validate machine id
+        let request_payload: DeprovisionRequest = match parse_message_payload(message.payload) {
+            Ok(s) => s,
+            Err(e) => {
+                bail!(e)
+            }
+        };
+        // Validate request machine id with current machine id is same or not
+        if request_payload.machine_id == machine_id {
+            match de_provision(event_tx.clone()) {
+                Ok(_) => {
+                    info!(
+                        func = "start_service",
+                        package = PACKAGE_NAME,
+                        result = "success",
+                        "de provisioned successfully"
+                    );
+                }
+                Err(e) => {
+                    error!(
+                        func = "start_service",
+                        package = PACKAGE_NAME,
+                        "error de provisioning - {}",
+                        e
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+pub async fn ping() -> Result<PingResponse> {
+    trace!(func = "ping", package = PACKAGE_NAME, "init",);
+    let settings: AgentSettings = match read_settings_yml() {
+        Ok(settings) => settings,
+        Err(_) => {
+            warn!(
+                func = "ping",
+                package = PACKAGE_NAME,
+                "settings.yml not found, using default settings"
+            );
+            AgentSettings::default()
+        }
+    };
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap();
+
+    let result = client
+        .get(format!("{}/v1/ping", settings.provisioning.server_url).as_str())
+        .header("CONTENT_TYPE", "application/json")
+        .header("ACCEPT", "application/json")
+        .send()
+        .await;
+    println!("result {:?}", result);
+    match result {
+        Ok(res) => {
+            //step-ca returns error payload with 200 status code, error is inside payload
+            if res.status() == StatusCode::CREATED || res.status().is_success() {
+                return Ok(PingResponse {
+                    code: String::from("success"),
+                    message: String::from(""),
+                });
+            } else {
+                let error_status_code = res.status();
+                match error_status_code {
+                    StatusCode::UNAUTHORIZED => {
+                        error!(
+                            func = "ping",
+                            package = PACKAGE_NAME,
+                            "ping call returned unauthorized error num - {}",
+                            1002,
+                        );
+                        bail!(ProvisioningError::new(
+                            ProvisioningErrorCodes::UnauthorizedError,
+                            format!("ping call returned unauthorized error num - {}", 1002,),
+                            true
+                        ))
+                    }
+                    StatusCode::NOT_FOUND => {
+                        error!(
+                            func = "ping",
+                            package = PACKAGE_NAME,
+                            "ping call returned not found error num - {}",
+                            1003,
+                        );
+                        bail!(ProvisioningError::new(
+                            ProvisioningErrorCodes::NotFoundError,
+                            format!("ping call returned not found error num - {}", 1003,),
+                            true
+                        ))
+                    }
+                    StatusCode::BAD_REQUEST => {
+                        error!(
+                            func = "ping",
+                            package = PACKAGE_NAME,
+                            "ping call returned bad request num - {}",
+                            1004,
+                        );
+                        bail!(ProvisioningError::new(
+                            ProvisioningErrorCodes::BadRequestError,
+                            format!("ping call returned bad request num - {}", 1004,),
+                            true
+                        ))
+                    }
+                    StatusCode::INTERNAL_SERVER_ERROR => {
+                        error!(
+                            func = "ping",
+                            package = PACKAGE_NAME,
+                            "ping call returned internal server error num - {}",
+                            1005,
+                        );
+                        bail!(ProvisioningError::new(
+                            ProvisioningErrorCodes::InternalServerError,
+                            format!("ping call returned internal server error num - {}", 1005,),
+                            true
+                        ))
+                    }
+                    _ => {
+                        error!(
+                            func = "ping",
+                            package = PACKAGE_NAME,
+                            "ping call returned unknown error num - {}",
+                            1006,
+                        );
+                        bail!(ProvisioningError::new(
+                            ProvisioningErrorCodes::UnknownError,
+                            format!("ping call returned unknown error num - {}", 1006,),
+                            true
+                        ))
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            error!(
+                func = "ping",
+                package = PACKAGE_NAME,
+                "ping call returned error num - {}, error - {}",
+                1007,
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::UnknownError,
+                format!("ping call returned error num - {}, error - {}", 1007, e,),
+                true
+            ))
+        }
+    };
 }
 
 pub fn generate_code() -> Result<String> {
@@ -317,23 +548,49 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
             ));
         }
     }
-
-    //3. Delete database
-    match fs::remove_dir_all(&settings.settings.storage.path) {
+    let db_path = match construct_dir_path(&settings.settings.storage.path) {
+        Ok(path) => {
+            debug!(
+                func = "de_provision",
+                package = PACKAGE_NAME,
+                "db path constructed {:?}",
+                path.display()
+            );
+            path
+        }
+        Err(e) => {
+            error!(
+                func = "de_provision",
+                package = PACKAGE_NAME,
+                "error constructing db path - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::DatabaseDeleteError,
+                format!(
+                    "error constructing db path - {} - {}",
+                    &settings.settings.storage.path, e
+                ),
+                true
+            ))
+        }
+    };
+    //2. Delete db
+    match fs::remove_dir_all(&db_path) {
         Ok(_) => {
             debug!(
                 func = "de_provision",
                 package = PACKAGE_NAME,
                 "db deleted successfully from path - {:?}",
-                &settings.settings.storage.path
+                &db_path
             )
         }
         Err(e) => {
             error!(
                 func = "de_provision",
                 package = PACKAGE_NAME,
-                "error deleting db, from path {}, error - {}",
-                &settings.settings.storage.path,
+                "error deleting db, from path {:?}, error - {}",
+                &db_path,
                 e
             );
             bail!(ProvisioningError::new(
@@ -352,6 +609,7 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
     );
     Ok(true)
 }
+
 async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<ProvisioningManifest> {
     trace!(
         func = "lookup_manifest",
@@ -382,7 +640,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
                     e
                 );
                 bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::ManifestLookupServerError,
+                    ProvisioningErrorCodes::InternalServerError,
                     format!("manifest find endpoint url returned server error - {}", e),
                     true
                 ))
@@ -395,7 +653,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
                     e
                 );
                 bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::ManifestLookupBadRequestError,
+                    ProvisioningErrorCodes::BadRequestError,
                     format!("manifest find endpoint url returned bad request - {}", e),
                     true
                 ))
@@ -408,7 +666,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
                     e
                 );
                 bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::ManifestLookupNotFoundError,
+                    ProvisioningErrorCodes::NotFoundError,
                     format!("manifest find endpoint url not found - {}", e),
                     true
                 ))
@@ -421,7 +679,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
                     e
                 );
                 bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::ManifestLookupUnknownError,
+                    ProvisioningErrorCodes::UnknownError,
                     format!("manifest find endpoint url returned unknown error - {}", e),
                     true
                 ))
@@ -434,7 +692,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
                     e
                 );
                 bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::ManifestLookupUnknownError,
+                    ProvisioningErrorCodes::UnknownError,
                     format!(
                         "manifest find endpoint url returned unmatched error - {}",
                         e
@@ -467,8 +725,8 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
                 e
             );
             bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::ManifestParseResponseError,
-                format!("error parsing lookup manifest response - {}", e),
+                ProvisioningErrorCodes::ParseResponseError,
+                format!("error parsing manifest lookup response - {}", e),
                 true
             ))
         }
@@ -684,7 +942,7 @@ async fn sign_csr(
                     e
                 );
                 bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::CSRSignServerError,
+                    ProvisioningErrorCodes::InternalServerError,
                     format!("csr sign url returned server error - {}", e),
                     true
                 ))
@@ -697,7 +955,7 @@ async fn sign_csr(
                     e
                 );
                 bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::CSRSignBadRequestError,
+                    ProvisioningErrorCodes::BadRequestError,
                     format!("csr sign url returned bad request - {}", e),
                     true
                 ))
@@ -710,7 +968,7 @@ async fn sign_csr(
                     e
                 );
                 bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::CSRSignNotFoundError,
+                    ProvisioningErrorCodes::NotFoundError,
                     format!("csr sign url not found - {}", e),
                     true
                 ))
@@ -723,13 +981,13 @@ async fn sign_csr(
                     e
                 );
                 bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::CSRSignUnknownError,
+                    ProvisioningErrorCodes::UnknownError,
                     format!("csr sign url returned unknown error - {}", e),
                     true
                 ))
             }
             None => bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::CSRSignUnknownError,
+                ProvisioningErrorCodes::UnknownError,
                 format!("csr sign url returned unmatched error - {}", e),
                 true
             )),
@@ -746,7 +1004,7 @@ async fn sign_csr(
                     e
                 );
                 bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::CSRSignResponseParseError,
+                    ProvisioningErrorCodes::ParseResponseError,
                     format!("error parsing csr sign response - {}", e),
                     true
                 ));
@@ -759,4 +1017,79 @@ async fn sign_csr(
         "csr signed successfully"
     );
     Ok(result.payload)
+}
+async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Result<String> {
+    let (tx, rx) = oneshot::channel();
+    match identity_tx
+        .clone()
+        .send(IdentityMessage::GetMachineId { reply_to: tx })
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
+                "error sending get machine id message - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::ChannelSendMessageError,
+                format!("error sending get machine id message - {}", e),
+                true
+            ));
+        }
+    }
+    let machine_id = match recv_with_timeout(rx).await {
+        Ok(id) => id,
+        Err(e) => {
+            error!(
+                func = "get_machine_id",
+                package = PACKAGE_NAME,
+                "error receiving get machine id message - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::ChannelReceiveMessageError,
+                format!("error receiving get machine id message - {}", e),
+                true
+            ));
+        }
+    };
+    info!(
+        func = "get_machine_id",
+        package = PACKAGE_NAME,
+        "get machine id request completed",
+    );
+    Ok(machine_id)
+}
+
+fn parse_message_payload(payload: Bytes) -> Result<DeprovisionRequest> {
+    let payload_value = match std::str::from_utf8(&payload) {
+        Ok(s) => s,
+        Err(e) => {
+            error!(
+                func = "parse_message_payload",
+                package = PACKAGE_NAME,
+                "error converting payload to string - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::ExtractMessagePayloadError,
+                format!("Error converting payload to string - {}", e),
+                true
+            ))
+        }
+    };
+    let payload: DeprovisionRequest = match serde_json::from_str(payload_value) {
+        Ok(s) => s,
+        Err(e) => {
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::ExtractMessagePayloadError,
+                format!("Error converting payload to AddTaskRequestPayload - {}", e),
+                true
+            ))
+        }
+    };
+    Ok(payload)
 }
