@@ -22,7 +22,7 @@ pub struct NetworkingHandler {
     identity_tx: mpsc::Sender<IdentityMessage>,
     setting_tx: mpsc::Sender<SettingMessage>,
     status: ServiceStatus,
-    nebula_process: Option<Child>,
+    nebula_process: Option<tokio::process::Child>,
 }
 pub struct NetworkingOptions {
     pub event_tx: broadcast::Sender<Event>,
@@ -122,7 +122,7 @@ impl NetworkingHandler {
 
         match self.nebula_process.as_mut() {
             Some(nebula_process) => {
-                match nebula_process.kill() {
+                match nebula_process.kill().await {
                     Ok(_) => {
                         info!(
                             func = "cleanup",

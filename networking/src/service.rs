@@ -109,7 +109,7 @@ pub struct OverrideConfigurations {
 
 #[derive(Debug)]
 pub struct StartRes {
-    pub nebula_process: Child,
+    pub nebula_process: tokio::process::Child,
 }
 
 pub async fn get_provider_info(
