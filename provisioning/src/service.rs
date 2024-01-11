@@ -282,7 +282,7 @@ pub async fn ping() -> Result<PingResponse> {
                 e
             );
             bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::UnknownError,
+                ProvisioningErrorCodes::UnreachableError,
                 format!("ping call returned error num - {}, error - {}", 1007, e,),
                 true
             ))

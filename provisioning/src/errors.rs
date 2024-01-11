@@ -1,6 +1,6 @@
 use sentry_anyhow::capture_anyhow;
-use serde::{Deserialize, Serialize};
 use std::fmt;
+use tonic::Status;
 
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 #[derive(Debug, Default, Clone, Copy)]
@@ -101,5 +101,20 @@ impl ProvisioningError {
             capture_anyhow(error);
         }
         Self { code, message }
+    }
+}
+
+pub fn map_provisioning_error_to_tonic(code: ProvisioningErrorCodes, message: String) -> Status {
+    match code {
+        ProvisioningErrorCodes::UnauthorizedError => {
+            Status::new(tonic::Code::Unauthenticated, message)
+        }
+        ProvisioningErrorCodes::NotFoundError => Status::new(tonic::Code::NotFound, message),
+        ProvisioningErrorCodes::BadRequestError => {
+            Status::new(tonic::Code::InvalidArgument, message)
+        }
+        ProvisioningErrorCodes::UnreachableError => Status::new(tonic::Code::Unavailable, message),
+        // Add more mappings as needed
+        _ => Status::new(tonic::Code::Unknown, message),
     }
 }

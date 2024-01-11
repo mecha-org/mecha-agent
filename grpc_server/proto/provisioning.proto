@@ -8,6 +8,7 @@ service ProvisioningService {
   rpc generateCode (Empty) returns (ProvisioningCodeResponse);
   rpc provisionByCode (ProvisioningCodeRequest) returns (ProvisioningStatusResponse);
   rpc deprovision (Empty) returns (DeProvisioningStatusResponse);
+  rpc ping (Empty) returns (PingResponse);
 }
 
 message Empty {}
@@ -25,4 +26,8 @@ message ProvisioningStatusResponse {
 }
 message DeProvisioningStatusResponse {
   bool success = 1;
+}
+message PingResponse {
+  string code = 1;
+  string message = 2;
 }
