@@ -6,6 +6,7 @@ use crate::agent::{
 };
 use crate::agent::{DeProvisioningStatusResponse, PingResponse};
 use anyhow::Result;
+use channel::recv_with_timeout;
 use provisioning::errors::{map_provisioning_error_to_tonic, ProvisioningError};
 use provisioning::handler::ProvisioningMessage;
 use serde::{Deserialize, Serialize};
@@ -85,22 +86,22 @@ impl ProvisioningService for ProvisioningServiceHandler {
 
         // send message
         let (tx, rx) = oneshot::channel();
-        let _ = provisioning_tx
+        match provisioning_tx
             .send(ProvisioningMessage::GenerateCode { reply_to: tx })
-            .await;
-
-        // TODO handle
-        let reply =
-            rx.await.unwrap_or(Err(
-                Status::unavailable("provisioning service unavailable").into()
-            ));
-
-        if reply.is_ok() {
-            let code = reply.unwrap();
-            Ok(Response::new(ProvisioningCodeResponse { code }))
-        } else {
-            Err(Status::from_error(reply.unwrap_err().into()))
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(Status::unavailable("provisioning service unavailable").into());
+            }
         }
+
+        let code = match recv_with_timeout(rx).await {
+            Ok(code) => code,
+            Err(err) => return Err(Status::unavailable("provisioning service unavailable").into()),
+        };
+
+        Ok(Response::new(ProvisioningCodeResponse { code }))
     }
 
     async fn provision_by_code(

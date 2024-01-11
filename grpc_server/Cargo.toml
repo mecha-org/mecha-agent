@@ -11,6 +11,7 @@ homepage.workspace = true
 heartbeat = { path = "../heartbeat" }
 messaging = { path = "../messaging" }
 agent_settings = { path = "../core/settings" }
+channel = { path = "../commons/channel" }
 identity = { path = "../identity" }
 provisioning = { path = "../provisioning" }
 settings = { path = "../settings" }
