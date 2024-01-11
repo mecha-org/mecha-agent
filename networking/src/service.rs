@@ -1,5 +1,6 @@
 use crate::errors::NetworkingError;
 use crate::errors::NetworkingErrorCodes;
+use crate::nebula::decode_cert;
 use crate::nebula::generate_nebula_key_cert;
 use crate::nebula::is_cert_valid;
 use crate::nebula::is_cert_verified;
@@ -18,6 +19,8 @@ use channel::recv_with_timeout;
 use crypto::base64::b64_decode;
 use identity::handler::IdentityMessage;
 use ipaddress::IPAddress;
+use ipnet::Ipv4Net;
+use iprange::IpRange;
 use messaging::handler::MessagingMessage;
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
@@ -25,6 +28,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use settings::handler::SettingMessage;
 use sha256::digest;
+use std::collections::HashMap;
 use std::env::temp_dir;
 use std::fs;
 use std::fs::create_dir_all;
@@ -33,7 +37,6 @@ use std::io::copy;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Child;
 use std::str;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
@@ -61,6 +64,12 @@ pub struct ProviderMetadataPayload {
     pub arch: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ControlServer {
+    pub vpn_ip_addr: String,
+    pub public_ip_addr: String,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ProviderMetadataReply {
     pub name: String,
@@ -69,6 +78,7 @@ pub struct ProviderMetadataReply {
     pub download_url: String,
     pub checksum: String,
     pub base_config: String,
+    pub control_server_map: HashMap<String, Vec<ControlServer>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -105,6 +115,7 @@ pub struct OverrideConfigurations {
     pub key: String,
     pub ca: String,
     pub networking_firewall_rules: Vec<NetworkingFirewallRules>,
+    pub control_servers: Vec<ControlServer>,
 }
 
 #[derive(Debug)]
@@ -935,6 +946,20 @@ pub async fn generate_nebula_configuartion_file(
     nebula_settings.firewall.inbound = inbound_firewall_roles;
     nebula_settings.firewall.outbound = outbound_firewall_roles;
 
+    overide_configurations
+        .control_servers
+        .into_iter()
+        .for_each(|control_server| {
+            nebula_settings.static_host_map.insert(
+                control_server.vpn_ip_addr.clone(),
+                vec![control_server.public_ip_addr],
+            );
+            nebula_settings
+                .lighthouse
+                .hosts
+                .push(control_server.vpn_ip_addr);
+        });
+
     // Serialize NebulaSettings into a YAML-formatted string
     let yaml_string = match serde_yaml::to_string(&nebula_settings) {
         Ok(v) => v,
@@ -1219,11 +1244,61 @@ pub async fn start(
         }
     };
 
+    let signed_cert_path = format!("{}/machine.crt", certs_dir);
+
+    let decoded_cert = match decode_cert(&signed_cert_path) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while decoding signed cert {}",
+                e
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::SignCertDecodeError,
+                format!("error while decoding signed cert {}", e),
+                true
+            ))
+        }
+    };
+
+    let cidr_address = match decoded_cert.details.ips.first() {
+        Some(v) => v,
+        None => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "unable to get ip address from decoced cert",
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::SignCertDecodeError,
+                format!("unable to get ip address from decoced cert"),
+                true
+            ))
+        }
+    };
+
+    let ip_address = cidr_address.parse::<Ipv4Net>().unwrap();
+
+    let mut control_servers = None;
+
+    provider_config
+        .control_server_map
+        .into_iter()
+        .for_each(|(key, value)| {
+            let ip_range: IpRange<Ipv4Net> = [key].iter().map(|s| s.parse().unwrap()).collect();
+            if ip_range.contains(&ip_address) {
+                control_servers = Some(value);
+            }
+        });
+
     let overide_configurations = OverrideConfigurations {
-        cert: format!("{}/machine.crt", certs_dir),
+        cert: signed_cert_path,
         key: format!("{}/machine.key", certs_dir),
         ca: format!("{}/ca.crt", certs_dir),
         networking_firewall_rules,
+        control_servers: control_servers.unwrap_or(vec![]),
     };
 
     debug!(
