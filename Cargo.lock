@@ -877,6 +877,7 @@ dependencies = [
  "agent_settings",
  "anyhow",
  "bincode",
+ "channel",
  "heartbeat",
  "identity",
  "messaging",
