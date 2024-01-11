@@ -126,7 +126,6 @@ impl ServiceHandler for HeartbeatHandler {
     async fn start(&mut self) -> Result<bool> {
         // Start if device is provisioned
         let is_provisioned = device_provision_status(self.identity_tx.clone()).await;
-        error!("is provisioned : {}", is_provisioned);
         if is_provisioned {
             self.status = ServiceStatus::STARTED;
         }
