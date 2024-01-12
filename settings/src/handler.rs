@@ -52,6 +52,7 @@ impl SettingHandler {
     }
 
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<SettingMessage>) -> Result<()> {
+        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
         // start the service
         let _ = &self.start().await;
         let mut event_rx = self.event_tx.subscribe();

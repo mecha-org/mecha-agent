@@ -62,6 +62,7 @@ impl MessagingHandler {
         }
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<MessagingMessage>) -> Result<()> {
+        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
         let _ = &self.start().await;
         let mut event_rx = self.event_tx.subscribe();
         loop {

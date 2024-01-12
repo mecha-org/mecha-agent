@@ -47,6 +47,7 @@ impl TelemetryHandler {
         }
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<TelemetryMessage>) -> Result<()> {
+        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
         // Start the service
         let mut event_rx = self.event_tx.subscribe();
         loop {

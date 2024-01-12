@@ -47,6 +47,7 @@ impl HeartbeatHandler {
         }
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<HeartbeatMessage>) -> Result<()> {
+        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
         // start the service
         let _ = &self.start().await;
         let interval_in_secs: u64 = get_time_interval();
