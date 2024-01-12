@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use anyhow::{bail, Result};
 use events::Event;
 use identity::handler::IdentityMessage;
@@ -11,6 +13,7 @@ use tokio::{
         mpsc::{self, Sender},
         oneshot,
     },
+    task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
 use tonic::async_trait;
@@ -24,7 +27,7 @@ pub struct HeartbeatHandler {
     event_tx: broadcast::Sender<Event>,
     messaging_tx: Sender<MessagingMessage>,
     identity_tx: Sender<IdentityMessage>,
-    status: ServiceStatus,
+    timer_token: Option<CancellationToken>,
 }
 
 pub enum HeartbeatMessage {
@@ -44,36 +47,63 @@ impl HeartbeatHandler {
             event_tx: options.event_tx,
             messaging_tx: options.messaging_tx,
             identity_tx: options.identity_tx,
-            status: ServiceStatus::INACTIVE,
+            timer_token: None,
         }
     }
-    pub async fn subscribe(&mut self, cancel_token: CancellationToken) -> Result<()> {
-        info!(func = "subscribe", package = env!("CARGO_PKG_NAME"), "init");
-        let interval_in_secs: u64 = get_time_interval();
-        let mut timer = tokio::time::interval(std::time::Duration::from_secs(interval_in_secs));
-        loop {
-            select! {
-                    _ = cancel_token.cancelled() => {
-                        // subscriber is cancelled
-                        println!("token is cancelled");
-                        return Ok(());
-                    },
-                    _ = timer.tick() => {
-                        let _ = send_heartbeat(SendHeartbeatOptions {
-                            messaging_tx: self.messaging_tx.clone(),
-                            identity_tx: self.identity_tx.clone(),
-                        }).await;
+    pub async fn set_timer(&mut self) -> Result<()> {
+        info!(func = "set_timer", package = env!("CARGO_PKG_NAME"), "init");
+
+        // safety: check for existing cancel token, and cancel it
+        let exist_timer_token = &self.timer_token;
+        if exist_timer_token.is_some() {
+            let _ = exist_timer_token.as_ref().unwrap().cancel();
+        }
+
+        // create a new token
+        let timer_token = CancellationToken::new();
+        let timer_token_cloned = timer_token.clone();
+        let messaging_tx = self.messaging_tx.clone();
+        let identity_tx = self.identity_tx.clone();
+
+        // create spawn for timer
+        let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {
+            let interval_in_secs: u64 = get_time_interval();
+            let mut timer = tokio::time::interval(std::time::Duration::from_secs(interval_in_secs));
+            loop {
+                select! {
+                        _ = timer_token.cancelled() => {
+                            return Ok(());
+                        },
+                        _ = timer.tick() => {
+                            let _ = send_heartbeat(SendHeartbeatOptions {
+                                messaging_tx: messaging_tx.clone(),
+                                identity_tx: identity_tx.clone(),
+                            }).await;
+                    }
                 }
             }
+        });
+
+        // Save to state
+        self.timer_token = Some(timer_token_cloned);
+
+        Ok(())
+    }
+
+    pub async fn clear_timer(&self) -> Result<bool> {
+        let exist_timer_token = &self.timer_token;
+        if exist_timer_token.is_some() {
+            let _ = exist_timer_token.as_ref().unwrap().cancel();
+        } else {
+            return Ok(false);
         }
+        Ok(true)
     }
 
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<HeartbeatMessage>) -> Result<()> {
         info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
-        // start the service
-        let _ = &self.start().await;
-        let interval_in_secs: u64 = get_time_interval();
         let mut event_rx = self.event_tx.subscribe();
+
         loop {
             select! {
                     msg = message_rx.recv() => {
@@ -91,83 +121,26 @@ impl HeartbeatHandler {
                             }
                         };
                     }
-
                     // Receive events from other services
                     event = event_rx.recv() => {
                         if event.is_err() {
                             continue;
                         }
                         match event.unwrap() {
-                            Event::Provisioning(events::ProvisioningEvent::Provisioned) => {
-                                info!(
-                                    func = "run",
-                                    package = env!("CARGO_PKG_NAME"),
-                                    "Heartbeat service received provisioning event"
-                                );
-                                let _ = &self.start().await;
+                            Event::Messaging(events::MessagingEvent::Connected) => {
+                                // start
+                                let _ = &self.set_timer();
+                            },
+                            Event::Messaging(events::MessagingEvent::Disconnected) => {
+                                let _ = &self.clear_timer();
                             },
                             Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
-                                let _ = &self.stop().await;
+                                let _ = &self.clear_timer();
                             },
-                            Event::Messaging(events::MessagingEvent::Connected) => {
-                                info!(
-                                    func = "run",
-                                    package = env!("CARGO_PKG_NAME"),
-                                    "Heartbeat service received messaging event"
-                                );
-                                if !self.is_started().unwrap() {
-                                    let _ = &self.start().await;
-                                }
-                            },
-                            Event::Settings(_) => {},
-                            Event::Nats(_) => {},
+                            _ => {},
                         }
                     }
-
-                //     _ = timer.tick() => {
-                //         if self.is_started().unwrap() {
-                //            let _ = send_heartbeat(SendHeartbeatOptions {
-                //                 messaging_tx: self.messaging_tx.clone(),
-                //                 identity_tx: self.identity_tx.clone(),
-                //             }).await;
-                //     } else {
-                //         info!(
-                //             func = "run",
-                //             package = env!("CARGO_PKG_NAME"),
-                //             "Heartbeat service is not started"
-                //         );
-                //     }
-                // }
             }
         }
-    }
-}
-
-#[async_trait]
-impl ServiceHandler for HeartbeatHandler {
-    async fn start(&mut self) -> Result<bool> {
-        // Start if device is provisioned
-        let is_provisioned = device_provision_status(self.identity_tx.clone()).await;
-        if is_provisioned {
-            self.status = ServiceStatus::STARTED;
-        }
-        Ok(true)
-    }
-
-    async fn stop(&mut self) -> Result<bool> {
-        self.status = ServiceStatus::STOPPED;
-        Ok(true)
-    }
-
-    fn get_status(&self) -> anyhow::Result<ServiceStatus> {
-        Ok(self.status)
-    }
-
-    fn is_stopped(&self) -> Result<bool> {
-        Ok(self.status == ServiceStatus::STOPPED)
-    }
-
-    fn is_started(&self) -> Result<bool> {
-        Ok(self.status == ServiceStatus::STARTED)
     }
 }

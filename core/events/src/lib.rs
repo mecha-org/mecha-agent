@@ -10,6 +10,7 @@ pub enum ProvisioningEvent {
 #[derive(Debug, Clone)]
 pub enum MessagingEvent {
     Connected,
+    Disconnected,
 }
 
 #[derive(Debug, Clone)]

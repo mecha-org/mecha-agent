@@ -81,8 +81,8 @@ pub async fn init_services() -> Result<bool> {
     .await;
 
     // start global subscriber
-    let global_subscriber_t =
-        init_global_subscriber(event_tx.clone(), messaging_tx.clone(), identity_tx.clone()).await;
+    // let global_subscriber_t =
+    //     init_global_subscriber(event_tx.clone(), messaging_tx.clone(), identity_tx.clone()).await;
 
     //TODO: remove this
     // let start_t = tokio::task::spawn(async move {
@@ -99,7 +99,7 @@ pub async fn init_services() -> Result<bool> {
     setting_t.await.unwrap();
     networking_t.await.unwrap();
     grpc_t.await.unwrap();
-    global_subscriber_t.await.unwrap();
+    // global_subscriber_t.await.unwrap();
 
     Ok(true)
 }
@@ -325,37 +325,37 @@ async fn init_grpc_server(
     grpc_t
 }
 
-async fn init_global_subscriber(
-    event_tx: broadcast::Sender<Event>,
-    messaging_tx: mpsc::Sender<MessagingMessage>,
-    identity_tx: mpsc::Sender<IdentityMessage>,
-) -> task::JoinHandle<Result<()>> {
-    let global_subscriber_t = tokio::spawn(async move {
-        let _ = match subscriber::GlobalSubscriber::new(GlobalSubscriberOpts {
-            event_tx,
-            messaging_tx,
-            identity_tx,
-        })
-        .run()
-        .await
-        {
-            Ok(_) => {}
-            Err(e) => {
-                error!(
-                    func = "init_global_subscriber",
-                    package = PACKAGE_NAME,
-                    "error init/run global subscriber: {:?}",
-                    e
-                );
-                bail!(AgentError::new(
-                    AgentErrorCodes::TelemetryInitError,
-                    format!("error init/run global subscriber: {:?}", e),
-                    true
-                ));
-            }
-        };
-        Ok(())
-    });
+// async fn init_global_subscriber(
+//     event_tx: broadcast::Sender<Event>,
+//     messaging_tx: mpsc::Sender<MessagingMessage>,
+//     identity_tx: mpsc::Sender<IdentityMessage>,
+// ) -> task::JoinHandle<Result<()>> {
+//     let global_subscriber_t = tokio::spawn(async move {
+//         let _ = match subscriber::GlobalSubscriber::new(GlobalSubscriberOpts {
+//             event_tx,
+//             messaging_tx,
+//             identity_tx,
+//         })
+//         .run()
+//         .await
+//         {
+//             Ok(_) => {}
+//             Err(e) => {
+//                 error!(
+//                     func = "init_global_subscriber",
+//                     package = PACKAGE_NAME,
+//                     "error init/run global subscriber: {:?}",
+//                     e
+//                 );
+//                 bail!(AgentError::new(
+//                     AgentErrorCodes::TelemetryInitError,
+//                     format!("error init/run global subscriber: {:?}", e),
+//                     true
+//                 ));
+//             }
+//         };
+//         Ok(())
+//     });
 
-    global_subscriber_t
-}
+//     global_subscriber_t
+// }
