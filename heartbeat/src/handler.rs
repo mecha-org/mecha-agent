@@ -48,28 +48,21 @@ impl HeartbeatHandler {
         }
     }
     pub async fn subscribe(&mut self, cancel_token: CancellationToken) -> Result<()> {
-        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
+        info!(func = "subscribe", package = env!("CARGO_PKG_NAME"), "init");
         let interval_in_secs: u64 = get_time_interval();
         let mut timer = tokio::time::interval(std::time::Duration::from_secs(interval_in_secs));
         loop {
             select! {
                     _ = cancel_token.cancelled() => {
                         // subscriber is cancelled
+                        println!("token is cancelled");
                         return Ok(());
                     },
                     _ = timer.tick() => {
-                        if self.is_started().unwrap() {
-                           let _ = send_heartbeat(SendHeartbeatOptions {
-                                messaging_tx: self.messaging_tx.clone(),
-                                identity_tx: self.identity_tx.clone(),
-                            }).await;
-                        } else {
-                            info!(
-                                func = "run",
-                                package = env!("CARGO_PKG_NAME"),
-                                "Heartbeat service is not started"
-                            );
-                        }
+                        let _ = send_heartbeat(SendHeartbeatOptions {
+                            messaging_tx: self.messaging_tx.clone(),
+                            identity_tx: self.identity_tx.clone(),
+                        }).await;
                 }
             }
         }
@@ -81,7 +74,6 @@ impl HeartbeatHandler {
         let _ = &self.start().await;
         let interval_in_secs: u64 = get_time_interval();
         let mut event_rx = self.event_tx.subscribe();
-        let mut timer = tokio::time::interval(std::time::Duration::from_secs(interval_in_secs));
         loop {
             select! {
                     msg = message_rx.recv() => {
@@ -132,20 +124,20 @@ impl HeartbeatHandler {
                         }
                     }
 
-                    _ = timer.tick() => {
-                        if self.is_started().unwrap() {
-                           let _ = send_heartbeat(SendHeartbeatOptions {
-                                messaging_tx: self.messaging_tx.clone(),
-                                identity_tx: self.identity_tx.clone(),
-                            }).await;
-                    } else {
-                        info!(
-                            func = "run",
-                            package = env!("CARGO_PKG_NAME"),
-                            "Heartbeat service is not started"
-                        );
-                    }
-                }
+                //     _ = timer.tick() => {
+                //         if self.is_started().unwrap() {
+                //            let _ = send_heartbeat(SendHeartbeatOptions {
+                //                 messaging_tx: self.messaging_tx.clone(),
+                //                 identity_tx: self.identity_tx.clone(),
+                //             }).await;
+                //     } else {
+                //         info!(
+                //             func = "run",
+                //             package = env!("CARGO_PKG_NAME"),
+                //             "Heartbeat service is not started"
+                //         );
+                //     }
+                // }
             }
         }
     }

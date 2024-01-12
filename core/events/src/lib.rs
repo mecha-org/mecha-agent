@@ -1,24 +1,24 @@
 use async_nats::Event as NatsEvent;
 use std::collections::HashMap;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum ProvisioningEvent {
     Provisioned,
     Deprovisioned,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum MessagingEvent {
     Connected,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum SettingEvent {
     Synced,
     Updated { settings: HashMap<String, String> },
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Event {
     Provisioning(ProvisioningEvent),
     Messaging(MessagingEvent),

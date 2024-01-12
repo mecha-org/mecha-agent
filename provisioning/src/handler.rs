@@ -65,8 +65,6 @@ impl ProvisioningHandler {
 
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<ProvisioningMessage>) -> Result<()> {
         info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
-        let mut timer = tokio::time::interval(std::time::Duration::from_secs(5));
-
         loop {
             select! {
                 msg = message_rx.recv() => {
@@ -96,9 +94,7 @@ impl ProvisioningHandler {
                         }
                     };
                 },
-                _ = timer.tick() => {
-                    info!(func = "run", package = env!("CARGO_PKG_NAME"), "service is running!");
-                }
+
             }
         }
     }
