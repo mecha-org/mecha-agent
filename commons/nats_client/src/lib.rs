@@ -10,9 +10,11 @@ use tracing::{debug, error, info, trace};
 
 pub mod errors;
 pub mod jetstream;
+pub use async_nats;
 pub use async_nats::jetstream::message::Message;
 pub use async_nats::Event as NatsEvent;
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
+
 #[derive(Clone)]
 pub struct NatsClient {
     pub address: String,

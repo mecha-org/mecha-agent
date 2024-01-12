@@ -16,16 +16,21 @@ use crypto::x509::PrivateKeySize;
 use events::Event;
 use futures::StreamExt;
 use identity::handler::IdentityMessage;
+use messaging::async_nats::Message;
 use messaging::handler::MessagingMessage;
 use messaging::Bytes;
+use messaging::Message as NatsMessage;
+use messaging::Subscriber as NatsSubscriber;
 use reqwest::Client as RequestClient;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::str;
+use std::sync::Arc;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
+use tokio::task::JoinSet;
 use tracing::error;
 use tracing::{debug, info, trace, warn};
 
@@ -79,17 +84,22 @@ pub struct SignedCertificates {
     pub intermediate_cert: String,
     pub root_cert: String,
 }
-pub async fn start_service(
+
+pub enum ProvisioningSubscriber {
+    Deprovisioning { sub: NatsSubscriber },
+}
+
+pub async fn subscribe_to_nats(
     identity_tx: mpsc::Sender<IdentityMessage>,
     messaging_tx: mpsc::Sender<MessagingMessage>,
     event_tx: Sender<Event>,
-) -> Result<()> {
+) -> Result<JoinSet<Result<()>>> {
     // Get machine id
-    let machine_id = match get_machine_id(identity_tx).await {
+    let machine_id = match get_machine_id(identity_tx.clone()).await {
         Ok(id) => id,
         Err(e) => {
             error!(
-                func = "start_service",
+                func = "subscribe",
                 package = PACKAGE_NAME,
                 "error getting machine id - {}",
                 e
@@ -108,7 +118,7 @@ pub async fn start_service(
         Ok(_) => {}
         Err(e) => {
             error!(
-                func = "start_service",
+                func = "init",
                 package = PACKAGE_NAME,
                 "error sending subscriber message - {}",
                 e
@@ -120,11 +130,11 @@ pub async fn start_service(
             ));
         }
     }
-    let mut subscriber = match recv_with_timeout(rx).await {
+    let de_prov_subscriber = match recv_with_timeout(rx).await {
         Ok(id) => id,
         Err(e) => {
             error!(
-                func = "start_service",
+                func = "init",
                 package = PACKAGE_NAME,
                 "error receiving get machine id message - {}",
                 e
@@ -136,39 +146,17 @@ pub async fn start_service(
             ));
         }
     };
-    while let Some(message) = subscriber.next().await {
-        // Parse payload and validate machine id
-        let request_payload: DeprovisionRequest = match parse_message_payload(message.payload) {
-            Ok(s) => s,
-            Err(e) => {
-                bail!(e)
-            }
-        };
-        // Validate request machine id with current machine id is same or not
-        if request_payload.machine_id == machine_id {
-            match de_provision(event_tx.clone()) {
-                Ok(_) => {
-                    info!(
-                        func = "start_service",
-                        package = PACKAGE_NAME,
-                        result = "success",
-                        "de provisioned successfully"
-                    );
-                }
-                Err(e) => {
-                    error!(
-                        func = "start_service",
-                        package = PACKAGE_NAME,
-                        "error de provisioning - {}",
-                        e
-                    );
-                }
-            }
-        }
-    }
 
-    Ok(())
+    let mut futures = JoinSet::new();
+    futures.spawn(await_deprovision_message(
+        identity_tx.clone(),
+        event_tx,
+        de_prov_subscriber,
+    ));
+
+    Ok(futures)
 }
+
 pub async fn ping() -> Result<PingResponse> {
     trace!(func = "ping", package = PACKAGE_NAME, "init",);
     let settings: AgentSettings = match read_settings_yml() {
@@ -566,7 +554,7 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
                 e
             );
             bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::DatabaseDeleteError,
+                ProvisioningErrorCodes::SettingsDatabaseDeleteError,
                 format!(
                     "error constructing db path - {} - {}",
                     &settings.settings.storage.path, e
@@ -594,7 +582,7 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
                 e
             );
             bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::DatabaseDeleteError,
+                ProvisioningErrorCodes::SettingsDatabaseDeleteError,
                 format!("error deleting db, code: {}, error - {}", 1001, e),
                 true
             ));
@@ -1018,6 +1006,7 @@ async fn sign_csr(
     );
     Ok(result.payload)
 }
+
 async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Result<String> {
     let (tx, rx) = oneshot::channel();
     match identity_tx
@@ -1093,3 +1082,74 @@ fn parse_message_payload(payload: Bytes) -> Result<DeprovisionRequest> {
     };
     Ok(payload)
 }
+
+pub async fn await_deprovision_message(
+    identity_tx: mpsc::Sender<IdentityMessage>,
+    event_tx: Sender<Event>,
+    mut subscriber: NatsSubscriber,
+) -> Result<()> {
+    // Don't exit loop in any case by returning a response
+    while let Some(message) = subscriber.next().await {
+        let machine_id = match get_machine_id(identity_tx.clone()).await {
+            Ok(id) => id,
+            Err(e) => {
+                error!(
+                    func = "await_deprovision_message",
+                    package = PACKAGE_NAME,
+                    "error getting machine id - {}",
+                    e
+                );
+                continue;
+            }
+        };
+
+        // Parse payload and validate machine id
+        let request_payload: DeprovisionRequest = match parse_message_payload(message.payload) {
+            Ok(s) => s,
+            Err(e) => {
+                error!(
+                    func = "await_deprovision_message",
+                    package = PACKAGE_NAME,
+                    "error getting machine id - {}",
+                    e
+                );
+                continue;
+            }
+        };
+
+        // Validate request machine id with current machine id is same or not
+        if request_payload.machine_id != machine_id {
+            error!(
+                func = "handle_deprovision_message",
+                package = PACKAGE_NAME,
+                "error validating machine id in request - req_machine_id: {} - machine_id: {}",
+                request_payload.machine_id,
+                machine_id
+            );
+            continue;
+        }
+
+        match de_provision(event_tx.clone()) {
+            Ok(_) => {
+                info!(
+                    func = "init",
+                    package = PACKAGE_NAME,
+                    result = "success",
+                    "de provisioned successfully"
+                );
+            }
+            Err(e) => {
+                error!(
+                    func = "init",
+                    package = PACKAGE_NAME,
+                    "error de provisioning - {}",
+                    e
+                );
+                continue;
+            }
+        }
+    }
+    Ok(())
+}
+
+pub async fn deprovision() {}

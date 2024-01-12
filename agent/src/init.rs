@@ -1,5 +1,9 @@
-use crate::errors::{AgentError, AgentErrorCodes};
+use crate::{
+    errors::{AgentError, AgentErrorCodes},
+    subscriber::{self, GlobalSubscriberOpts},
+};
 use anyhow::{bail, Result};
+use events::Event;
 use grpc_server::GrpcServerOptions;
 use heartbeat::handler::{HeartbeatHandler, HeartbeatMessage, HeartbeatOptions};
 use identity::handler::{IdentityHandler, IdentityMessage, IdentityOptions};
@@ -73,6 +77,10 @@ pub async fn init_services() -> Result<bool> {
         telemetry_tx.clone(),
     )
     .await;
+
+    // start global subscriber
+    let global_subscriber_t =
+        init_global_subscriber(event_tx.clone(), messaging_tx.clone(), identity_tx.clone());
 
     // wait on all join handles
     identity_t.await.unwrap();
@@ -257,6 +265,7 @@ async fn init_networking_service(
 
     (networking_t, networking_tx)
 }
+
 async fn init_telemetry_service(
     opt: TelemetryOptions,
 ) -> (task::JoinHandle<Result<()>>, mpsc::Sender<TelemetryMessage>) {
@@ -284,6 +293,7 @@ async fn init_telemetry_service(
 
     (telemetry_t, telemetry_tx)
 }
+
 async fn init_grpc_server(
     provisioning_tx: mpsc::Sender<ProvisioningMessage>,
     identity_tx: mpsc::Sender<IdentityMessage>,
@@ -303,4 +313,39 @@ async fn init_grpc_server(
     });
 
     grpc_t
+}
+
+async fn init_global_subscriber(
+    event_tx: broadcast::Sender<Event>,
+    messaging_tx: mpsc::Sender<MessagingMessage>,
+    identity_tx: mpsc::Sender<IdentityMessage>,
+) -> task::JoinHandle<Result<()>> {
+    let global_subscriber_t = tokio::spawn(async move {
+        let _ = match subscriber::GlobalSubscriber::new(GlobalSubscriberOpts {
+            event_tx,
+            messaging_tx,
+            identity_tx,
+        })
+        .run()
+        .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                error!(
+                    func = "init_global_subscriber",
+                    package = PACKAGE_NAME,
+                    "error init/run global subscriber: {:?}",
+                    e
+                );
+                bail!(AgentError::new(
+                    AgentErrorCodes::TelemetryInitError,
+                    format!("error init/run global subscriber: {:?}", e),
+                    true
+                ));
+            }
+        };
+        Ok(())
+    });
+
+    global_subscriber_t
 }

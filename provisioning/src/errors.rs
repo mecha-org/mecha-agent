@@ -15,12 +15,14 @@ pub enum ProvisioningErrorCodes {
     CSRSignReadFileError,
     CertificateWriteError,
     SendEventError,
-    DatabaseDeleteError,
+    SettingsDatabaseDeleteError,
     ParseResponseError,
     ChannelSendMessageError,
     ChannelReceiveMessageError,
-    MachineIdError,
+    MachineMismatchError,
     ExtractMessagePayloadError,
+    DeprovisioningError,
+    SubscribeToNatsError,
 }
 
 impl fmt::Display for ProvisioningErrorCodes {
@@ -53,8 +55,8 @@ impl fmt::Display for ProvisioningErrorCodes {
             ProvisioningErrorCodes::SendEventError => {
                 write!(f, "ProvisioningErrorCodes: SendEventError")
             }
-            ProvisioningErrorCodes::DatabaseDeleteError => {
-                write!(f, "ProvisioningErrorCodes: DatabaseDeleteError")
+            ProvisioningErrorCodes::SettingsDatabaseDeleteError => {
+                write!(f, "ProvisioningErrorCodes: SettingsDatabaseDeleteError")
             }
             ProvisioningErrorCodes::ParseResponseError => {
                 write!(f, "ProvisioningErrorCodes: ParseResponseError")
@@ -65,11 +67,17 @@ impl fmt::Display for ProvisioningErrorCodes {
             ProvisioningErrorCodes::ChannelReceiveMessageError => {
                 write!(f, "ProvisioningErrorCodes: ChannelReceiveMessageError")
             }
-            ProvisioningErrorCodes::MachineIdError => {
-                write!(f, "ProvisioningErrorCodes: MachineIdError")
+            ProvisioningErrorCodes::MachineMismatchError => {
+                write!(f, "ProvisioningErrorCodes: MachineMismatchError")
             }
             ProvisioningErrorCodes::ExtractMessagePayloadError => {
                 write!(f, "ProvisioningErrorCodes: ExtractMessagePayloadError")
+            }
+            ProvisioningErrorCodes::DeprovisioningError => {
+                write!(f, "ProvisioningErrorCodes: DeprovisioningError")
+            }
+            ProvisioningErrorCodes::SubscribeToNatsError => {
+                write!(f, "ProvisioningErrorCodes: SubscribeToNatsError")
             }
         }
     }

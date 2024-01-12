@@ -1,20 +1,31 @@
+use std::ops::Deref;
+use std::sync::Arc;
+
+use crate::errors::{ProvisioningError, ProvisioningErrorCodes};
 use crate::service::{
-    de_provision, generate_code, ping, provision_by_code, start_service, PingResponse,
+    de_provision, generate_code, ping, provision_by_code, subscribe_to_nats, PingResponse,
+    ProvisioningSubscriber,
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use events::Event;
+use futures::StreamExt;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
+use messaging::Subscriber as NatsSubscriber;
+use messaging::{async_nats, Message as NatsMessage};
 use services::{ServiceHandler, ServiceStatus};
 use tokio::select;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tracing::info;
+use tokio::task::JoinSet;
+use tracing::{error, info};
+
+const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
+
 pub struct ProvisioningHandler {
     identity_tx: mpsc::Sender<IdentityMessage>,
     message_tx: mpsc::Sender<MessagingMessage>,
     event_tx: broadcast::Sender<Event>,
-    status: ServiceStatus,
 }
 
 pub enum ProvisioningMessage {
@@ -49,15 +60,13 @@ impl ProvisioningHandler {
             identity_tx: options.identity_tx,
             message_tx: options.messaging_tx,
             event_tx: options.event_tx,
-            status: ServiceStatus::INACTIVE,
         }
     }
 
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<ProvisioningMessage>) -> Result<()> {
         info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
-        // start the service
-        let res = &self.start().await;
         let mut timer = tokio::time::interval(std::time::Duration::from_secs(5));
+
         loop {
             select! {
                 msg = message_rx.recv() => {
@@ -86,42 +95,11 @@ impl ProvisioningHandler {
                             let _ = reply_to.send(status);
                         }
                     };
-                }
+                },
                 _ = timer.tick() => {
                     info!(func = "run", package = env!("CARGO_PKG_NAME"), "service is running!");
                 }
             }
         }
-    }
-}
-
-#[async_trait]
-impl ServiceHandler for ProvisioningHandler {
-    async fn start(&mut self) -> Result<bool> {
-        self.status = ServiceStatus::STARTED;
-        let _ = start_service(
-            self.identity_tx.clone(),
-            self.message_tx.clone(),
-            self.event_tx.clone(),
-        )
-        .await;
-        Ok(true)
-    }
-
-    async fn stop(&mut self) -> Result<bool> {
-        self.status = ServiceStatus::STOPPED;
-        Ok(true)
-    }
-
-    fn get_status(&self) -> anyhow::Result<ServiceStatus> {
-        Ok(self.status)
-    }
-
-    fn is_stopped(&self) -> Result<bool> {
-        Ok(self.status == ServiceStatus::STOPPED)
-    }
-
-    fn is_started(&self) -> Result<bool> {
-        Ok(self.status == ServiceStatus::STARTED)
     }
 }

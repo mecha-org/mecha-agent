@@ -12,6 +12,7 @@ use tokio::{
         oneshot,
     },
 };
+use tokio_util::sync::CancellationToken;
 use tonic::async_trait;
 use tracing::{error, info, warn};
 
@@ -46,6 +47,34 @@ impl HeartbeatHandler {
             status: ServiceStatus::INACTIVE,
         }
     }
+    pub async fn subscribe(&mut self, cancel_token: CancellationToken) -> Result<()> {
+        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
+        let interval_in_secs: u64 = get_time_interval();
+        let mut timer = tokio::time::interval(std::time::Duration::from_secs(interval_in_secs));
+        loop {
+            select! {
+                    _ = cancel_token.cancelled() => {
+                        // subscriber is cancelled
+                        return Ok(());
+                    },
+                    _ = timer.tick() => {
+                        if self.is_started().unwrap() {
+                           let _ = send_heartbeat(SendHeartbeatOptions {
+                                messaging_tx: self.messaging_tx.clone(),
+                                identity_tx: self.identity_tx.clone(),
+                            }).await;
+                        } else {
+                            info!(
+                                func = "run",
+                                package = env!("CARGO_PKG_NAME"),
+                                "Heartbeat service is not started"
+                            );
+                        }
+                }
+            }
+        }
+    }
+
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<HeartbeatMessage>) -> Result<()> {
         info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
         // start the service
