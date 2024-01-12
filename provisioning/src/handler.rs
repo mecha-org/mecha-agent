@@ -9,6 +9,7 @@ use messaging::handler::MessagingMessage;
 use services::{ServiceHandler, ServiceStatus};
 use tokio::select;
 use tokio::sync::{broadcast, mpsc, oneshot};
+use tracing::info;
 pub struct ProvisioningHandler {
     identity_tx: mpsc::Sender<IdentityMessage>,
     message_tx: mpsc::Sender<MessagingMessage>,
@@ -53,6 +54,7 @@ impl ProvisioningHandler {
     }
 
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<ProvisioningMessage>) -> Result<()> {
+        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
         // start the service
         let res = &self.start().await;
 
