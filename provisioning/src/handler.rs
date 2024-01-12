@@ -57,7 +57,7 @@ impl ProvisioningHandler {
         info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
         // start the service
         let res = &self.start().await;
-
+        let mut timer = tokio::time::interval(std::time::Duration::from_secs(5));
         loop {
             select! {
                 msg = message_rx.recv() => {
@@ -86,6 +86,9 @@ impl ProvisioningHandler {
                             let _ = reply_to.send(status);
                         }
                     };
+                }
+                _ = timer.tick() => {
+                    info!(func = "run", package = env!("CARGO_PKG_NAME"), "service is running!");
                 }
             }
         }
