@@ -13,7 +13,9 @@ use provisioning::handler::{ProvisioningHandler, ProvisioningMessage, Provisioni
 use serde_json::error;
 use settings::handler::{SettingHandler, SettingMessage, SettingOptions};
 use telemetry::handler::{TelemetryHandler, TelemetryMessage, TelemetryOptions};
+use tokio::time::{sleep, Duration};
 use tokio::{
+    spawn,
     sync::{broadcast, mpsc},
     task,
 };
@@ -80,7 +82,14 @@ pub async fn init_services() -> Result<bool> {
 
     // start global subscriber
     let global_subscriber_t =
-        init_global_subscriber(event_tx.clone(), messaging_tx.clone(), identity_tx.clone());
+        init_global_subscriber(event_tx.clone(), messaging_tx.clone(), identity_tx.clone()).await;
+
+    //TODO: remove this
+    // let start_t = tokio::task::spawn(async move {
+    //     sleep(Duration::from_secs(20)).await;
+    //     println!("triggering provisioned");
+    //     let _ = event_tx_1.send(Event::Provisioning(events::ProvisioningEvent::Provisioned));
+    // });
 
     // wait on all join handles
     identity_t.await.unwrap();
@@ -90,6 +99,7 @@ pub async fn init_services() -> Result<bool> {
     setting_t.await.unwrap();
     networking_t.await.unwrap();
     grpc_t.await.unwrap();
+    global_subscriber_t.await.unwrap();
 
     Ok(true)
 }

@@ -22,7 +22,7 @@ use crate::errors::AgentErrorCodes;
 
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Debug, Hash, PartialEq, Eq)]
 pub enum SubscriberKey {
     Provisioning = 0,
     Heartbeat = 1,
@@ -58,13 +58,13 @@ impl GlobalSubscriber {
     }
 
     pub async fn run(&mut self) -> Result<()> {
+        info!("global_subscriber: init");
         let event_tx = &self.event_tx;
-        let mut start_event_rx = event_tx.subscribe();
-        let mut stop_event_rx = event_tx.subscribe();
+        let mut event_tx_cloned = event_tx.subscribe();
         loop {
             tokio::select! {
-                evt = start_event_rx.recv() => {
-                    info!("global_subscriber: start_event_rx recv");
+                evt = event_tx_cloned.recv() => {
+                    info!("global_subscriber: event_tx_cloned recv - {:?}", evt);
                     if evt.is_err() {
                         continue;
                     }
@@ -75,31 +75,15 @@ impl GlobalSubscriber {
                                 ProvisioningEvent::Provisioned => {
                                     let _ = &self.start_all().await;
                                 },
-                                _ => {},
-                            };
-                        }
-                        _ => {},
-                    };
-                },
-                evt = stop_event_rx.recv() => {
-                    info!("global_subscriber: stop_event_rx recv");
-
-                    if evt.is_err() {
-                        continue;
-                    }
-
-                    let _ = match evt.unwrap() {
-                        Event::Provisioning(prov_evt) => {
-                            let _ = match prov_evt {
-                                ProvisioningEvent::Provisioned => {
+                                ProvisioningEvent::Deprovisioned => {
                                     let _ = &self.stop_all();
                                 },
                                 _ => {},
                             };
-                        }
+                        },
                         _ => {},
                     };
-                }
+                },
             }
         }
     }
@@ -123,20 +107,27 @@ impl GlobalSubscriber {
         self.cancel_token_map = Some(cancel_token_map);
 
         // await all handles
-        let _ = heartbeat_t.await.unwrap();
+        // let _ = heartbeat_t.await.unwrap();
 
         Ok(())
     }
 
     fn stop_all(&self) -> Result<bool> {
+        println!("stop_all subscribers");
         let cancel_token_map = match &self.cancel_token_map {
             Some(m) => m,
             None => return Ok(false),
         };
 
-        let _ = cancel_token_map.values().into_iter().map(|c_token| {
+        println!(
+            "iter cancel_token_map {}",
+            cancel_token_map.values().count()
+        );
+
+        for (k, c_token) in cancel_token_map.into_iter() {
+            println!("cancelling token {:?}", k);
             c_token.clone().cancel();
-        });
+        }
 
         Ok(true)
     }
