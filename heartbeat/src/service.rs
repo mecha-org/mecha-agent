@@ -125,7 +125,7 @@ pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<b
             error!(
                 func = "provision_by_code",
                 package = PACKAGE_NAME,
-                "error looking up manifest - {}",
+                "error publishing heartbeat - {}",
                 err
             );
             bail!(HeartbeatError::new(

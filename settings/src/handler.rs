@@ -98,9 +98,8 @@ impl SettingHandler {
                             let _ = sync_settings(self.event_tx.clone(), self.messaging_tx.clone(), self.identity_tx.clone()).await;
                             let _ = start_consumer(self.messaging_tx.clone(), self.identity_tx.clone()).await;
                         }
-                        Event::Provisioning(_) => {},
-                        Event::Settings(_) => {},
-                        Event::Nats(_) => {},
+                        _ => {}
+
                     }
                 }
             }

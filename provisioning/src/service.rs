@@ -93,7 +93,7 @@ pub async fn subscribe_to_nats(
     identity_tx: mpsc::Sender<IdentityMessage>,
     messaging_tx: mpsc::Sender<MessagingMessage>,
     event_tx: Sender<Event>,
-) -> Result<JoinSet<Result<()>>> {
+) -> Result<NatsSubscriber> {
     // Get machine id
     let machine_id = match get_machine_id(identity_tx.clone()).await {
         Ok(id) => id,
@@ -147,14 +147,7 @@ pub async fn subscribe_to_nats(
         }
     };
 
-    let mut futures = JoinSet::new();
-    futures.spawn(await_deprovision_message(
-        identity_tx.clone(),
-        event_tx,
-        de_prov_subscriber,
-    ));
-
-    Ok(futures)
+    Ok(de_prov_subscriber)
 }
 
 pub async fn ping() -> Result<PingResponse> {
@@ -1102,7 +1095,6 @@ pub async fn await_deprovision_message(
                 continue;
             }
         };
-
         // Parse payload and validate machine id
         let request_payload: DeprovisionRequest = match parse_message_payload(message.payload) {
             Ok(s) => s,
@@ -1151,5 +1143,3 @@ pub async fn await_deprovision_message(
     }
     Ok(())
 }
-
-pub async fn deprovision() {}

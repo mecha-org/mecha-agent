@@ -1,25 +1,18 @@
-use crate::{
-    errors::{AgentError, AgentErrorCodes},
-    subscriber::{self, GlobalSubscriberOpts},
-};
+use crate::errors::{AgentError, AgentErrorCodes};
 use anyhow::{bail, Result};
-use events::Event;
 use grpc_server::GrpcServerOptions;
 use heartbeat::handler::{HeartbeatHandler, HeartbeatMessage, HeartbeatOptions};
 use identity::handler::{IdentityHandler, IdentityMessage, IdentityOptions};
 use messaging::handler::{MessagingHandler, MessagingMessage, MessagingOptions};
 use networking::handler::{NetworkingHandler, NetworkingMessage, NetworkingOptions};
 use provisioning::handler::{ProvisioningHandler, ProvisioningMessage, ProvisioningOptions};
-use serde_json::error;
 use settings::handler::{SettingHandler, SettingMessage, SettingOptions};
 use telemetry::handler::{TelemetryHandler, TelemetryMessage, TelemetryOptions};
-use tokio::time::{sleep, Duration};
 use tokio::{
-    spawn,
     sync::{broadcast, mpsc},
     task,
 };
-use tracing::{error, info};
+use tracing::error;
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 const CHANNEL_SIZE: usize = 32;
 
@@ -56,13 +49,13 @@ pub async fn init_services() -> Result<bool> {
         identity_tx: identity_tx.clone(),
     })
     .await;
-    let (networking_t, networking_tx) = init_networking_service(NetworkingOptions {
-        event_tx: event_tx.clone(),
-        messaging_tx: messaging_tx.clone(),
-        identity_tx: identity_tx.clone(),
-        setting_tx: setting_tx.clone(),
-    })
-    .await;
+    // let (networking_t, networking_tx) = init_networking_service(NetworkingOptions {
+    //     event_tx: event_tx.clone(),
+    //     messaging_tx: messaging_tx.clone(),
+    //     identity_tx: identity_tx.clone(),
+    //     setting_tx: setting_tx.clone(),
+    // })
+    // .await;
 
     let (telemetry_t, telemetry_tx) = init_telemetry_service(TelemetryOptions {
         event_tx: event_tx.clone(),
@@ -80,10 +73,6 @@ pub async fn init_services() -> Result<bool> {
     )
     .await;
 
-    // start global subscriber
-    // let global_subscriber_t =
-    //     init_global_subscriber(event_tx.clone(), messaging_tx.clone(), identity_tx.clone()).await;
-
     //TODO: remove this
     // let start_t = tokio::task::spawn(async move {
     //     sleep(Duration::from_secs(20)).await;
@@ -97,9 +86,9 @@ pub async fn init_services() -> Result<bool> {
     prov_t.await.unwrap();
     heartbeat_t.await.unwrap();
     setting_t.await.unwrap();
-    networking_t.await.unwrap();
+    // networking_t.await.unwrap();
+    telemetry_t.await.unwrap();
     grpc_t.await.unwrap();
-    // global_subscriber_t.await.unwrap();
 
     Ok(true)
 }
@@ -324,38 +313,3 @@ async fn init_grpc_server(
 
     grpc_t
 }
-
-// async fn init_global_subscriber(
-//     event_tx: broadcast::Sender<Event>,
-//     messaging_tx: mpsc::Sender<MessagingMessage>,
-//     identity_tx: mpsc::Sender<IdentityMessage>,
-// ) -> task::JoinHandle<Result<()>> {
-//     let global_subscriber_t = tokio::spawn(async move {
-//         let _ = match subscriber::GlobalSubscriber::new(GlobalSubscriberOpts {
-//             event_tx,
-//             messaging_tx,
-//             identity_tx,
-//         })
-//         .run()
-//         .await
-//         {
-//             Ok(_) => {}
-//             Err(e) => {
-//                 error!(
-//                     func = "init_global_subscriber",
-//                     package = PACKAGE_NAME,
-//                     "error init/run global subscriber: {:?}",
-//                     e
-//                 );
-//                 bail!(AgentError::new(
-//                     AgentErrorCodes::TelemetryInitError,
-//                     format!("error init/run global subscriber: {:?}", e),
-//                     true
-//                 ));
-//             }
-//         };
-//         Ok(())
-//     });
-
-//     global_subscriber_t
-// }
