@@ -90,7 +90,7 @@ impl HeartbeatHandler {
         Ok(())
     }
 
-    pub async fn clear_timer(&self) -> Result<bool> {
+    pub fn clear_timer(&self) -> Result<bool> {
         let exist_timer_token = &self.timer_token;
         if exist_timer_token.is_some() {
             let _ = exist_timer_token.as_ref().unwrap().cancel();
@@ -129,7 +129,7 @@ impl HeartbeatHandler {
                         match event.unwrap() {
                             Event::Messaging(events::MessagingEvent::Connected) => {
                                 // start
-                                let _ = &self.set_timer();
+                                let _ = &self.set_timer().await;
                             },
                             Event::Messaging(events::MessagingEvent::Disconnected) => {
                                 let _ = &self.clear_timer();
