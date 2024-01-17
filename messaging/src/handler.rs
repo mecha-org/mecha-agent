@@ -100,7 +100,7 @@ impl MessagingHandler {
                             let res = self.messaging_client.init_jetstream().await;
                             let _ = reply_to.send(res);
                         }
-                };
+                    };
                 }
                 // Receive events from other services
                 event = event_rx.recv() => {
@@ -124,8 +124,6 @@ impl MessagingHandler {
                             );
                             let _ = &self.stop().await;
                         },
-                        Event::Messaging(_) => {},
-                        Event::Settings(_) => {},
                         Event::Nats(nats_client::NatsEvent::Disconnected) => {
                             let _ = match self.event_tx.send(Event::Messaging(events::MessagingEvent::Disconnected)) {
                                 Ok(_) => {}
@@ -145,8 +143,7 @@ impl MessagingHandler {
                             };
                             let _ = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
                         },
-                        Event::Nats(_) => {
-                        },
+                      _ => {}
                     }
                 }
             }

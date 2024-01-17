@@ -14,6 +14,7 @@ pub enum AgentErrorCodes {
     TelemetryInitError,
     GlobalSubscriberInitError,
     InitGRPCError,
+    ChannelReceiveMessageError,
 }
 
 impl fmt::Display for AgentErrorCodes {
@@ -29,6 +30,7 @@ impl fmt::Display for AgentErrorCodes {
             AgentErrorCodes::TelemetryInitError => write!(f, "TelemetryInitError"),
             AgentErrorCodes::InitGRPCError => write!(f, "InitGRPCError"),
             AgentErrorCodes::GlobalSubscriberInitError => write!(f, "GlobalSubscriberInitError"),
+            AgentErrorCodes::ChannelReceiveMessageError => write!(f, "ChannelReceiveMessageError"),
         }
     }
 }

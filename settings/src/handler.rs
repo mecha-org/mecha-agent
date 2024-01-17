@@ -110,7 +110,6 @@ impl SettingHandler {
 #[async_trait]
 impl ServiceHandler for SettingHandler {
     async fn start(&mut self) -> Result<bool> {
-        println!("start setting service");
         self.status = ServiceStatus::STARTED;
         Ok(true)
     }

@@ -129,7 +129,7 @@ impl ProvisioningService for ProvisioningServiceHandler {
             }
         }
         let result = match recv_with_timeout(rx).await {
-            Ok(result) => result,
+            Ok(res) => res,
             Err(err) => {
                 error!(
                     func = "provision_by_code",
@@ -138,7 +138,16 @@ impl ProvisioningService for ProvisioningServiceHandler {
                     1002,
                     err
                 );
-                return Err(Status::unavailable("provisioning service unavailable").into());
+                match err.downcast::<ProvisioningError>() {
+                    Ok(e) => {
+                        let status = map_provisioning_error_to_tonic(
+                            e.code,
+                            e.code.to_string() + " - " + e.message.as_str(),
+                        );
+                        return Err(status);
+                    }
+                    Err(e) => return Err(Status::internal(e.to_string()).into()),
+                }
             }
         };
         Ok(Response::new(ProvisioningStatusResponse {
@@ -169,8 +178,9 @@ impl ProvisioningService for ProvisioningServiceHandler {
                 return Err(Status::unavailable("provisioning service unavailable").into());
             }
         }
+
         let success = match recv_with_timeout(rx).await {
-            Ok(result) => result,
+            Ok(res) => res,
             Err(err) => {
                 error!(
                     func = "deprovision",
@@ -179,7 +189,16 @@ impl ProvisioningService for ProvisioningServiceHandler {
                     1004,
                     err
                 );
-                return Err(Status::unavailable("provisioning service unavailable").into());
+                match err.downcast::<ProvisioningError>() {
+                    Ok(e) => {
+                        let status = map_provisioning_error_to_tonic(
+                            e.code,
+                            e.code.to_string() + " - " + e.message.as_str(),
+                        );
+                        return Err(status);
+                    }
+                    Err(e) => return Err(Status::internal(e.to_string()).into()),
+                }
             }
         };
         Ok(Response::new(DeProvisioningStatusResponse { success }))
