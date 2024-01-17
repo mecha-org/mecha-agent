@@ -4,7 +4,7 @@ use crate::agent::{
 };
 use crate::agent::{DeProvisioningStatusResponse, PingResponse};
 use anyhow::Result;
-use channel::recv_with_timeout;
+use channel::{recv_with_custom_timeout, recv_with_timeout};
 use provisioning::errors::{map_provisioning_error_to_tonic, ProvisioningError};
 use provisioning::handler::ProvisioningMessage;
 use tokio::sync::mpsc::{self};
@@ -128,7 +128,7 @@ impl ProvisioningService for ProvisioningServiceHandler {
                 return Err(Status::unavailable("provisioning service unavailable").into());
             }
         }
-        let result = match recv_with_timeout(rx).await {
+        let result = match recv_with_custom_timeout(30000, rx).await {
             Ok(res) => res,
             Err(err) => {
                 error!(
