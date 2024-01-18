@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use events::Event;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
@@ -7,9 +7,12 @@ use std::collections::HashMap;
 use tokio::select;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tonic::async_trait;
-use tracing::info;
+use tracing::{error, info};
 
-use crate::services::{get_settings_by_key, set_settings, start_consumer, sync_settings};
+use crate::errors::{DeviceSettingError, DeviceSettingErrorCodes};
+use crate::services::{
+    create_pull_consumer, get_settings_by_key, set_settings, start_settings, sync_settings,
+};
 
 pub struct SettingHandler {
     event_tx: broadcast::Sender<Event>,
@@ -19,7 +22,7 @@ pub struct SettingHandler {
 }
 
 pub enum SettingMessage {
-    StartConsumer {
+    StartSettings {
         reply_to: oneshot::Sender<Result<bool>>,
     },
     SyncSettings {
@@ -50,7 +53,75 @@ impl SettingHandler {
             status: ServiceStatus::INACTIVE,
         }
     }
+    async fn sync_settings(&mut self) -> Result<bool> {
+        let (event_tx, messaging_tx) = (self.event_tx.clone(), self.messaging_tx.clone());
+        let consumer =
+            match create_pull_consumer(self.messaging_tx.clone(), self.identity_tx.clone()).await {
+                Ok(s) => s,
+                Err(e) => {
+                    error!(
+                        func = "sync_settings",
+                        package = env!("CARGO_PKG_NAME"),
+                        "error creating pull consumer, error -  {:?}",
+                        e
+                    );
+                    bail!(DeviceSettingError::new(
+                        DeviceSettingErrorCodes::CreateConsumerError,
+                        format!("create consumer error - {:?} ", e.to_string()),
+                        true
+                    ))
+                }
+            };
+        let _ = tokio::task::spawn(async move {
+            match sync_settings(consumer, event_tx, messaging_tx).await {
+                Ok(_) => {}
+                Err(e) => {
+                    error!(
+                        func = "sync_settings",
+                        package = env!("CARGO_PKG_NAME"),
+                        "error syncing settings, error -  {:?}",
+                        e
+                    );
+                }
+            }
+        });
+        Ok(true)
+    }
 
+    async fn start_settings(&mut self) -> Result<bool> {
+        let messaging_tx = self.messaging_tx.clone();
+        let consumer =
+            match create_pull_consumer(self.messaging_tx.clone(), self.identity_tx.clone()).await {
+                Ok(s) => s,
+                Err(e) => {
+                    error!(
+                        func = "sync_settings",
+                        package = env!("CARGO_PKG_NAME"),
+                        "error creating pull consumer, error -  {:?}",
+                        e
+                    );
+                    bail!(DeviceSettingError::new(
+                        DeviceSettingErrorCodes::CreateConsumerError,
+                        format!("create consumer error - {:?} ", e.to_string()),
+                        true
+                    ))
+                }
+            };
+        let _ = tokio::task::spawn(async move {
+            match start_settings(consumer, messaging_tx).await {
+                Ok(_) => {}
+                Err(e) => {
+                    error!(
+                        func = "sync_settings",
+                        package = env!("CARGO_PKG_NAME"),
+                        "error syncing settings, error -  {:?}",
+                        e
+                    );
+                }
+            }
+        });
+        Ok(true)
+    }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<SettingMessage>) -> Result<()> {
         info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
         // start the service
@@ -64,12 +135,12 @@ impl SettingHandler {
                     }
 
                     match msg.unwrap() {
-                        SettingMessage::StartConsumer { reply_to } => {
-                            let status = start_consumer(self.messaging_tx.clone(), self.identity_tx.clone()).await;
+                        SettingMessage::StartSettings { reply_to } => {
+                            let status = self.start_settings().await;
                             reply_to.send(status);
                         }
                         SettingMessage::SyncSettings { reply_to } => {
-                            let status = sync_settings(self.event_tx.clone(), self.messaging_tx.clone(), self.identity_tx.clone()).await;
+                            let status = self.sync_settings().await;
                             reply_to.send(status);
                         }
                         SettingMessage::GetSettingsByKey { reply_to, key } => {
@@ -95,8 +166,8 @@ impl SettingHandler {
                                 package = env!("CARGO_PKG_NAME"),
                                 "event received messaging service connected"
                             );
-                            let _ = sync_settings(self.event_tx.clone(), self.messaging_tx.clone(), self.identity_tx.clone()).await;
-                            let _ = start_consumer(self.messaging_tx.clone(), self.identity_tx.clone()).await;
+                            let _ = self.sync_settings().await;
+                            let _ = self.start_settings().await;
                         }
                         _ => {}
 
@@ -130,8 +201,4 @@ impl ServiceHandler for SettingHandler {
     fn is_started(&self) -> Result<bool> {
         Ok(self.status == ServiceStatus::STARTED)
     }
-}
-
-fn generate_code() -> Result<String> {
-    Ok("123456".to_string())
 }

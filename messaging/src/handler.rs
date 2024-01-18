@@ -73,7 +73,6 @@ impl MessagingHandler {
                     if msg.is_none() {
                         continue;
                     }
-
                     match msg.unwrap() {
                         MessagingMessage::Send{reply_to, message, subject} => {
                             let res = self.messaging_client.publish(&subject.as_str(), Bytes::from(message)).await;
@@ -87,7 +86,6 @@ impl MessagingHandler {
                             let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
                             let _ = reply_to.send(res);
                         },
-                        MessagingMessage::Disconnect { reply_to } => todo!(),
                         MessagingMessage::Reconnect { reply_to } => {
                             let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
                             let _ = reply_to.send(res);
@@ -100,6 +98,7 @@ impl MessagingHandler {
                             let res = self.messaging_client.init_jetstream().await;
                             let _ = reply_to.send(res);
                         }
+                        _ => {}
                     };
                 }
                 // Receive events from other services
@@ -154,14 +153,12 @@ impl MessagingHandler {
 #[async_trait]
 impl ServiceHandler for MessagingHandler {
     async fn start(&mut self) -> Result<bool> {
-        println!("Starting messaging service");
         let machine_id = match get_machine_id(self.identity_tx.clone()).await {
             Ok(id) => id,
             Err(e) => {
                 return Ok(false);
             }
         };
-        println!("Should connect: {}", machine_id);
         if !machine_id.is_empty() {
             self.status = ServiceStatus::STARTED;
             match self
@@ -175,7 +172,6 @@ impl ServiceHandler for MessagingHandler {
                 }
             };
         }
-        println!("Messaging service started");
         Ok(true)
     }
 

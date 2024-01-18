@@ -9,14 +9,14 @@ use futures::StreamExt;
 use identity::handler::IdentityMessage;
 use kv_store::KeyValueStoreClient;
 use messaging::handler::MessagingMessage;
-use nats_client::{Bytes, Message};
+use nats_client::{
+    async_nats::jetstream::consumer::{pull::Config, Consumer},
+    Bytes, Message,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha256::digest;
-use tokio::{
-    sync::{broadcast, mpsc::Sender, oneshot},
-    time::error,
-};
+use tokio::sync::{broadcast, mpsc::Sender, oneshot};
 use tracing::{debug, error, info, trace};
 
 use crate::errors::{DeviceSettingError, DeviceSettingErrorCodes};
@@ -37,12 +37,11 @@ pub struct DeviceSettings {
     settings: AgentSettings,
 }
 
-pub async fn sync_settings(
-    event_tx: tokio::sync::broadcast::Sender<Event>,
+pub async fn create_pull_consumer(
     messaging_tx: Sender<MessagingMessage>,
     identity_tx: Sender<IdentityMessage>,
-) -> Result<bool> {
-    let fn_name = "sync_settings";
+) -> Result<Consumer<Config>> {
+    let fn_name = "create_pull_consumer";
     let (tx, rx) = oneshot::channel();
     match messaging_tx
         .send(MessagingMessage::InitJetStream { reply_to: tx })
@@ -168,8 +167,15 @@ pub async fn sync_settings(
         }
     };
 
+    Ok(consumer)
+}
+pub async fn sync_settings(
+    consumer: Consumer<Config>,
+    event_tx: broadcast::Sender<Event>,
+    messaging_tx: Sender<MessagingMessage>,
+) -> Result<bool> {
+    let fn_name = "sync_settings";
     let key_value_store = KeyValueStoreClient::new();
-    //todo: confirm with sm that should we process in batch of process all
     let mut messages = match consumer.fetch().messages().await {
         Ok(s) => s,
         Err(e) => {
@@ -229,108 +235,13 @@ pub async fn sync_settings(
             ))
         }
     }
-
     Ok(true)
 }
-pub async fn start_consumer(
+pub async fn start_settings(
+    consumer: Consumer<Config>,
     messaging_tx: Sender<MessagingMessage>,
-    identity_tx: Sender<IdentityMessage>,
 ) -> Result<bool> {
-    let fn_name = "start_consumer";
-    let (tx, rx) = oneshot::channel();
-    match messaging_tx
-        .send(MessagingMessage::InitJetStream { reply_to: tx })
-        .await
-    {
-        Ok(_) => {}
-        Err(err) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "error sending init jetstream message - {:?}",
-                err
-            );
-            bail!(DeviceSettingError::new(
-                DeviceSettingErrorCodes::ChannelSendMessageError,
-                format!(
-                    "error sending init jetstream message - {:?}",
-                    err.to_string()
-                ),
-                true
-            ))
-        }
-    }
-
-    let jet_stream_client = match recv_with_timeout(rx).await {
-        Ok(js_client) => js_client,
-        Err(err) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "error receiving init jetstream message - {:?}",
-                err
-            );
-            bail!(DeviceSettingError::new(
-                DeviceSettingErrorCodes::ChannelReceiveMessageError,
-                format!("error receiving init jetstream message - {:?}", err),
-                true
-            ))
-        }
-    };
-
-    let stream_name = "machine_settings";
-    let stream = match jet_stream_client.get_stream(stream_name.to_string()).await {
-        Ok(s) => s,
-        Err(e) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "error getting stream, name - {}, error -  {:?}",
-                stream_name,
-                e
-            );
-            bail!(e)
-        }
-    };
-    let machine_id = match get_machine_id(identity_tx.clone()).await {
-        Ok(s) => s,
-        Err(e) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "error getting machine id, error -  {:?}",
-                e
-            );
-            bail!(e)
-        }
-    };
-
-    // Create consumer
-    let consumer_name = generate_random_alphanumeric(10);
-    debug!(
-        func = fn_name,
-        package = PACKAGE_NAME,
-        "consumer name generated - {}",
-        &consumer_name
-    );
-    let filter_subject = format!("machine.{}.settings.kv.>", digest(machine_id.clone()));
-    let consumer = match jet_stream_client
-        .create_consumer(stream, filter_subject, consumer_name.clone())
-        .await
-    {
-        Ok(s) => s,
-        Err(e) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "error creating consumer, name - {}, error -  {:?}",
-                &consumer_name,
-                e
-            );
-            bail!(e)
-        }
-    };
-
+    let fn_name = "start_settings";
     let key_value_store = KeyValueStoreClient::new();
     let mut messages = match consumer.messages().await {
         Ok(s) => s,
@@ -349,46 +260,43 @@ pub async fn start_consumer(
         }
     };
 
-    // mpsc getting blocked due to while loop that's why spawning a new task
-    tokio::spawn(async move {
-        while let Some(Ok(message)) = messages.next().await {
-            match process_message(
-                message.clone(),
-                key_value_store.clone(),
-                messaging_tx.clone(),
-            )
-            .await
-            {
-                Ok(_) => {}
-                Err(err) => {
-                    error!(
-                        func = fn_name,
-                        package = PACKAGE_NAME,
-                        "error processing message - {:?}",
-                        err
-                    );
-                }
+    while let Some(Ok(message)) = messages.next().await {
+        match process_message(
+            message.clone(),
+            key_value_store.clone(),
+            messaging_tx.clone(),
+        )
+        .await
+        {
+            Ok(_) => {}
+            Err(err) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error processing message - {:?}",
+                    err
+                );
             }
-
-            // Acknowledges a message delivery
-            match message.ack().await {
-                Ok(res) => println!("message Acknowledged {:?}", res),
-                Err(err) => {
-                    error!(
-                        func = fn_name,
-                        package = PACKAGE_NAME,
-                        "message acknowledge failed {}",
-                        err
-                    );
-                }
-            };
         }
-        info!(
-            func = fn_name,
-            package = PACKAGE_NAME,
-            "message delivery acknowledged"
-        );
-    });
+
+        // Acknowledges a message delivery
+        match message.ack().await {
+            Ok(res) => println!("message Acknowledged {:?}", res),
+            Err(err) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "message acknowledge failed {}",
+                    err
+                );
+            }
+        };
+    }
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "message delivery acknowledged"
+    );
     info!(func = fn_name, package = PACKAGE_NAME, "consumer started");
     Ok(true)
 }

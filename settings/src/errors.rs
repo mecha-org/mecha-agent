@@ -9,6 +9,7 @@ pub enum DeviceSettingErrorCodes {
     MessageHeaderEmptyError,
     AckHeaderNotFoundError,
     PullMessagesError,
+    CreateConsumerError,
     ChannelSendMessageError,
     ChannelReceiveMessageError,
 }
@@ -30,6 +31,9 @@ impl fmt::Display for DeviceSettingErrorCodes {
             }
             DeviceSettingErrorCodes::PullMessagesError => {
                 write!(f, "DeviceSettingErrorCodes: PullMessagesError")
+            }
+            DeviceSettingErrorCodes::CreateConsumerError => {
+                write!(f, "DeviceSettingErrorCodes: CreateConsumerError")
             }
             DeviceSettingErrorCodes::ChannelSendMessageError => {
                 write!(f, "DeviceSettingErrorCodes: ChannelSendMessageError",)
