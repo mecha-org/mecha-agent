@@ -5,7 +5,6 @@ use channel::recv_with_timeout;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
 use serde::{Deserialize, Serialize};
-use std::process::Command;
 use tokio::sync::{mpsc::Sender, oneshot};
 use tracing::{error, info, warn};
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -28,7 +27,11 @@ pub struct EncodeData {
     machine_id: String,
 }
 
-pub fn telemetry_init() -> Result<bool> {
+#[derive(Debug)]
+pub struct TelemetryStartResponse {
+    pub telemetry_process: tokio::process::Child,
+}
+pub fn telemetry_init() -> Result<TelemetryStartResponse> {
     let fn_name = "telemetry_init";
     let settings = match read_settings_yml() {
         Ok(v) => v,
@@ -43,29 +46,39 @@ pub fn telemetry_init() -> Result<bool> {
         }
     };
     if settings.telemetry.enabled {
-        let r = Command::new(settings.telemetry.otel_collector.bin)
-            .arg("--config")
-            .arg(settings.telemetry.otel_collector.conf.clone())
-            .spawn();
-        match r {
-            Ok(_) => {}
+        let cmd = &format!(
+            "{} --config {}",
+            settings.telemetry.otel_collector.bin,
+            settings.telemetry.otel_collector.conf.clone()
+        );
+        let mut parts = cmd.split_whitespace();
+        let program = parts.next().unwrap();
+        let args = parts.collect::<Vec<_>>();
+
+        let mut binding = tokio::process::Command::new(program);
+        let spawn_result = binding.args(&args).spawn();
+
+        let spawn_child = match spawn_result {
+            Ok(v) => v,
             Err(e) => {
                 error!(
-                    func = fn_name,
+                    func = "spawn_command",
                     package = PACKAGE_NAME,
-                    "failed to initialize telemetry - {}",
+                    "failed to spawn command {}, error - {}",
+                    cmd,
                     e
                 );
-                bail!("Failed to initialize telemetry - {}", e);
+                bail!("failed to spawn command {}, error - {}", cmd, e);
             }
         };
-
         info!(
             func = fn_name,
             package = PACKAGE_NAME,
             "telemetry initialized"
         );
-        Ok(true)
+        Ok(TelemetryStartResponse {
+            telemetry_process: spawn_child,
+        })
     } else {
         info!(func = fn_name, package = PACKAGE_NAME, "telemetry disabled");
         bail!(TelemetryError::new(
