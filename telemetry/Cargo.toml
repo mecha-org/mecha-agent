@@ -25,3 +25,4 @@ tracing = "0.1"
 sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
 sha256 = "1.1.2"
 tokio = { version = "1.27.0", features = ["full"] }
+tokio-util = "0.7.10"
