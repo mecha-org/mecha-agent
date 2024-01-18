@@ -199,7 +199,6 @@ pub async fn sync_settings(
             messaging_tx.clone(),
         )
         .await;
-
         // Acknowledges a message delivery
         match message.ack().await {
             Ok(res) => println!("message Acknowledged {:?}", res),
@@ -217,7 +216,13 @@ pub async fn sync_settings(
         "message delivery acknowledged"
     );
     match event_tx.send(Event::Settings(events::SettingEvent::Synced)) {
-        Ok(_) => {}
+        Ok(_) => {
+            info!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "settings synced event sent"
+            );
+        }
         Err(err) => {
             error!(
                 func = fn_name,
@@ -237,11 +242,11 @@ pub async fn sync_settings(
     }
     Ok(true)
 }
-pub async fn start_settings(
+pub async fn await_settings_message(
     consumer: Consumer<Config>,
     messaging_tx: Sender<MessagingMessage>,
 ) -> Result<bool> {
-    let fn_name = "start_settings";
+    let fn_name = "await_settings_message";
     let key_value_store = KeyValueStoreClient::new();
     let mut messages = match consumer.messages().await {
         Ok(s) => s,
@@ -297,7 +302,6 @@ pub async fn start_settings(
         package = PACKAGE_NAME,
         "message delivery acknowledged"
     );
-    info!(func = fn_name, package = PACKAGE_NAME, "consumer started");
     Ok(true)
 }
 

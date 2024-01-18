@@ -18,7 +18,7 @@ pub struct SettingHandler {
     event_tx: broadcast::Sender<Event>,
     messaging_tx: mpsc::Sender<MessagingMessage>,
     identity_tx: mpsc::Sender<IdentityMessage>,
-    setting_subscriber_token: Option<CancellationToken>,
+    setting_consumer_token: Option<CancellationToken>,
     sync_settings_token: Option<CancellationToken>,
 }
 
@@ -51,7 +51,7 @@ impl SettingHandler {
             event_tx: options.event_tx,
             messaging_tx: options.messaging_tx,
             identity_tx: options.identity_tx,
-            setting_subscriber_token: None,
+            setting_consumer_token: None,
             sync_settings_token: None,
         }
     }
@@ -100,7 +100,7 @@ impl SettingHandler {
                     },
                     result = futures.join_next() => {
                         println!("result {:?}", result);
-                        if result.unwrap().is_ok() {}
+                        return Ok(());
                     },
                 }
             }
@@ -111,10 +111,10 @@ impl SettingHandler {
         Ok(true)
     }
 
-    async fn start_settings(&mut self) -> Result<bool> {
-        let fn_name = "start_settings";
+    async fn settings_consumer(&mut self) -> Result<bool> {
+        let fn_name = "settings_consumer";
         // safety: check for existing cancel token, and cancel it
-        let exist_settings_token = &self.setting_subscriber_token;
+        let exist_settings_token = &self.setting_consumer_token;
         if exist_settings_token.is_some() {
             let _ = exist_settings_token.as_ref().unwrap().cancel();
         }
@@ -144,7 +144,6 @@ impl SettingHandler {
             consumer.clone(),
             messaging_tx.clone(),
         ));
-        let mut sync_timer = tokio::time::interval(std::time::Duration::from_secs(5));
         // create spawn for timer
         let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {
             loop {
@@ -154,31 +153,23 @@ impl SettingHandler {
                                 func = fn_name,
                                 package = PACKAGE_NAME,
                                 result = "success",
-                                "start_settings cancelled"
+                                "settings subscriber cancelled"
                             );
                             return Ok(());
                     },
                     result = futures.join_next() => {
                         if result.unwrap().is_ok() {}
                     },
-                    _ = sync_timer.tick() => {
-                        info!(
-                            func = fn_name,
-                            package = PACKAGE_NAME,
-                            result = "success",
-                            "start_settings"
-                        );
-                    }
                 }
             }
         });
 
         // Save to state
-        self.setting_subscriber_token = Some(settings_token_cloned);
+        self.setting_consumer_token = Some(settings_token_cloned);
         Ok(true)
     }
     fn clear_settings_subscription(&self) -> Result<bool> {
-        let exist_subscriber_token = &self.setting_subscriber_token;
+        let exist_subscriber_token = &self.setting_consumer_token;
         if exist_subscriber_token.is_some() {
             let _ = exist_subscriber_token.as_ref().unwrap().cancel();
         } else {
@@ -207,7 +198,7 @@ impl SettingHandler {
 
                     match msg.unwrap() {
                         SettingMessage::StartSettings { reply_to } => {
-                            let status = self.start_settings().await;
+                            let status = self.settings_consumer().await;
                             reply_to.send(status);
                         }
                         SettingMessage::SyncSettings { reply_to } => {
@@ -235,18 +226,25 @@ impl SettingHandler {
                             info!(
                                 func = "run",
                                 package = env!("CARGO_PKG_NAME"),
-                                "event received messaging service connected"
+                                "connected event in settings service"
                             );
                             let _ = self.sync_settings().await;
-                            println!("sync settings completed");
-                            let _ = self.start_settings().await;
-                            println!("start settings completed");
+                            let _ = self.settings_consumer().await;
                         }
                         Event::Messaging(events::MessagingEvent::Disconnected) => {
                             info!(
                                 func = "run",
                                 package = env!("CARGO_PKG_NAME"),
-                                "event received messaging service disconnected"
+                                "disconnected event in settings service"
+                            );
+                            let _ = self.clear_sync_settings_subscriber();
+                            let _ = self.clear_settings_subscription();
+                        }
+                        Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
+                            info!(
+                                func = "run",
+                                package = env!("CARGO_PKG_NAME"),
+                                "deprovisioned event in settings service"
                             );
                             let _ = self.clear_sync_settings_subscriber();
                             let _ = self.clear_settings_subscription();
