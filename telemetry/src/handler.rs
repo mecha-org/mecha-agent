@@ -88,19 +88,7 @@ impl TelemetryHandler {
                     continue;
                 }
                 match event.unwrap() {
-                    Event::Provisioning(events::ProvisioningEvent::Provisioned) => {
-                        info!(
-                            func = "run",
-                            package = env!("CARGO_PKG_NAME"),
-                            "device provisioned event received"
-                        );
-                        let _ = &self.start().await;
-                    },
-                    Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
-                        let _ = &self.stop().await;
-                    },
-                    Event::Messaging(_) => {},
-                    Event::Settings(events::SettingEvent::Synced) => {
+                    Event::Messaging(events::MessagingEvent::Connected) => {
                         let _ = &self.start().await;
                     },
                     Event::Settings(events::SettingEvent::Updated { settings }) => {
@@ -122,7 +110,7 @@ impl TelemetryHandler {
                             None => {},
                         }
                     },
-                    Event::Nats(_) => {},
+                    _ => {}
                 }
             }
             }

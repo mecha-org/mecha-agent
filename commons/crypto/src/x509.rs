@@ -290,11 +290,19 @@ pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<
     let mut private_key_buf = Vec::new();
     let mut file = match safe_open_file(private_key_path) {
         Ok(v) => v,
-        Err(e) => bail!(CryptoError::new(
-            CryptoErrorCodes::ReadPrivateKeyError,
-            format!("failed to open private key file - {}", e),
-            true
-        )),
+        Err(e) => {
+            error!(
+                func = "sign_with_private_key",
+                package = PACKAGE_NAME,
+                "failed to open private key file - {}",
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::ReadPrivateKeyError,
+                format!("failed to open private key file - {}", e),
+                true
+            ))
+        }
     };
 
     match file.read_to_end(&mut private_key_buf) {

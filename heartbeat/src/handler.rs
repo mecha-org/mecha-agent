@@ -1,11 +1,7 @@
-use std::ops::Deref;
-
-use anyhow::{bail, Result};
+use anyhow::Result;
 use events::Event;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
-use serde_json::json;
-use services::{ServiceHandler, ServiceStatus};
 use tokio::{
     select,
     sync::{
@@ -16,12 +12,9 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
-use tonic::async_trait;
-use tracing::{error, info, warn};
+use tracing::info;
 
-use crate::service::{
-    device_provision_status, get_time_interval, send_heartbeat, SendHeartbeatOptions,
-};
+use crate::service::{get_time_interval, send_heartbeat, SendHeartbeatOptions};
 
 pub struct HeartbeatHandler {
     event_tx: broadcast::Sender<Event>,
@@ -117,7 +110,7 @@ impl HeartbeatHandler {
                                     messaging_tx: self.messaging_tx.clone(),
                                     identity_tx: self.identity_tx.clone(),
                                 }).await;
-                                reply_to.send(res);
+                                let _ = reply_to.send(res);
                             }
                         };
                     }

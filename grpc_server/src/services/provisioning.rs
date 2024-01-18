@@ -4,7 +4,7 @@ use crate::agent::{
 };
 use crate::agent::{DeProvisioningStatusResponse, PingResponse};
 use anyhow::Result;
-use channel::recv_with_timeout;
+use channel::{recv_with_custom_timeout, recv_with_timeout};
 use provisioning::errors::{map_provisioning_error_to_tonic, ProvisioningError};
 use provisioning::handler::ProvisioningMessage;
 use tokio::sync::mpsc::{self};
@@ -128,8 +128,8 @@ impl ProvisioningService for ProvisioningServiceHandler {
                 return Err(Status::unavailable("provisioning service unavailable").into());
             }
         }
-        let result = match recv_with_timeout(rx).await {
-            Ok(result) => result,
+        let result = match recv_with_custom_timeout(30000, rx).await {
+            Ok(res) => res,
             Err(err) => {
                 error!(
                     func = "provision_by_code",
@@ -138,7 +138,16 @@ impl ProvisioningService for ProvisioningServiceHandler {
                     1002,
                     err
                 );
-                return Err(Status::unavailable("provisioning service unavailable").into());
+                match err.downcast::<ProvisioningError>() {
+                    Ok(e) => {
+                        let status = map_provisioning_error_to_tonic(
+                            e.code,
+                            e.code.to_string() + " - " + e.message.as_str(),
+                        );
+                        return Err(status);
+                    }
+                    Err(e) => return Err(Status::internal(e.to_string()).into()),
+                }
             }
         };
         Ok(Response::new(ProvisioningStatusResponse {
@@ -169,8 +178,9 @@ impl ProvisioningService for ProvisioningServiceHandler {
                 return Err(Status::unavailable("provisioning service unavailable").into());
             }
         }
+
         let success = match recv_with_timeout(rx).await {
-            Ok(result) => result,
+            Ok(res) => res,
             Err(err) => {
                 error!(
                     func = "deprovision",
@@ -179,7 +189,16 @@ impl ProvisioningService for ProvisioningServiceHandler {
                     1004,
                     err
                 );
-                return Err(Status::unavailable("provisioning service unavailable").into());
+                match err.downcast::<ProvisioningError>() {
+                    Ok(e) => {
+                        let status = map_provisioning_error_to_tonic(
+                            e.code,
+                            e.code.to_string() + " - " + e.message.as_str(),
+                        );
+                        return Err(status);
+                    }
+                    Err(e) => return Err(Status::internal(e.to_string()).into()),
+                }
             }
         };
         Ok(Response::new(DeProvisioningStatusResponse { success }))
