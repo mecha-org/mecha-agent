@@ -1499,6 +1499,7 @@ dependencies = [
  "sha256",
  "tar",
  "tokio",
+ "tokio-util",
  "tonic 0.10.2",
  "tracing",
  "tracing-subscriber",

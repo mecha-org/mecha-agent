@@ -119,7 +119,7 @@ pub struct OverrideConfigurations {
 }
 
 #[derive(Debug)]
-pub struct StartRes {
+pub struct NetworkingInitResponse {
     pub nebula_process: tokio::process::Child,
 }
 
@@ -1069,11 +1069,11 @@ pub async fn get_networking_firewall_rules(
     Ok(networking_firewall_rules)
 }
 
-pub async fn start(
+pub async fn networking_init(
     setting_tx: Sender<SettingMessage>,
     identity_tx: Sender<IdentityMessage>,
     messaging_tx: Sender<MessagingMessage>,
-) -> Result<StartRes> {
+) -> Result<NetworkingInitResponse> {
     let fn_name = "start";
 
     let agent_settings: AgentSettings = match read_settings_yml() {
@@ -1352,7 +1352,7 @@ pub async fn start(
         package = PACKAGE_NAME,
         "nebula started successfully"
     );
-    Ok(StartRes {
+    Ok(NetworkingInitResponse {
         nebula_process: nebula_child_process,
     })
 }
