@@ -49,13 +49,13 @@ pub async fn init_services() -> Result<bool> {
         identity_tx: identity_tx.clone(),
     })
     .await;
-    // let (networking_t, networking_tx) = init_networking_service(NetworkingOptions {
-    //     event_tx: event_tx.clone(),
-    //     messaging_tx: messaging_tx.clone(),
-    //     identity_tx: identity_tx.clone(),
-    //     setting_tx: setting_tx.clone(),
-    // })
-    // .await;
+    let (networking_t, networking_tx) = init_networking_service(NetworkingOptions {
+        event_tx: event_tx.clone(),
+        messaging_tx: messaging_tx.clone(),
+        identity_tx: identity_tx.clone(),
+        setting_tx: setting_tx.clone(),
+    })
+    .await;
 
     let (telemetry_t, telemetry_tx) = init_telemetry_service(TelemetryOptions {
         event_tx: event_tx.clone(),
@@ -86,7 +86,7 @@ pub async fn init_services() -> Result<bool> {
     prov_t.await.unwrap();
     heartbeat_t.await.unwrap();
     setting_t.await.unwrap();
-    // networking_t.await.unwrap();
+    networking_t.await.unwrap();
     telemetry_t.await.unwrap();
     grpc_t.await.unwrap();
 
