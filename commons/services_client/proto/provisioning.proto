@@ -20,7 +20,7 @@ message FindManifestRequest {
 }
 message ManifestDetailsResponse {
   string machine_id = 1;
-  string cert_signing_url = 2;
+  string token = 2;
   string cert_key_pair_algorithm = 3;
   string cert_key_pair_size = 4;
   string cert_valid_upto = 5;

@@ -125,7 +125,7 @@ pub async fn subscribe_to_nats(
 
 pub async fn ping() -> Result<PingResponse> {
     trace!(func = "ping", package = PACKAGE_NAME, "init",);
-    let client = ServicesClient::new();
+    let client = ServicesClient::new().await?;
     let response = match client.ping().await {
         Ok(v) => v,
         Err(e) => {
@@ -282,9 +282,9 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
 
     // 4. Sign the CSR using the cert signing url
     let signed_certificates = match sign_csr(
+        manifest.token.as_str(),
         &settings.provisioning.paths.machine.csr,
         &manifest.machine_id,
-        &manifest.cert_signing_url,
     )
     .await
     {
@@ -488,14 +488,14 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
 }
 
 async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<ManifestDetailsResponse> {
-    trace!(
+    info!(
         func = "lookup_manifest",
         package = PACKAGE_NAME,
         "init, code - {:?}",
         code
     );
 
-    let client = ServicesClient::new();
+    let client = ServicesClient::new().await?;
     let lookup_result = match client
         .find_manifest(FindManifestRequest {
             code: code.to_string(),
@@ -630,17 +630,8 @@ fn write_certificates_to_path(
     Ok(true)
 }
 
-async fn sign_csr(
-    csr_path: &str,
-    machine_id: &str,
-    cert_signing_url: &str,
-) -> Result<CertSignResponse> {
-    trace!(
-        func = "sign_csr",
-        package = PACKAGE_NAME,
-        "init, csr_sign_url {}",
-        cert_signing_url
-    );
+async fn sign_csr(ott: &str, csr_path: &str, machine_id: &str) -> Result<CertSignResponse> {
+    trace!(func = "sign_csr", package = PACKAGE_NAME, "init",);
 
     let constructed_path = match construct_dir_path(csr_path) {
         Ok(path) => {
@@ -691,10 +682,10 @@ async fn sign_csr(
         }
     };
 
-    let client = ServicesClient::new();
+    let client = ServicesClient::new().await?;
     let cert_sign_response = match client
         .cert_sign(CertSignRequest {
-            token: "".to_string(), //todo:check and fix
+            token: ott.to_string(),
             csr: csr_pem,
             machine_id: machine_id.to_string(),
         })

@@ -382,7 +382,7 @@ fn sign_nonce(private_key_path: &String, nonce: &str) -> Result<String> {
 
 async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
     let fn_name = "get_auth_nonce";
-    let client = ServicesClient::new();
+    let client = ServicesClient::new().await?;
     let result = match client
         .get_auth_nonce(AuthNonceRequest {
             agent_name: String::from("mecha_agent"),
@@ -430,7 +430,7 @@ async fn get_auth_token(
         signed_nonce: signed_nonce.to_string(),
         public_key: nats_user_public_key.to_string(),
     };
-    let client = ServicesClient::new();
+    let client = ServicesClient::new().await?;
     let result = match client.get_auth_token(request_body).await {
         Ok(v) => v,
         Err(e) => {

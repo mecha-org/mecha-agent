@@ -7,11 +7,10 @@ use messaging::{
 use provisioning::{
     CertSignRequest, CertSignResponse, Empty, FindManifestRequest, ManifestDetailsResponse,
 };
-
 use tonic::transport::Channel;
 
 use crate::provisioning::provisioning_service_client::ProvisioningServiceClient;
-
+use tracing::{info, warn};
 pub mod provisioning {
     tonic::include_proto!("provisioning");
 }
@@ -22,16 +21,28 @@ pub struct ServicesClient {
     client: Channel,
 }
 impl ServicesClient {
-    pub fn new() -> Self {
+    pub async fn new() -> Result<Self> {
         let settings = match read_settings_yml() {
             Ok(s) => s,
             Err(e) => {
-                println!("error while reading settings.yml: {:?}", e);
+                warn!(
+                    func = "new",
+                    package = env!("CARGO_PKG_NAME"),
+                    "error reading settings - {}",
+                    e
+                );
                 AgentSettings::default()
             }
         };
-        let client = Channel::from_static("http://localhost:3000").connect_lazy();
-        Self { client }
+        let channel = Channel::from_shared(settings.services.url).unwrap();
+        let client = match channel.connect().await {
+            Ok(c) => c,
+            Err(e) => {
+                let e = anyhow::Error::from(e);
+                bail!(e);
+            }
+        };
+        Ok(Self { client })
     }
     pub async fn ping(&self) -> Result<bool> {
         let mut client = ProvisioningServiceClient::new(self.client.to_owned());
@@ -50,6 +61,13 @@ impl ServicesClient {
         &self,
         request: FindManifestRequest,
     ) -> Result<ManifestDetailsResponse> {
+        let fn_name = "find_manifest";
+        info!(
+            func = fn_name,
+            package = env!("CARGO_PKG_NAME"),
+            "request: {:?}",
+            request
+        );
         let mut client = ProvisioningServiceClient::new(self.client.to_owned());
         let request = tonic::Request::new(request);
         match client.find_manifest(request).await {
