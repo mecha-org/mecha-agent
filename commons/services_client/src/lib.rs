@@ -1,3 +1,4 @@
+use agent_settings::{read_settings_yml, AgentSettings};
 use anyhow::{bail, Result};
 use messaging::{
     messaging_service_client::MessagingServiceClient, AuthNonceRequest, AuthNonceResponse,
@@ -22,6 +23,13 @@ pub struct ServicesClient {
 }
 impl ServicesClient {
     pub fn new() -> Self {
+        let settings = match read_settings_yml() {
+            Ok(s) => s,
+            Err(e) => {
+                println!("error while reading settings.yml: {:?}", e);
+                AgentSettings::default()
+            }
+        };
         let client = Channel::from_static("http://localhost:3000").connect_lazy();
         Self { client }
     }

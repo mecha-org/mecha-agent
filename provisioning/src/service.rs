@@ -282,7 +282,6 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
 
     // 4. Sign the CSR using the cert signing url
     let signed_certificates = match sign_csr(
-        &settings.provisioning.server_url,
         &settings.provisioning.paths.machine.csr,
         &manifest.machine_id,
         &manifest.cert_signing_url,
@@ -632,7 +631,6 @@ fn write_certificates_to_path(
 }
 
 async fn sign_csr(
-    request_url: &str,
     csr_path: &str,
     machine_id: &str,
     cert_signing_url: &str,
@@ -640,8 +638,7 @@ async fn sign_csr(
     trace!(
         func = "sign_csr",
         package = PACKAGE_NAME,
-        "init, request_url {}, csr_sign_url {}",
-        request_url,
+        "init, csr_sign_url {}",
         cert_signing_url
     );
 
