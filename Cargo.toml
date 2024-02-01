@@ -1,6 +1,6 @@
 [workspace]
 default-members = ["agent"]
-members = ["agent", "core/services", "core/events", "core/settings", "provisioning", "messaging", "identity", "heartbeat", "settings", "grpc_server", "networking","telemetry","commons/crypto", "commons/kv_store", "commons/fs"]
+members = ["agent", "core/services", "core/events", "core/settings", "provisioning", "messaging", "identity", "heartbeat", "settings", "grpc_server", "networking","telemetry","commons/crypto", "commons/kv_store", "commons/fs", "commons/services_client"]
 
 
 [workspace.package]
