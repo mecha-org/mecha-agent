@@ -16,21 +16,21 @@ use crypto::x509::PrivateKeySize;
 use events::Event;
 use futures::StreamExt;
 use identity::handler::IdentityMessage;
-use messaging::async_nats::Message;
 use messaging::handler::MessagingMessage;
 use messaging::Bytes;
-use messaging::Message as NatsMessage;
 use messaging::Subscriber as NatsSubscriber;
-use reqwest::Client as RequestClient;
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use services_client::provisioning::{
+    CertSignRequest, CertSignResponse, FindManifestRequest, ManifestDetailsResponse, PingResponse,
+};
+use services_client::ServicesClient;
 use std::fs;
 use std::str;
-use std::sync::Arc;
+use std::str::FromStr;
+
 use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
-use tokio::task::JoinSet;
 use tracing::error;
 use tracing::{debug, info, trace, warn};
 
@@ -41,11 +41,7 @@ pub struct ErrorResponse {
     status: i32,
     message: String,
 }
-#[derive(Debug)]
-pub struct PingResponse {
-    pub code: String,
-    pub message: String,
-}
+
 #[derive(Deserialize, Debug)]
 struct DeprovisionRequest {
     pub machine_id: String,
@@ -60,29 +56,6 @@ pub struct ProvisioningServerResponseGeneric<T> {
     pub error_code: Option<String>,
     pub sub_errors: Option<String>,
     pub payload: T,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct ProvisioningManifest {
-    pub machine_id: String,
-    pub cert_signing_url: String,
-    pub cert_key_pair_algorithm: PrivateKeyAlgorithm,
-    pub cert_key_pair_size: PrivateKeySize,
-    pub cert_valid_upto: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SignCSRRequest {
-    pub csr: String,
-    pub machine_id: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SignedCertificates {
-    pub cert: String,
-    pub intermediate_cert: String,
-    pub root_cert: String,
 }
 
 pub enum ProvisioningSubscriber {
@@ -152,123 +125,24 @@ pub async fn subscribe_to_nats(
 
 pub async fn ping() -> Result<PingResponse> {
     trace!(func = "ping", package = PACKAGE_NAME, "init",);
-    let settings: AgentSettings = match read_settings_yml() {
-        Ok(settings) => settings,
-        Err(_) => {
-            warn!(
-                func = "ping",
-                package = PACKAGE_NAME,
-                "settings.yml not found, using default settings"
-            );
-            AgentSettings::default()
-        }
-    };
-    let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
-        .build()
-        .unwrap();
-
-    let result = client
-        .get(format!("{}/v1/ping", settings.provisioning.server_url).as_str())
-        .header("CONTENT_TYPE", "application/json")
-        .header("ACCEPT", "application/json")
-        .send()
-        .await;
-    println!("result {:?}", result);
-    match result {
-        Ok(res) => {
-            //step-ca returns error payload with 200 status code, error is inside payload
-            if res.status() == StatusCode::CREATED || res.status().is_success() {
-                return Ok(PingResponse {
-                    code: String::from("success"),
-                    message: String::from(""),
-                });
-            } else {
-                let error_status_code = res.status();
-                match error_status_code {
-                    StatusCode::UNAUTHORIZED => {
-                        error!(
-                            func = "ping",
-                            package = PACKAGE_NAME,
-                            "ping call returned unauthorized error num - {}",
-                            1002,
-                        );
-                        bail!(ProvisioningError::new(
-                            ProvisioningErrorCodes::UnauthorizedError,
-                            format!("ping call returned unauthorized error num - {}", 1002,),
-                            true
-                        ))
-                    }
-                    StatusCode::NOT_FOUND => {
-                        error!(
-                            func = "ping",
-                            package = PACKAGE_NAME,
-                            "ping call returned not found error num - {}",
-                            1003,
-                        );
-                        bail!(ProvisioningError::new(
-                            ProvisioningErrorCodes::NotFoundError,
-                            format!("ping call returned not found error num - {}", 1003,),
-                            true
-                        ))
-                    }
-                    StatusCode::BAD_REQUEST => {
-                        error!(
-                            func = "ping",
-                            package = PACKAGE_NAME,
-                            "ping call returned bad request num - {}",
-                            1004,
-                        );
-                        bail!(ProvisioningError::new(
-                            ProvisioningErrorCodes::BadRequestError,
-                            format!("ping call returned bad request num - {}", 1004,),
-                            true
-                        ))
-                    }
-                    StatusCode::INTERNAL_SERVER_ERROR => {
-                        error!(
-                            func = "ping",
-                            package = PACKAGE_NAME,
-                            "ping call returned internal server error num - {}",
-                            1005,
-                        );
-                        bail!(ProvisioningError::new(
-                            ProvisioningErrorCodes::InternalServerError,
-                            format!("ping call returned internal server error num - {}", 1005,),
-                            true
-                        ))
-                    }
-                    _ => {
-                        error!(
-                            func = "ping",
-                            package = PACKAGE_NAME,
-                            "ping call returned unknown error num - {}",
-                            1006,
-                        );
-                        bail!(ProvisioningError::new(
-                            ProvisioningErrorCodes::UnknownError,
-                            format!("ping call returned unknown error num - {}", 1006,),
-                            true
-                        ))
-                    }
-                }
-            }
-        }
+    let client = ServicesClient::new().await?;
+    let response = match client.ping().await {
+        Ok(v) => v,
         Err(e) => {
             error!(
                 func = "ping",
                 package = PACKAGE_NAME,
-                "ping call returned error num - {}, error - {}",
-                1007,
+                "error getting status - {}",
                 e
             );
             bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::UnreachableError,
-                format!("ping call returned error num - {}, error - {}", 1007, e,),
+                ProvisioningErrorCodes::PingRequestError,
+                format!("issue with grpc request: {}", e),
                 true
             ))
         }
     };
+    return Ok(PingResponse { success: response });
 }
 
 pub fn generate_code() -> Result<String> {
@@ -338,11 +212,34 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
         } // throw error from manifest lookup
     };
 
+    let private_key_algorithm =
+        match PrivateKeyAlgorithm::from_str(&manifest.cert_key_pair_algorithm) {
+            Ok(algorithm) => algorithm,
+            Err(e) => {
+                error!(
+                    func = "provision_by_code",
+                    package = PACKAGE_NAME,
+                    "error parsing private key algorithm"
+                );
+                bail!(e)
+            }
+        };
+    let private_key_size = match PrivateKeySize::from_str(&manifest.cert_key_pair_size) {
+        Ok(size) => size,
+        Err(e) => {
+            error!(
+                func = "provision_by_code",
+                package = PACKAGE_NAME,
+                "error parsing private key size"
+            );
+            bail!(e)
+        }
+    };
     // 2. Generate the private key based on the key algorithm
-    match manifest.cert_key_pair_algorithm {
+    match private_key_algorithm {
         PrivateKeyAlgorithm::ECDSA => match generate_ec_private_key(
             &settings.provisioning.paths.machine.private_key,
-            manifest.cert_key_pair_size,
+            private_key_size,
         ) {
             Ok(_) => debug!(
                 func = "provision_by_code",
@@ -385,10 +282,9 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
 
     // 4. Sign the CSR using the cert signing url
     let signed_certificates = match sign_csr(
-        &settings.provisioning.server_url,
+        manifest.token.as_str(),
         &settings.provisioning.paths.machine.csr,
         &manifest.machine_id,
-        &manifest.cert_signing_url,
     )
     .await
     {
@@ -591,123 +487,32 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
     Ok(true)
 }
 
-async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<ProvisioningManifest> {
-    trace!(
+async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<ManifestDetailsResponse> {
+    info!(
         func = "lookup_manifest",
         package = PACKAGE_NAME,
         "init, code - {:?}",
         code
     );
-    let url = format!(
-        "{}/v1/provisioning/manifest/find?code={}",
-        settings.provisioning.server_url, code
-    );
-    debug!(
-        func = "lookup_manifest",
-        package = PACKAGE_NAME,
-        "looking for manifest at url - {:?}",
-        url
-    );
-    let req_client = RequestClient::new();
-    let response = req_client.get(&url).send().await;
-    let lookup_result = match response {
-        Ok(v) => v,
-        Err(e) => match e.status() {
-            Some(StatusCode::INTERNAL_SERVER_ERROR) => {
-                error!(
-                    func = "lookup_manifest",
-                    package = PACKAGE_NAME,
-                    "manifest find endpoint url returned internal server error for url - {}",
-                    e
-                );
-                bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::InternalServerError,
-                    format!("manifest find endpoint url returned server error - {}", e),
-                    true
-                ))
-            }
-            Some(StatusCode::BAD_REQUEST) => {
-                error!(
-                    func = "lookup_manifest",
-                    package = PACKAGE_NAME,
-                    "manifest find endpoint url returned bad request - {}",
-                    e
-                );
-                bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::BadRequestError,
-                    format!("manifest find endpoint url returned bad request - {}", e),
-                    true
-                ))
-            }
-            Some(StatusCode::NOT_FOUND) => {
-                error!(
-                    func = "lookup_manifest",
-                    package = PACKAGE_NAME,
-                    "manifest find endpoint url not found - {}",
-                    e
-                );
-                bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::NotFoundError,
-                    format!("manifest find endpoint url not found - {}", e),
-                    true
-                ))
-            }
-            Some(_) => {
-                error!(
-                    func = "lookup_manifest",
-                    package = PACKAGE_NAME,
-                    "manifest find endpoint url returned unknown error - {}",
-                    e
-                );
-                bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::UnknownError,
-                    format!("manifest find endpoint url returned unknown error - {}", e),
-                    true
-                ))
-            }
-            None => {
-                error!(
-                    func = "lookup_manifest",
-                    package = PACKAGE_NAME,
-                    "manifest find endpoint url returned unknown error - {}",
-                    e
-                );
-                bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::UnknownError,
-                    format!(
-                        "manifest find endpoint url returned unmatched error - {}",
-                        e
-                    ),
-                    true
-                ))
-            }
-        },
-    };
 
-    // parse the manifest lookup result
-    let manifest_response = match lookup_result
-        .json::<ProvisioningServerResponseGeneric<ProvisioningManifest>>()
+    let client = ServicesClient::new().await?;
+    let lookup_result = match client
+        .find_manifest(FindManifestRequest {
+            code: code.to_string(),
+        })
         .await
     {
-        Ok(parse_manifest) => {
-            debug!(
-                func = "lookup_manifest",
-                package = PACKAGE_NAME,
-                "manifest lookup response - {:?}",
-                parse_manifest
-            );
-            parse_manifest
-        }
+        Ok(v) => v,
         Err(e) => {
             error!(
                 func = "lookup_manifest",
                 package = PACKAGE_NAME,
-                "error parsing manifest lookup response - {}",
+                "error looking up manifest - {}",
                 e
             );
             bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::ParseResponseError,
-                format!("error parsing manifest lookup response - {}", e),
+                ProvisioningErrorCodes::ManifestLookupError,
+                format!("error looking up manifest - {}", e),
                 true
             ))
         }
@@ -719,7 +524,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
         result = "success",
         "manifest lookup successful"
     );
-    Ok(manifest_response.payload)
+    Ok(lookup_result)
 }
 
 fn write_certificates_to_path(
@@ -825,19 +630,8 @@ fn write_certificates_to_path(
     Ok(true)
 }
 
-async fn sign_csr(
-    request_url: &str,
-    csr_path: &str,
-    machine_id: &str,
-    cert_signing_url: &str,
-) -> Result<SignedCertificates> {
-    trace!(
-        func = "sign_csr",
-        package = PACKAGE_NAME,
-        "init, request_url {}, csr_sign_url {}",
-        request_url,
-        cert_signing_url
-    );
+async fn sign_csr(ott: &str, csr_path: &str, machine_id: &str) -> Result<CertSignResponse> {
+    trace!(func = "sign_csr", package = PACKAGE_NAME, "init",);
 
     let constructed_path = match construct_dir_path(csr_path) {
         Ok(path) => {
@@ -888,116 +682,31 @@ async fn sign_csr(
         }
     };
 
-    // Construct payload for signing the csr
-    let sign_csr_request_body = SignCSRRequest {
-        csr: csr_pem,
-        machine_id: machine_id.to_string(),
-    };
-
-    // Format url for signing the csr
-    let url = format!("{}{}", request_url, cert_signing_url);
-
-    debug!(
-        func = "sign_csr",
-        package = PACKAGE_NAME,
-        "sign csr url formatted successfully - {:?}",
-        url
-    );
-    // Request to sign the csr
-    let client = reqwest::Client::new();
-    let csr_req = client
-        .post(url)
-        .json(&sign_csr_request_body)
-        .header("CONTENT_TYPE", "application/json")
-        .send()
-        .await?;
-
-    let csr_string = match csr_req.text().await {
-        Ok(csr) => csr,
-        Err(e) => match e.status() {
-            Some(StatusCode::INTERNAL_SERVER_ERROR) => {
-                error!(
-                    func = "sign_csr",
-                    package = PACKAGE_NAME,
-                    "csr sign url returned internal server error - {}",
-                    e
-                );
-                bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::InternalServerError,
-                    format!("csr sign url returned server error - {}", e),
-                    true
-                ))
-            }
-            Some(StatusCode::BAD_REQUEST) => {
-                error!(
-                    func = "sign_csr",
-                    package = PACKAGE_NAME,
-                    "csr sign url returned bad request - {}",
-                    e
-                );
-                bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::BadRequestError,
-                    format!("csr sign url returned bad request - {}", e),
-                    true
-                ))
-            }
-            Some(StatusCode::NOT_FOUND) => {
-                error!(
-                    func = "sign_csr",
-                    package = PACKAGE_NAME,
-                    "csr sign url not found - {}",
-                    e
-                );
-                bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::NotFoundError,
-                    format!("csr sign url not found - {}", e),
-                    true
-                ))
-            }
-            Some(_) => {
-                error!(
-                    func = "sign_csr",
-                    package = PACKAGE_NAME,
-                    "csr sign url returned unknown error - {}",
-                    e
-                );
-                bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::UnknownError,
-                    format!("csr sign url returned unknown error - {}", e),
-                    true
-                ))
-            }
-            None => bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::UnknownError,
-                format!("csr sign url returned unmatched error - {}", e),
+    let client = ServicesClient::new().await?;
+    let cert_sign_response = match client
+        .cert_sign(CertSignRequest {
+            token: ott.to_string(),
+            csr: csr_pem,
+            machine_id: machine_id.to_string(),
+        })
+        .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = "lookup_manifest",
+                package = PACKAGE_NAME,
+                "error looking up manifest - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::CertSignError,
+                format!("error signing certificate - {}", e),
                 true
-            )),
-        },
+            ))
+        }
     };
-    let result: ProvisioningServerResponseGeneric<SignedCertificates> =
-        match serde_json::from_str(&csr_string) {
-            Ok(v) => v,
-            Err(e) => {
-                error!(
-                    func = "sign_csr",
-                    package = PACKAGE_NAME,
-                    "error parsing csr sign response - {}",
-                    e
-                );
-                bail!(ProvisioningError::new(
-                    ProvisioningErrorCodes::ParseResponseError,
-                    format!("error parsing csr sign response - {}", e),
-                    true
-                ));
-            }
-        };
-    info!(
-        func = "sign_csr",
-        package = PACKAGE_NAME,
-        result = "success",
-        "csr signed successfully"
-    );
-    Ok(result.payload)
+    Ok(cert_sign_response)
 }
 
 async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Result<String> {

@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use fs::{construct_dir_path, safe_open_file};
 use openssl::{pkey::PKey, sign::Signer};
 use serde::{Deserialize, Serialize};
-use std::{fmt, io::Read, path::Path, process::Command};
+use std::{fmt, io::Read, path::Path, process::Command, str::FromStr};
 use tracing::{debug, error, info, trace};
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 /**
@@ -41,6 +41,20 @@ pub enum PrivateKeyAlgorithm {
     ECDSA,
 }
 
+impl FromStr for PrivateKeyAlgorithm {
+    type Err = CryptoError;
+
+    fn from_str(input: &str) -> Result<PrivateKeyAlgorithm, Self::Err> {
+        match input.to_uppercase().as_str() {
+            "ECDSA" => Ok(PrivateKeyAlgorithm::ECDSA),
+            _ => Err(CryptoError::new(
+                CryptoErrorCodes::CryptoGeneratePrivateKeyError,
+                format!("key algorithm not supported - {}", input),
+                true,
+            )),
+        }
+    }
+}
 // Key size enum
 #[derive(Serialize, Deserialize, Debug)]
 pub enum PrivateKeySize {
@@ -50,6 +64,22 @@ pub enum PrivateKeySize {
     EcP384,
     #[serde(rename = "EC_P521")]
     EcP521,
+}
+impl FromStr for PrivateKeySize {
+    type Err = CryptoError;
+
+    fn from_str(input: &str) -> Result<PrivateKeySize, Self::Err> {
+        match input {
+            "EC_P256" => Ok(PrivateKeySize::EcP256),
+            "EC_P384" => Ok(PrivateKeySize::EcP384),
+            "EC_P521" => Ok(PrivateKeySize::EcP521),
+            _ => Err(CryptoError::new(
+                CryptoErrorCodes::CryptoGeneratePrivateKeyError,
+                format!("key size not supported - {}", input),
+                true,
+            )),
+        }
+    }
 }
 
 impl fmt::Display for PrivateKeySize {

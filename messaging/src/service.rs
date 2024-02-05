@@ -10,6 +10,8 @@ use nats_client::jetstream::JetStreamClient;
 use nats_client::{Bytes, NatsClient, Subscriber};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use services_client::messaging::{AuthNonceRequest, AuthNonceResponse, IssueTokenRequest};
+use services_client::ServicesClient;
 use sha256::digest;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, error, info, trace};
@@ -28,47 +30,6 @@ pub struct MessagingServerResponseGeneric<T> {
     pub payload: T,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct MessagingAuthTokenRequest {
-    id: String,
-    #[serde(rename = "type")]
-    _type: MessagingAuthTokenType,
-    scope: MessagingScope,
-    nonce: String,
-    signed_noce: String,
-    public_key: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum MessagingScope {
-    #[serde(rename = "sys")]
-    System,
-    #[serde(rename = "user")]
-    User,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum MessagingAuthTokenType {
-    #[serde(rename = "device")]
-    Device,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct GetAuthTokenRequest {
-    machine_id: String,
-    #[serde(rename = "type")]
-    _type: MessagingAuthTokenType,
-    scope: MessagingScope,
-    nonce: String,
-    signed_nonce: String,
-    public_key: String,
-}
-#[derive(Serialize)]
-pub struct AuthNonceRequest {
-    pub agent_name: String,
-    pub agent_version: String,
-}
 #[derive(Clone)]
 pub struct Messaging {
     settings: AgentSettings,
@@ -378,7 +339,6 @@ pub async fn authenticate(
     };
 
     let token = match get_auth_token(
-        MessagingScope::User,
         &machine_id,
         &nonce,
         &signed_nonce,
@@ -421,132 +381,40 @@ fn sign_nonce(private_key_path: &String, nonce: &str) -> Result<String> {
 }
 
 async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
-    let url = format!(
-        "{}{}",
-        &settings.service_urls.base_url, &settings.service_urls.get_nonce
-    );
-
-    debug!(
-        func = "get_auth_nonce",
-        package = PACKAGE_NAME,
-        "url - {}",
-        url
-    );
-    // Construct request body
-    let request_body: AuthNonceRequest = AuthNonceRequest {
-        agent_name: "mecha_agent".to_string(),
-        agent_version: env!("CARGO_PKG_VERSION").to_string(),
-    };
-    let client = reqwest::Client::new();
-    let nonce_result = client
-        .post(url)
-        .json(&request_body)
-        .header("CONTENT_TYPE", "application/json")
-        .send()
-        .await;
-
-    let nonce_response = match nonce_result {
-        Ok(nonce) => nonce,
-        Err(e) => match e.status() {
-            Some(StatusCode::INTERNAL_SERVER_ERROR) => {
-                error!(
-                    func = "get_auth_nonce",
-                    package = PACKAGE_NAME,
-                    "get auth nonce returned internal server error - {}",
-                    e
-                );
-                bail!(MessagingError::new(
-                    MessagingErrorCodes::GetAuthNonceServerError,
-                    format!("get auth nonce returned internal server error - {}", e),
-                    true
-                ))
-            }
-            Some(StatusCode::BAD_REQUEST) => {
-                error!(
-                    func = "get_auth_nonce",
-                    package = PACKAGE_NAME,
-                    "get auth nonce returned bad request - {}",
-                    e
-                );
-                bail!(MessagingError::new(
-                    MessagingErrorCodes::GetAuthNonceBadRequestError,
-                    format!("get auth nonce returned bad request - {}", e),
-                    true
-                ))
-            }
-            Some(StatusCode::NOT_FOUND) => {
-                error!(
-                    func = "get_auth_nonce",
-                    package = PACKAGE_NAME,
-                    "get auth nonce returned not found - {}",
-                    e
-                );
-                bail!(MessagingError::new(
-                    MessagingErrorCodes::GetAuthNonceNotFoundError,
-                    format!("get auth nonce not found - {}", e),
-                    true
-                ))
-            }
-            Some(_) => {
-                error!(
-                    func = "get_auth_nonce",
-                    package = PACKAGE_NAME,
-                    "get auth nonce returned unknown error - {}",
-                    e
-                );
-                bail!(MessagingError::new(
-                    MessagingErrorCodes::UnknownError,
-                    format!("get auth nonce returned unknown error - {}", e),
-                    true
-                ))
-            }
-
-            None => {
-                error!(
-                    func = "get_auth_nonce",
-                    package = PACKAGE_NAME,
-                    "get auth nonce returned unknown error - {}",
-                    e
-                );
-                bail!(MessagingError::new(
-                    MessagingErrorCodes::UnknownError,
-                    format!("get auth nonce returned error unmatched - {}", e),
-                    true
-                ))
-            }
-        },
-    };
-
-    // parse the manifest lookup result
-    let nonce_response = match nonce_response
-        .json::<MessagingServerResponseGeneric<String>>()
+    let fn_name = "get_auth_nonce";
+    let client = ServicesClient::new().await?;
+    let result = match client
+        .get_auth_nonce(AuthNonceRequest {
+            agent_name: String::from("mecha_agent"),
+            agent_version: env!("CARGO_PKG_VERSION").to_string(),
+        })
         .await
     {
-        Ok(m) => m,
+        Ok(v) => v,
         Err(e) => {
             error!(
-                func = "get_auth_nonce",
+                func = fn_name,
                 package = PACKAGE_NAME,
-                "error parsing nonce response - {}",
+                "error getting auth nonce - {}",
                 e
             );
             bail!(MessagingError::new(
-                MessagingErrorCodes::AuthNonceResponseParseError,
-                format!("error parsing nonce response - {}", e),
+                MessagingErrorCodes::GetAuthNonceError,
+                format!("get auth nonce error - {}", e),
                 true
             ))
         }
     };
+
     info!(
         func = "get_auth_nonce",
         package = PACKAGE_NAME,
         "auth nonce request completed"
     );
-    Ok(nonce_response.payload)
+    Ok(result.nonce)
 }
 
 async fn get_auth_token(
-    scope: MessagingScope,
     machine_id: &str,
     nonce: &str,
     signed_nonce: &str,
@@ -554,118 +422,27 @@ async fn get_auth_token(
     settings: &MessagingSettings,
 ) -> Result<String> {
     let fn_name = "get_auth_token";
-    let request_body = GetAuthTokenRequest {
+    let request_body = IssueTokenRequest {
         machine_id: machine_id.to_string(),
-        _type: MessagingAuthTokenType::Device,
-        scope: scope,
+        r#type: String::from("Machine"),
+        scope: String::from("User"),
         nonce: nonce.to_string(),
         signed_nonce: signed_nonce.to_string(),
         public_key: nats_user_public_key.to_string(),
     };
-
-    // Format the url to get the auth token
-    let url = format!(
-        "{}{}",
-        &settings.service_urls.base_url, &settings.service_urls.issue_auth_token
-    );
-    debug!(func = fn_name, package = PACKAGE_NAME, "url - {}", url);
-    let client = reqwest::Client::new();
-    let get_auth_token_response = client
-        .post(url)
-        .header("CONTENT_TYPE", "application/json")
-        .json(&request_body)
-        .send()
-        .await;
-
-    // Check if the response is ok
-    let auth_token_response = match get_auth_token_response {
-        Ok(token) => token,
-        Err(e) => match e.status() {
-            Some(StatusCode::INTERNAL_SERVER_ERROR) => {
-                error!(
-                    func = fn_name,
-                    package = PACKAGE_NAME,
-                    "get auth token returned internal server error - {}",
-                    e
-                );
-                bail!(MessagingError::new(
-                    MessagingErrorCodes::GetAuthTokenServerError,
-                    format!("get auth token returned internal server error - {}", e),
-                    true
-                ))
-            }
-            Some(StatusCode::BAD_REQUEST) => {
-                error!(
-                    func = fn_name,
-                    package = PACKAGE_NAME,
-                    "get auth token returned bad request error - {}",
-                    e
-                );
-                bail!(MessagingError::new(
-                    MessagingErrorCodes::GetAuthTokenBadRequestError,
-                    format!("get auth token returned bad request error - {}", e),
-                    true
-                ))
-            }
-            Some(StatusCode::NOT_FOUND) => {
-                error!(
-                    func = fn_name,
-                    package = PACKAGE_NAME,
-                    "get auth token returned not found error - {}",
-                    e
-                );
-                bail!(MessagingError::new(
-                    MessagingErrorCodes::GetAuthTokenNotFoundError,
-                    format!("get auth token returned not found error - {}", e),
-                    true
-                ))
-            }
-            Some(_) => {
-                error!(
-                    func = fn_name,
-                    package = PACKAGE_NAME,
-                    "get auth token returned unknown error - {}",
-                    e
-                );
-                bail!(MessagingError::new(
-                    MessagingErrorCodes::UnknownError,
-                    format!("get auth token returned unknown error - {}", e),
-                    true
-                ))
-            }
-
-            None => {
-                error!(
-                    func = fn_name,
-                    package = PACKAGE_NAME,
-                    "get auth token returned error unmatched - {}",
-                    e
-                );
-                bail!(MessagingError::new(
-                    MessagingErrorCodes::UnknownError,
-                    format!("get auth token returned error unmatched - {}", e),
-                    true
-                ))
-            }
-        },
-    };
-
-    // Parse the auth token result
-    let auth_token = match auth_token_response
-        .json::<MessagingServerResponseGeneric<String>>()
-        .await
-    {
-        Ok(m) => m,
+    let client = ServicesClient::new().await?;
+    let result = match client.get_auth_token(request_body).await {
+        Ok(v) => v,
         Err(e) => {
             error!(
                 func = fn_name,
                 package = PACKAGE_NAME,
-                "error while parsing auth token response - {}",
+                "error getting auth token - {}",
                 e
             );
             bail!(MessagingError::new(
-                MessagingErrorCodes::AuthTokenResponseParseError,
-                format!("error while parsing auth token response - {}", e),
+                MessagingErrorCodes::GetAuthNonceError,
+                format!("get auth token error - {}", e),
                 true
             ))
         }
@@ -675,7 +452,7 @@ async fn get_auth_token(
         package = PACKAGE_NAME,
         "auth token request completed"
     );
-    Ok(auth_token.payload)
+    Ok(result.token)
 }
 
 pub async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Result<String> {

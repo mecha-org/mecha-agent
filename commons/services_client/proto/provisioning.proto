@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+package provisioning;
+
+service ProvisioningService {
+  rpc ping (Empty) returns (PingResponse);
+  rpc findManifest (FindManifestRequest) returns (ManifestDetailsResponse);
+  rpc provisionMe (ProvisionRequest) returns (ProvisionResponse);
+  rpc certSign (CertSignRequest) returns (CertSignResponse);
+}
+
+message Empty {}
+message PingResponse {
+ bool success = 1;
+}
+message FindManifestRequest {
+  string code = 1;
+}
+message ManifestDetailsResponse {
+  string machine_id = 1;
+  string token = 2;
+  string cert_key_pair_algorithm = 3;
+  string cert_key_pair_size = 4;
+  string cert_valid_upto = 5;
+}
+message ProvisionRequest {
+  string machine_id = 1;
+  string provisioning_code = 2;
+}
+message ProvisionResponse {
+  bool success = 1;
+}
+message CertSignRequest {
+  string token = 1;
+  string machine_id = 2;
+  string csr = 3;
+}
+message CertSignResponse {
+  string cert = 1;
+  string intermediate_cert = 2;
+  string root_cert = 3;
+}

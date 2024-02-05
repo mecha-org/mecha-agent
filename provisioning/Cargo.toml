@@ -16,6 +16,7 @@ identity = { path = "../identity" }
 crypto = { path = "../commons/crypto" }
 services = { path = "../core/services" }
 channel = { path = "../commons/channel" }
+services_client = { path = "../commons/services_client" }
 agent_settings = { path = "../core/settings" }
 fs = { path = "../commons/fs" }
 async-trait = "0.1.74"

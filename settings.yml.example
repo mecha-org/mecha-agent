@@ -9,8 +9,9 @@ server:
   url: 0.0.0.0
   port: 3001
   tls: false
+services:
+  url: http://localhost:3000
 provisioning: 
-  server_url:  http://localhost:3000
   openssl:
     engine:
   paths:
