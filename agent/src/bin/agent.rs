@@ -7,18 +7,34 @@ use init_tracing_opentelemetry::tracing_subscriber_ext::{
 use mecha_agent::init::init_services;
 use sentry_tracing::EventFilter;
 use std::path::Path;
+use tracing::info;
 use tracing_appender::non_blocking;
 use tracing_appender::rolling::never;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
-
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 #[tokio::main]
 async fn main() -> Result<()> {
     // Setting tracing
     let settings = match read_settings_yml() {
         Ok(settings) => settings,
-        Err(_) => AgentSettings::default(),
+        Err(e) => {
+            tracing::error!(
+                func = "main",
+                package = PACKAGE_NAME,
+                "error reading settings.yml: {}",
+                e
+            );
+            AgentSettings::default()
+        }
     };
+    //todo: remove this log
+    info!(
+        func = "main",
+        package = PACKAGE_NAME,
+        "settings: {:?}",
+        settings
+    );
     // enable error tracking on sentry
     let _guard = sentry::init((
         settings.sentry.dsn,
