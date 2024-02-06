@@ -7,6 +7,7 @@ use init_tracing_opentelemetry::tracing_subscriber_ext::{
 use mecha_agent::init::init_services;
 use sentry_tracing::EventFilter;
 use std::path::Path;
+use tracing::info;
 use tracing_appender::non_blocking;
 use tracing_appender::rolling::never;
 use tracing_subscriber::fmt::Layer;
@@ -27,6 +28,13 @@ async fn main() -> Result<()> {
             AgentSettings::default()
         }
     };
+    //todo: remove this log
+    info!(
+        func = "main",
+        package = PACKAGE_NAME,
+        "settings: {:?}",
+        settings
+    );
     // enable error tracking on sentry
     let _guard = sentry::init((
         settings.sentry.dsn,
