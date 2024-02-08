@@ -17,7 +17,6 @@ crypto = { path = "../commons/crypto" }
 channel = { path = "../commons/channel" }
 agent_settings = { path = "../core/settings" }
 nats_client = { path = "../commons/nats_client" }
-services_client = { path = "../commons/services_client" }
 identity = { path = "../identity" }
 anyhow = { version = "1.0.71", features = ["backtrace"]}
 reqwest = { version = "0.11", features = ["json"] }

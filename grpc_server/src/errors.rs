@@ -1,8 +1,6 @@
-use provisioning::errors::ProvisioningError;
-use regex::Regex;
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
-use tonic::{Code, Status};
+
 #[derive(Debug, Default, Clone, Copy)]
 pub enum AgentServerErrorCodes {
     #[default]
@@ -50,28 +48,4 @@ impl AgentServerError {
         }
         Self { code, message }
     }
-}
-
-pub fn resolve_tonic_error_code(code: &str) -> Code {
-    match code.to_uppercase().as_str() {
-        "OK" => Code::Ok,
-        "CANCELLED" => Code::Cancelled,
-        "UNKNOWN" => Code::Unknown,
-        "INVALID_ARGUMENT" => Code::InvalidArgument,
-        "DEADLINE_EXCEEDED" => Code::DeadlineExceeded,
-        "NOT_FOUND" => Code::NotFound,
-        "ABORTED" => Code::Aborted,
-        "UNIMPLEMENTED" => Code::Unimplemented,
-        "INTERNAL" => Code::Internal,
-        "UNAVAILABLE" => Code::Unavailable,
-        "UNAUTHENTICATED" => Code::Unauthenticated,
-        _ => Code::Unknown,
-    }
-}
-pub fn resolve_error(error: ProvisioningError) -> Status {
-    let re = Regex::new(r#"status: (\w+),"#).unwrap();
-    let caps = re.captures(&error.message).unwrap();
-    let code = caps.get(1).unwrap().as_str();
-    let code = resolve_tonic_error_code(code);
-    Status::new(code, error.to_string())
 }

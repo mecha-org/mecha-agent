@@ -21,7 +21,6 @@ pub mod telemetry;
 pub struct AgentSettings {
     pub sentry: SentrySettings,
     pub server: ServerSettings,
-    pub services: ServicesSettings,
     pub logging: LoggingSettings,
     pub provisioning: ProvisioningSettings,
     pub messaging: MessagingSettings,
@@ -36,7 +35,6 @@ impl Default for AgentSettings {
         Self {
             sentry: SentrySettings::default(),
             server: ServerSettings::default(),
-            services: ServicesSettings::default(),
             logging: LoggingSettings::default(),
             provisioning: ProvisioningSettings::default(),
             messaging: MessagingSettings::default(),
@@ -95,18 +93,6 @@ impl Default for LoggingSettings {
             enabled: false,
             level: String::from("info"),
             path: String::from(""),
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct ServicesSettings {
-    pub url: String,
-}
-impl Default for ServicesSettings {
-    fn default() -> Self {
-        Self {
-            url: String::from("http://localhost:3000"),
         }
     }
 }

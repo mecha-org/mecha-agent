@@ -5,8 +5,14 @@ use std::fmt;
 pub enum MessagingErrorCodes {
     #[default]
     UnknownError,
-    GetAuthNonceError,
     NatsClientNotInitialized,
+    GetAuthNonceUnknownError,
+    GetAuthNonceServerError,
+    GetAuthNonceNotFoundError,
+    GetAuthNonceBadRequestError,
+    GetAuthTokenServerError,
+    GetAuthTokenBadRequestError,
+    GetAuthTokenNotFoundError,
     AuthNonceResponseParseError,
     AuthTokenResponseParseError,
     ChannelSendMessageError,
@@ -18,11 +24,29 @@ impl fmt::Display for MessagingErrorCodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MessagingErrorCodes::UnknownError => write!(f, "MessagingErrorCodes: UnknownError"),
-            MessagingErrorCodes::GetAuthNonceError => {
-                write!(f, "MessagingErrorCodes: GetAuthNonceError")
-            }
             MessagingErrorCodes::NatsClientNotInitialized => {
                 write!(f, "MessagingErrorCodes: NatsClientNotInitialized")
+            }
+            MessagingErrorCodes::GetAuthNonceUnknownError => {
+                write!(f, "MessagingErrorCodes: GetAuthNonceUnknownError")
+            }
+            MessagingErrorCodes::GetAuthNonceServerError => {
+                write!(f, "MessagingErrorCodes: GetAuthNonceServerError")
+            }
+            MessagingErrorCodes::GetAuthNonceNotFoundError => {
+                write!(f, "MessagingErrorCodes: GetAuthNonceNotFoundError")
+            }
+            MessagingErrorCodes::GetAuthNonceBadRequestError => {
+                write!(f, "MessagingErrorCodes: GetAuthNonceBadRequestError")
+            }
+            MessagingErrorCodes::GetAuthTokenServerError => {
+                write!(f, "MessagingErrorCodes: GetAuthTokenServerError")
+            }
+            MessagingErrorCodes::GetAuthTokenBadRequestError => {
+                write!(f, "MessagingErrorCodes: GetAuthTokenBadRequestError")
+            }
+            MessagingErrorCodes::GetAuthTokenNotFoundError => {
+                write!(f, "MessagingErrorCodes: GetAuthTokenNotFoundError")
             }
             MessagingErrorCodes::AuthNonceResponseParseError => {
                 write!(f, "MessagingErrorCodes: AuthNonceResponseParseError")

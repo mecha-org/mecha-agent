@@ -1,14 +1,17 @@
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
+use tonic::Status;
 
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 #[derive(Debug, Default, Clone, Copy)]
 pub enum ProvisioningErrorCodes {
     #[default]
     UnknownError,
-    PingRequestError,
-    ManifestLookupError,
-    CertSignError,
+    UnauthorizedError,
+    NotFoundError,
+    BadRequestError,
+    UnreachableError,
+    InternalServerError,
     CSRSignReadFileError,
     CertificateWriteError,
     SendEventError,
@@ -28,14 +31,20 @@ impl fmt::Display for ProvisioningErrorCodes {
             ProvisioningErrorCodes::UnknownError => {
                 write!(f, "ProvisioningErrorCodes: UnknownError")
             }
-            ProvisioningErrorCodes::PingRequestError => {
-                write!(f, "ProvisioningErrorCodes: PingRequestError")
+            ProvisioningErrorCodes::UnauthorizedError => {
+                write!(f, "ProvisioningErrorCodes: UnauthorizedError")
             }
-            ProvisioningErrorCodes::ManifestLookupError => {
-                write!(f, "ProvisioningErrorCodes: ManifestLookupError")
+            ProvisioningErrorCodes::NotFoundError => {
+                write!(f, "ProvisioningErrorCodes: NotFoundError")
             }
-            ProvisioningErrorCodes::CertSignError => {
-                write!(f, "ProvisioningErrorCodes: CertSignError")
+            ProvisioningErrorCodes::BadRequestError => {
+                write!(f, "ProvisioningErrorCodes: BadRequestError")
+            }
+            ProvisioningErrorCodes::UnreachableError => {
+                write!(f, "ProvisioningErrorCodes: UnreachableError")
+            }
+            ProvisioningErrorCodes::InternalServerError => {
+                write!(f, "ProvisioningErrorCodes: InternalServerError")
             }
             ProvisioningErrorCodes::CSRSignReadFileError => {
                 write!(f, "ProvisioningErrorCodes: CSRSignReadFileError")
@@ -100,5 +109,20 @@ impl ProvisioningError {
             capture_anyhow(error);
         }
         Self { code, message }
+    }
+}
+
+pub fn map_provisioning_error_to_tonic(code: ProvisioningErrorCodes, message: String) -> Status {
+    match code {
+        ProvisioningErrorCodes::UnauthorizedError => {
+            Status::new(tonic::Code::Unauthenticated, message)
+        }
+        ProvisioningErrorCodes::NotFoundError => Status::new(tonic::Code::NotFound, message),
+        ProvisioningErrorCodes::BadRequestError => {
+            Status::new(tonic::Code::InvalidArgument, message)
+        }
+        ProvisioningErrorCodes::UnreachableError => Status::new(tonic::Code::Unavailable, message),
+        // Add more mappings as needed
+        _ => Status::new(tonic::Code::Unknown, message),
     }
 }
