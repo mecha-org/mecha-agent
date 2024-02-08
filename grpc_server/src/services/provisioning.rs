@@ -3,10 +3,9 @@ use crate::agent::{
     ProvisioningCodeResponse, ProvisioningStatusResponse,
 };
 use crate::agent::{DeProvisioningStatusResponse, PingResponse};
-use crate::errors::resolve_error;
 use anyhow::Result;
 use channel::{recv_with_custom_timeout, recv_with_timeout};
-use provisioning::errors::ProvisioningError;
+use provisioning::errors::{map_provisioning_error_to_tonic, ProvisioningError};
 use provisioning::handler::ProvisioningMessage;
 use tokio::sync::mpsc::{self};
 use tokio::sync::oneshot;
@@ -51,7 +50,6 @@ impl ProvisioningService for ProvisioningServiceHandler {
         let result = match recv_with_timeout(rx).await {
             Ok(res) => res,
             Err(err) => {
-                println!("error while pinging machine  error - {}", err);
                 error!(
                     func = "ping",
                     package = PACKAGE_NAME,
@@ -59,17 +57,21 @@ impl ProvisioningService for ProvisioningServiceHandler {
                     1000,
                     err
                 );
-
                 match err.downcast::<ProvisioningError>() {
                     Ok(e) => {
-                        return Err(resolve_error(e));
+                        let status = map_provisioning_error_to_tonic(
+                            e.code,
+                            e.code.to_string() + " - " + e.message.as_str(),
+                        );
+                        return Err(status);
                     }
                     Err(e) => return Err(Status::internal(e.to_string()).into()),
                 }
             }
         };
         return Ok(Response::new(PingResponse {
-            success: result.success,
+            code: result.code,
+            message: result.message,
         }));
     }
 
@@ -136,12 +138,15 @@ impl ProvisioningService for ProvisioningServiceHandler {
                     1002,
                     err
                 );
-                if let Some(tonic_status) = err.downcast_ref::<tonic::Status>() {
-                    // If it does, return the tonic::Status directly
-                    return Err(tonic_status.clone());
-                } else {
-                    // If not, convert it to a default tonic::Status
-                    return Err(Status::internal(err.to_string()).into());
+                match err.downcast::<ProvisioningError>() {
+                    Ok(e) => {
+                        let status = map_provisioning_error_to_tonic(
+                            e.code,
+                            e.code.to_string() + " - " + e.message.as_str(),
+                        );
+                        return Err(status);
+                    }
+                    Err(e) => return Err(Status::internal(e.to_string()).into()),
                 }
             }
         };
@@ -184,12 +189,15 @@ impl ProvisioningService for ProvisioningServiceHandler {
                     1004,
                     err
                 );
-                if let Some(tonic_status) = err.downcast_ref::<tonic::Status>() {
-                    // If it does, return the tonic::Status directly
-                    return Err(tonic_status.clone());
-                } else {
-                    // If not, convert it to a default tonic::Status
-                    return Err(Status::internal(err.to_string()).into());
+                match err.downcast::<ProvisioningError>() {
+                    Ok(e) => {
+                        let status = map_provisioning_error_to_tonic(
+                            e.code,
+                            e.code.to_string() + " - " + e.message.as_str(),
+                        );
+                        return Err(status);
+                    }
+                    Err(e) => return Err(Status::internal(e.to_string()).into()),
                 }
             }
         };

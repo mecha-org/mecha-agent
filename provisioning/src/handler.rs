@@ -1,12 +1,11 @@
 use crate::service::{
     await_deprovision_message, de_provision, generate_code, ping, provision_by_code,
-    subscribe_to_nats,
+    subscribe_to_nats, PingResponse,
 };
 use anyhow::{bail, Result};
 use events::Event;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
-use services_client::provisioning::PingResponse;
 use tokio::select;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinHandle, JoinSet};

@@ -28,5 +28,6 @@ message DeProvisioningStatusResponse {
   bool success = 1;
 }
 message PingResponse {
-  bool success = 1;
+  string code = 1;
+  string message = 2;
 }
