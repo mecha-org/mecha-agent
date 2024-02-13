@@ -10,9 +10,7 @@ use anyhow::{bail, Result};
 use channel::recv_with_timeout;
 use crypto::random::generate_random_alphanumeric;
 use crypto::x509::generate_csr;
-use crypto::x509::generate_ec_private_key;
-use crypto::x509::PrivateKeyAlgorithm;
-use crypto::x509::PrivateKeySize;
+use crypto::x509::generate_rsa_private_key;
 use events::Event;
 use futures::StreamExt;
 use identity::handler::IdentityMessage;
@@ -66,9 +64,7 @@ pub struct ProvisioningServerResponseGeneric<T> {
 #[serde(rename_all = "camelCase")]
 pub struct ProvisioningManifest {
     pub machine_id: String,
-    pub cert_signing_url: String,
-    pub cert_key_pair_algorithm: PrivateKeyAlgorithm,
-    pub cert_key_pair_size: PrivateKeySize,
+    pub cert_sign_url: String,
     pub cert_valid_upto: String,
 }
 
@@ -81,8 +77,8 @@ pub struct SignCSRRequest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SignedCertificates {
     pub cert: String,
-    pub intermediate_cert: String,
     pub root_cert: String,
+    pub ca_bundle: Vec<String>,
 }
 
 pub enum ProvisioningSubscriber {
@@ -338,28 +334,29 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
         } // throw error from manifest lookup
     };
 
-    // 2. Generate the private key based on the key algorithm
-    match manifest.cert_key_pair_algorithm {
-        PrivateKeyAlgorithm::ECDSA => match generate_ec_private_key(
-            &settings.provisioning.paths.machine.private_key,
-            manifest.cert_key_pair_size,
-        ) {
-            Ok(_) => debug!(
+    info!(
+        func = "provision_by_code",
+        package = PACKAGE_NAME,
+        "manifest response :{:?}",
+        manifest
+    );
+    // 2. Generate the private key based
+    match generate_rsa_private_key(&settings.provisioning.paths.machine.private_key) {
+        Ok(_) => debug!(
+            func = "provision_by_code",
+            package = PACKAGE_NAME,
+            "private key generated successfully"
+        ),
+        Err(e) => {
+            error!(
                 func = "provision_by_code",
                 package = PACKAGE_NAME,
-                "private key generated successfully"
-            ),
-            Err(e) => {
-                error!(
-                    func = "provision_by_code",
-                    package = PACKAGE_NAME,
-                    "error generating private key on path - {}",
-                    &settings.provisioning.paths.machine.private_key
-                );
-                bail!(e)
-            }
-        },
-    };
+                "error generating private key on path - {}",
+                &settings.provisioning.paths.machine.private_key
+            );
+            bail!(e)
+        }
+    }
 
     // 3. Generate the CSR, using above private key
     match generate_csr(
@@ -388,7 +385,7 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
         &settings.provisioning.server_url,
         &settings.provisioning.paths.machine.csr,
         &manifest.machine_id,
-        &manifest.cert_signing_url,
+        &manifest.cert_sign_url,
     )
     .await
     {
@@ -410,13 +407,18 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
             bail!(e)
         }
     };
-
+    let ca_bundle_str = match serde_json::to_string(&signed_certificates.ca_bundle) {
+        Ok(res) => res,
+        Err(err) => {
+            bail!(err)
+        }
+    };
     // 5. Store the signed certificates in destination path
     match write_certificates_to_path(
         &settings.provisioning.paths,
         signed_certificates.root_cert.as_bytes(),
-        signed_certificates.intermediate_cert.as_bytes(),
         signed_certificates.cert.as_bytes(),
+        ca_bundle_str.as_bytes(),
     ) {
         Ok(result) => {
             debug!(
@@ -488,7 +490,7 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
         &settings.provisioning.paths.machine.cert,
         &settings.provisioning.paths.machine.private_key,
         &settings.provisioning.paths.machine.csr,
-        &settings.provisioning.paths.intermediate.cert,
+        &settings.provisioning.paths.ca_bundle.cert,
         &settings.provisioning.paths.root.cert,
     ]) {
         Ok(_) => (),
@@ -725,8 +727,8 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
 fn write_certificates_to_path(
     certificate_paths: &CertificatePaths,
     root_cert: &[u8],
-    intermediate_cert: &[u8],
     cert: &[u8],
+    ca_bundle: &[u8],
 ) -> Result<bool> {
     trace!(
         func = "write_certificates_to_path",
@@ -763,26 +765,26 @@ fn write_certificates_to_path(
     }
 
     // save the intermediate certificate
-    match safe_write_to_path(&certificate_paths.intermediate.cert, intermediate_cert) {
+    match safe_write_to_path(&certificate_paths.ca_bundle.cert, ca_bundle) {
         Ok(_) => debug!(
             func = "write_file",
             package = PACKAGE_NAME,
-            "intermediate certificate saved in path - {}",
-            &certificate_paths.intermediate.cert
+            "ca_bundle certificate saved in path - {}",
+            &certificate_paths.ca_bundle.cert
         ),
         Err(e) => {
             error!(
                 func = "write_file",
                 package = PACKAGE_NAME,
-                "error saving intermediate certificate in path - {} - {}",
-                &certificate_paths.intermediate.cert,
+                "error saving ca_bundle certificate in path - {} - {}",
+                &certificate_paths.ca_bundle.cert,
                 e
             );
             bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::CertificateWriteError,
                 format!(
-                    "error saving intermediate certificate in path - {} - {}",
-                    &certificate_paths.intermediate.cert, e
+                    "error saving ca_bundle certificate in path - {} - {}",
+                    &certificate_paths.ca_bundle.cert, e
                 ),
                 true
             ))
@@ -896,6 +898,7 @@ async fn sign_csr(
 
     // Format url for signing the csr
     let url = format!("{}{}", request_url, cert_signing_url);
+    println!("request url for sign csr: {:?}", url);
 
     debug!(
         func = "sign_csr",

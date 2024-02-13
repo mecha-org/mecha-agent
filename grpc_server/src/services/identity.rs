@@ -98,7 +98,7 @@ impl IdentityService for IdentityServiceHandler {
                 expiry: machine_cert.expiry,
                 fingerprint: machine_cert.fingerprint,
                 public_cert: machine_cert.public_cert,
-                intermediate_cert: machine_cert.intermediate_cert,
+                ca_bundle: machine_cert.ca_bundle,
                 root_cert: machine_cert.root_cert,
             }))
         } else {

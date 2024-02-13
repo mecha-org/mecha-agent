@@ -69,14 +69,13 @@ pub struct DecodedCert {
     pub not_before: DateTime<Utc>,
 }
 
-pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Result<bool> {
+pub fn generate_rsa_private_key(file_path: &str) -> Result<bool> {
     let fn_name = "generate_ec_private_key";
     tracing::trace!(
         func = fn_name,
         package = PACKAGE_NAME,
-        "file_path - {}, key_size - {:?}",
+        "file_path - {}",
         file_path,
-        key_size
     );
     let file_path_buf = match construct_dir_path(file_path) {
         Ok(v) => v,
@@ -89,16 +88,6 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
             );
             bail!(e)
         }
-    };
-    let elliptic_curve = match key_size {
-        PrivateKeySize::EcP256 => String::from("secp256r1"),
-        PrivateKeySize::EcP384 => String::from("secp384r1"),
-        PrivateKeySize::EcP521 => String::from("secp521r1"),
-        // k => bail!(CryptoError::new(
-        //     CryptoErrorCodes::CryptoGeneratePrivateKeyError,
-        //     format!("key size not supported for elliptical curve key - {}", k),
-        //     true
-        // ))
     };
 
     // Check if the directory of file_path exists, and create it if it doesn't.
@@ -123,13 +112,9 @@ pub fn generate_ec_private_key(file_path: &str, key_size: PrivateKeySize) -> Res
         let _res = safe_create_dir(&file_path);
     }
 
-    // Command: openssl ecparam -name secp521r1 -genkey -noout -out key.pem
+    // Command: openssl genrsa -out key.pem 2048
     let output_result = Command::new("openssl")
-        .arg("ecparam")
-        .arg("-name")
-        .arg(elliptic_curve)
-        .arg("-genkey")
-        .arg("-noout")
+        .arg("genrsa")
         .arg("-out")
         .arg(file_path_buf.to_str().unwrap())
         .output();

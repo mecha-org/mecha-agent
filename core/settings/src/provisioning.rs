@@ -20,8 +20,8 @@ impl Default for ProvisioningSettings {
                 server: ServerCertificate {
                     cert: String::from("~/.mecha/agent/certs/server.pem"),
                 },
-                intermediate: IntermediateCertificate {
-                    cert: String::from("~/.mecha/agent/certs/intermediate.pem"),
+                ca_bundle: CABundle {
+                    cert: String::from("~/.mecha/agent/certs/ca_bundle.pem"),
                 },
                 root: RootCertificate {
                     cert: String::from("~/.mecha/agent/certs/root.pem"),
@@ -41,7 +41,7 @@ pub struct OpenSslSettings {
 pub struct CertificatePaths {
     pub machine: MachineCertificate,
     pub server: ServerCertificate,
-    pub intermediate: IntermediateCertificate,
+    pub ca_bundle: CABundle,
     pub root: RootCertificate,
 }
 
@@ -58,7 +58,7 @@ pub struct ServerCertificate {
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
-pub struct IntermediateCertificate {
+pub struct CABundle {
     pub cert: String,
 }
 

@@ -53,7 +53,7 @@ impl ProvisioningService for ProvisioningServiceHandler {
                 error!(
                     func = "ping",
                     package = PACKAGE_NAME,
-                    "error while pinging machine num - {} error - {}",
+                    "error while  receive pinging machine num - {} error - {}",
                     1000,
                     err
                 );

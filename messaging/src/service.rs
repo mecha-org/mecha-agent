@@ -568,7 +568,13 @@ async fn get_auth_token(
         "{}{}",
         &settings.service_urls.base_url, &settings.service_urls.issue_auth_token
     );
-    debug!(func = fn_name, package = PACKAGE_NAME, "url - {}", url);
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "url - {}, request_body {:?}",
+        url,
+        request_body
+    );
     let client = reqwest::Client::new();
     let get_auth_token_response = client
         .post(url)
