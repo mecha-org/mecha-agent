@@ -3,17 +3,17 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use dotenv::dotenv;
-use heartbeat::HeartbeatSettings;
 use networking::NetworkingSettings;
 use serde::{Deserialize, Serialize};
 use settings::Settings;
+use status::StatusSettings;
 use std::{env, fmt, fs::File, path::PathBuf};
 use tracing::error;
-pub mod heartbeat;
 pub mod messaging;
 pub mod networking;
 pub mod provisioning;
 pub mod settings;
+pub mod status;
 pub mod telemetry;
 
 /// Agent Settings - Struct corresponding to the settings.yml schema
@@ -24,7 +24,7 @@ pub struct AgentSettings {
     pub logging: LoggingSettings,
     pub provisioning: ProvisioningSettings,
     pub messaging: MessagingSettings,
-    pub heartbeat: HeartbeatSettings,
+    pub status: StatusSettings,
     pub settings: Settings,
     pub networking: NetworkingSettings,
     pub telemetry: TelemetrySettings,
@@ -38,7 +38,7 @@ impl Default for AgentSettings {
             logging: LoggingSettings::default(),
             provisioning: ProvisioningSettings::default(),
             messaging: MessagingSettings::default(),
-            heartbeat: HeartbeatSettings::default(),
+            status: StatusSettings::default(),
             settings: Settings::default(),
             networking: NetworkingSettings::default(),
             telemetry: TelemetrySettings::default(),

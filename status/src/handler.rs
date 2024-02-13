@@ -14,28 +14,28 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::service::{get_time_interval, send_heartbeat, SendHeartbeatOptions};
+use crate::service::{get_time_interval, send_status, SendStatusOptions};
 
-pub struct HeartbeatHandler {
+pub struct StatusHandler {
     event_tx: broadcast::Sender<Event>,
     messaging_tx: Sender<MessagingMessage>,
     identity_tx: Sender<IdentityMessage>,
     timer_token: Option<CancellationToken>,
 }
 
-pub enum HeartbeatMessage {
+pub enum StatusMessage {
     Send {
         reply_to: oneshot::Sender<Result<bool>>,
     },
 }
-pub struct HeartbeatOptions {
+pub struct StatusOptions {
     pub event_tx: broadcast::Sender<Event>,
     pub messaging_tx: Sender<MessagingMessage>,
     pub identity_tx: Sender<IdentityMessage>,
 }
 
-impl HeartbeatHandler {
-    pub fn new(options: HeartbeatOptions) -> Self {
+impl StatusHandler {
+    pub fn new(options: StatusOptions) -> Self {
         Self {
             event_tx: options.event_tx,
             messaging_tx: options.messaging_tx,
@@ -68,7 +68,7 @@ impl HeartbeatHandler {
                             return Ok(());
                         },
                         _ = timer.tick() => {
-                            let _ = send_heartbeat(SendHeartbeatOptions {
+                            let _ = send_status(SendStatusOptions {
                                 messaging_tx: messaging_tx.clone(),
                                 identity_tx: identity_tx.clone(),
                             }).await;
@@ -93,7 +93,7 @@ impl HeartbeatHandler {
         Ok(true)
     }
 
-    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<HeartbeatMessage>) -> Result<()> {
+    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<StatusMessage>) -> Result<()> {
         info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
         let mut event_rx = self.event_tx.subscribe();
 
@@ -105,8 +105,8 @@ impl HeartbeatHandler {
                         }
 
                         match msg.unwrap() {
-                            HeartbeatMessage::Send { reply_to } => {
-                                let res = send_heartbeat(SendHeartbeatOptions {
+                            StatusMessage::Send { reply_to } => {
+                                let res = send_status(SendStatusOptions {
                                     messaging_tx: self.messaging_tx.clone(),
                                     identity_tx: self.identity_tx.clone(),
                                 }).await;
