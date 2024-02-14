@@ -20,7 +20,7 @@ pub struct MachineCert {
     pub common_name: String,
     pub fingerprint: String,
     pub public_cert: String,
-    pub intermediate_cert: String,
+    pub ca_bundle: String,
     pub root_cert: String,
 }
 pub fn get_machine_id() -> Result<String> {
@@ -161,11 +161,10 @@ pub fn get_machine_cert() -> Result<MachineCert> {
     };
 
     // Read intermediate and root certificates
-    let intermediate_cert_path = settings.provisioning.paths.intermediate.cert.clone();
+    let ca_bundle_path = settings.provisioning.paths.ca_bundle.cert.clone();
     let root_cert_path = settings.provisioning.paths.root.cert.clone();
 
-    let (intermediate_cert, root_cert) =
-        read_certificates(intermediate_cert_path, root_cert_path).unwrap();
+    let (ca_bundle, root_cert) = read_certificates(ca_bundle_path, root_cert_path).unwrap();
 
     match pub_key_file.read_to_end(&mut public_key_buf) {
         Ok(v) => v,
@@ -233,7 +232,7 @@ pub fn get_machine_cert() -> Result<MachineCert> {
             .collect::<String>(),
         fingerprint: fingerprint,
         public_cert: b64_encode(&public_key_buf),
-        intermediate_cert: b64_encode(intermediate_cert),
+        ca_bundle: b64_encode(ca_bundle),
         root_cert: b64_encode(root_cert),
     };
     Ok(response)

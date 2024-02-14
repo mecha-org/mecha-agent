@@ -8,7 +8,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-heartbeat = { path = "../heartbeat" }
+status = { path = "../status" }
 messaging = { path = "../messaging" }
 agent_settings = { path = "../core/settings" }
 channel = { path = "../commons/channel" }

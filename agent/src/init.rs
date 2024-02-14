@@ -1,12 +1,12 @@
 use crate::errors::{AgentError, AgentErrorCodes};
 use anyhow::{bail, Result};
 use grpc_server::GrpcServerOptions;
-use heartbeat::handler::{HeartbeatHandler, HeartbeatMessage, HeartbeatOptions};
 use identity::handler::{IdentityHandler, IdentityMessage, IdentityOptions};
 use messaging::handler::{MessagingHandler, MessagingMessage, MessagingOptions};
 use networking::handler::{NetworkingHandler, NetworkingMessage, NetworkingOptions};
 use provisioning::handler::{ProvisioningHandler, ProvisioningMessage, ProvisioningOptions};
 use settings::handler::{SettingHandler, SettingMessage, SettingOptions};
+use status::handler::{StatusHandler, StatusMessage, StatusOptions};
 use telemetry::handler::{TelemetryHandler, TelemetryMessage, TelemetryOptions};
 use tokio::{
     sync::{broadcast, mpsc},
@@ -36,7 +36,7 @@ pub async fn init_services() -> Result<bool> {
     })
     .await;
 
-    let (heartbeat_t, heartbeat_tx) = init_heartbeat_service(HeartbeatOptions {
+    let (status_t, status_tx) = init_status_service(StatusOptions {
         event_tx: event_tx.clone(),
         messaging_tx: messaging_tx.clone(),
         identity_tx: identity_tx.clone(),
@@ -84,7 +84,7 @@ pub async fn init_services() -> Result<bool> {
     identity_t.await.unwrap();
     messaging_t.await.unwrap();
     prov_t.await.unwrap();
-    heartbeat_t.await.unwrap();
+    status_t.await.unwrap();
     setting_t.await.unwrap();
     networking_t.await.unwrap();
     telemetry_t.await.unwrap();
@@ -179,24 +179,24 @@ async fn init_messaging_service(
 
     (messaging_t, messaging_tx)
 }
-async fn init_heartbeat_service(
-    opt: HeartbeatOptions,
-) -> (task::JoinHandle<Result<()>>, mpsc::Sender<HeartbeatMessage>) {
-    let (heartbeat_tx, heartbeat_rx) = mpsc::channel(CHANNEL_SIZE);
+async fn init_status_service(
+    opt: StatusOptions,
+) -> (task::JoinHandle<Result<()>>, mpsc::Sender<StatusMessage>) {
+    let (status_tx, status_rx) = mpsc::channel(CHANNEL_SIZE);
 
-    let heartbeat_t = tokio::spawn(async move {
-        match HeartbeatHandler::new(opt).run(heartbeat_rx).await {
+    let status_t = tokio::spawn(async move {
+        match StatusHandler::new(opt).run(status_rx).await {
             Ok(_) => (),
             Err(e) => {
                 error!(
-                    func = "init_heartbeat_service",
+                    func = "init_status_service",
                     package = PACKAGE_NAME,
-                    "error init/run heartbeat service: {:?}",
+                    "error init/run status service: {:?}",
                     e
                 );
                 bail!(AgentError::new(
-                    AgentErrorCodes::HeartbeatInitError,
-                    format!("error init/run heartbeat service: {:?}", e),
+                    AgentErrorCodes::StatusInitError,
+                    format!("error init/run status service: {:?}", e),
                     true
                 ));
             }
@@ -204,7 +204,7 @@ async fn init_heartbeat_service(
         Ok(())
     });
 
-    (heartbeat_t, heartbeat_tx)
+    (status_t, status_tx)
 }
 async fn init_setting_service(
     opt: SettingOptions,

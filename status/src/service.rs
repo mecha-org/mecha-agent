@@ -1,3 +1,5 @@
+use std::env;
+
 use agent_settings::{read_settings_yml, AgentSettings};
 use anyhow::{bail, Result};
 use channel::recv_with_timeout;
@@ -6,17 +8,17 @@ use messaging::handler::MessagingMessage;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha256::digest;
+use sys_info::hostname;
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, error, info, trace, warn};
-
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
-use crate::errors::{HeartbeatError, HeartbeatErrorCodes};
+use crate::errors::{StatusError, StatusErrorCodes};
 #[derive(Serialize, Deserialize, Debug)]
-pub struct HeartbeatPublishPayload {
+pub struct StatusPublishPayload {
     pub time: String,
     pub machine_id: String,
 }
-pub struct SendHeartbeatOptions {
+pub struct SendStatusOptions {
     pub messaging_tx: Sender<MessagingMessage>,
     pub identity_tx: Sender<IdentityMessage>,
 }
@@ -37,16 +39,16 @@ pub fn get_time_interval() -> u64 {
         func = "get_time_interval",
         package = PACKAGE_NAME,
         "time_interval_sec: {}",
-        settings.heartbeat.time_interval_sec
+        settings.status.time_interval_sec
     );
-    settings.heartbeat.time_interval_sec
+    settings.status.time_interval_sec
 }
-pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<bool> {
-    let fn_name = "send_heartbeat";
+pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
+    let fn_name = "send_status";
     // Get machine id
     let (tx, rx) = tokio::sync::oneshot::channel();
     let (publish_result_tx, publish_result_rx) = tokio::sync::oneshot::channel();
-    let send_output = heartbeat_options
+    let send_output = status_options
         .identity_tx
         .send(IdentityMessage::GetMachineId { reply_to: tx })
         .await;
@@ -60,8 +62,8 @@ pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<b
                 "error send identity message to get machine_id: {:?}",
                 err
             );
-            bail!(HeartbeatError::new(
-                HeartbeatErrorCodes::ChannelSendMessageError,
+            bail!(StatusError::new(
+                StatusErrorCodes::ChannelSendMessageError,
                 format!("error send identity message to get machine_id: {:?}", err),
                 false
             ));
@@ -89,18 +91,27 @@ pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<b
         "formatted utc time - {}",
         formatted_utc_time
     );
-    let publish_payload = HeartbeatPublishPayload {
+    let publish_payload = StatusPublishPayload {
         time: formatted_utc_time,
         machine_id: machine_id.clone(),
     };
 
+    let hostname = hostname().unwrap();
+    println!("Platform hostname: {}", hostname);
+
+    let five = sys_info::loadavg().unwrap().one;
+    println!("Load average: {}", five);
+
+    println!("Version: release {}", sys_info::os_release().unwrap());
+    println!("OS Type: {}", sys_info::os_type().unwrap());
+
     // Publish message
-    let send_output = heartbeat_options
+    let send_output = status_options
         .messaging_tx
         .send(MessagingMessage::Send {
             reply_to: publish_result_tx,
             message: json!(publish_payload).to_string(),
-            subject: format!("machine.{}.heartbeat", digest(machine_id.clone())),
+            subject: format!("machine.{}.status", digest(machine_id.clone())),
         })
         .await;
     match send_output {
@@ -109,12 +120,12 @@ pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<b
             error!(
                 func = fn_name,
                 package = PACKAGE_NAME,
-                "error send heartbeat message {:?}",
+                "error send status message {:?}",
                 err
             );
-            bail!(HeartbeatError::new(
-                HeartbeatErrorCodes::ChannelSendMessageError,
-                "error send heartbeat message".to_string(),
+            bail!(StatusError::new(
+                StatusErrorCodes::ChannelSendMessageError,
+                "error send status message".to_string(),
                 false
             ));
         }
@@ -125,11 +136,11 @@ pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<b
             error!(
                 func = "provision_by_code",
                 package = PACKAGE_NAME,
-                "error publishing heartbeat - {}",
+                "error publishing status - {}",
                 err
             );
-            bail!(HeartbeatError::new(
-                HeartbeatErrorCodes::ChannelRecvTimeoutError,
+            bail!(StatusError::new(
+                StatusErrorCodes::ChannelRecvTimeoutError,
                 format!("error receiving message: {}", err),
                 false
             ));
@@ -138,7 +149,7 @@ pub async fn send_heartbeat(heartbeat_options: SendHeartbeatOptions) -> Result<b
     info!(
         func = fn_name,
         package = PACKAGE_NAME,
-        "heartbeat message published!"
+        "status message published!"
     );
     Ok(true)
 }
