@@ -16,24 +16,6 @@ use std::{fmt, io::Read, path::Path};
 use tracing::{error, info, trace};
 use x509_certificate::CapturedX509Certificate;
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
-/**
- * Open SSL Commands Reference
- *
- * [Default]
- * ECDSA:
- * Generate Key: openssl ecparam -name secp521r1 -genkey -noout -out key.pem
- * Generate CSR: openssl req -new -sha256 -key key.pem -out req.pem
- * Sign: openssl dgst -sha256  -sign private.pem /path/to/data
- * Verify: openssl dgst -ecdsa-with-SHA1 -verify public.pem -signature /path/to/signature /path/to/data
- *
- * RSA:
- * Generate Key: openssl genrsa -out key.pem 2048
- * Generate CSR: openssl req -new -sha256 -key key.pem -out req.pem
- *
- * [TrustM]
- * TBD
- *
- */
 
 // Certificate Attributes
 #[derive(Serialize, Deserialize, Debug)]

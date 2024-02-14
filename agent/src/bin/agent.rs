@@ -28,13 +28,7 @@ async fn main() -> Result<()> {
             AgentSettings::default()
         }
     };
-    //todo: remove this log
-    info!(
-        func = "main",
-        package = PACKAGE_NAME,
-        "settings: {:?}",
-        settings
-    );
+
     // enable error tracking on sentry
     let _guard = sentry::init((
         settings.sentry.dsn,

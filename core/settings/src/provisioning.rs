@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 pub struct ProvisioningSettings {
     pub server_url: String,
     pub paths: CertificatePaths,
-    pub openssl: OpenSslSettings,
 }
 
 impl Default for ProvisioningSettings {
@@ -27,14 +26,8 @@ impl Default for ProvisioningSettings {
                     cert: String::from("~/.mecha/agent/certs/root.pem"),
                 },
             },
-            openssl: OpenSslSettings { engine: None },
         }
     }
-}
-
-#[derive(Debug, Deserialize, Clone, Serialize)]
-pub struct OpenSslSettings {
-    pub engine: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]

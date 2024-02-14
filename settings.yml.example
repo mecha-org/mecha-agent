@@ -11,8 +11,6 @@ server:
   tls: false
 provisioning: 
   server_url:  http://localhost:3000
-  openssl:
-    engine:
   paths:
     device:
       private_key: /home/user/.mecha/agent/.keys/device.key
