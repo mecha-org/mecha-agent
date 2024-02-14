@@ -1,11 +1,20 @@
 use crate::errors::{CryptoError, CryptoErrorCodes};
 use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
-use fs::{construct_dir_path, safe_open_file};
-use openssl::{pkey::PKey, sign::Signer};
+use fs::{construct_dir_path, safe_open_file, safe_write_to_path};
+use rand::rngs::OsRng;
+use rcgen::{Certificate, CertificateParams, DistinguishedName, DnType, KeyPair, PKCS_RSA_SHA256};
+use rsa::{
+    pkcs1v15::SigningKey,
+    pkcs8::{DecodePrivateKey, EncodePrivateKey},
+    signature::{SignatureEncoding, Signer},
+    RsaPrivateKey,
+};
 use serde::{Deserialize, Serialize};
-use std::{fmt, io::Read, path::Path, process::Command};
-use tracing::{debug, error, info, trace};
+use sha2::Sha256;
+use std::{fmt, io::Read, path::Path};
+use tracing::{error, info, trace};
+use x509_certificate::CapturedX509Certificate;
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 /**
  * Open SSL Commands Reference
@@ -77,21 +86,9 @@ pub fn generate_rsa_private_key(file_path: &str) -> Result<bool> {
         "file_path - {}",
         file_path,
     );
-    let file_path_buf = match construct_dir_path(file_path) {
-        Ok(v) => v,
-        Err(e) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "failed to construct file path - {}",
-                e
-            );
-            bail!(e)
-        }
-    };
 
     // Check if the directory of file_path exists, and create it if it doesn't.
-    let parent_directory = match Path::new(&file_path_buf).parent() {
+    let parent_directory = match Path::new(&file_path).parent() {
         Some(v) => v,
         None => {
             error!(
@@ -113,56 +110,22 @@ pub fn generate_rsa_private_key(file_path: &str) -> Result<bool> {
     }
 
     // Command: openssl genrsa -out key.pem 2048
-    let output_result = Command::new("openssl")
-        .arg("genrsa")
-        .arg("-out")
-        .arg(file_path_buf.to_str().unwrap())
-        .output();
-
-    let output = match output_result {
-        Ok(v) => v,
+    let mut rng = OsRng;
+    let bits = 2048;
+    let private_key = RsaPrivateKey::new(&mut rng, bits).unwrap();
+    let private_key_der = private_key.to_pkcs8_der().unwrap();
+    let key_pair = rcgen::KeyPair::try_from(private_key_der.as_bytes()).unwrap();
+    // key_pair.serialize_pem().as_bytes()
+    match safe_write_to_path(file_path, key_pair.serialize_pem().as_bytes()) {
+        Ok(_) => {}
         Err(e) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "openssl ec private key generate command failed - {}",
-                e
-            );
             bail!(CryptoError::new(
-                CryptoErrorCodes::GeneratePrivateKeyError,
-                format!("openssl private key generate command failed - {}", e),
+                CryptoErrorCodes::WritePrivateKeyError,
+                format!("failed to write private key file - {}", e),
                 true
             ))
         }
-    };
-
-    debug!(
-        func = fn_name,
-        package = PACKAGE_NAME,
-        "openssl ec private key generate command output - {:?}",
-        output
-    );
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        error!(
-            func = fn_name,
-            package = PACKAGE_NAME,
-            "openssl error in generating private key, stderr - {}",
-            stderr
-        );
-        bail!(CryptoError::new(
-            CryptoErrorCodes::GeneratePrivateKeyError,
-            format!(
-                "openssl error in generating private key, stderr - {}",
-                stderr
-            ),
-            true
-        ))
     }
-
-    let _stdout = String::from_utf8_lossy(&output.stdout).to_string();
-
-    // TODO: Update permissions of keypath to 400
     Ok(true)
 }
 
@@ -180,104 +143,13 @@ pub fn generate_csr(
         common_name
     );
 
-    let subject = format!("/C=/ST=/L=/O=/OU=/CN={}", common_name);
-    let private_key_path_buf = match construct_dir_path(&private_key_path) {
+    // read private key
+    let mut private_key_str = String::new();
+    let mut file = match safe_open_file(&private_key_path) {
         Ok(v) => v,
         Err(e) => {
             error!(
                 func = "generate_csr",
-                package = PACKAGE_NAME,
-                "failed to construct private key path - {}, error - {}",
-                &private_key_path,
-                e
-            );
-            bail!(e)
-        }
-    };
-
-    let csr_file_path_buf = match construct_dir_path(csr_file_path) {
-        Ok(v) => v,
-        Err(e) => {
-            error!(
-                func = "generate_csr",
-                package = PACKAGE_NAME,
-                "failed to construct csr file path - {}, error - {}",
-                csr_file_path,
-                e
-            );
-            bail!(e)
-        }
-    };
-
-    // Command: openssl req -new -sha256 -key key.pem -subj "/C=/ST=/L=/O=/OU=/CN=" -out req.pem
-    let output_result = Command::new("openssl")
-        .arg("req")
-        .arg("-new")
-        .arg("-sha256")
-        .arg("-key")
-        .arg(private_key_path_buf.to_str().unwrap())
-        .arg("-subj")
-        .arg(subject)
-        .arg("-out")
-        .arg(csr_file_path_buf.to_str().unwrap())
-        .output();
-
-    debug!(
-        func = "generate_csr",
-        package = PACKAGE_NAME,
-        "openssl csr generate command output - {:?}",
-        output_result
-    );
-    let output = match output_result {
-        Ok(v) => v,
-        Err(e) => {
-            error!(
-                func = "generate_csr",
-                package = PACKAGE_NAME,
-                "openssl csr generate command failed - {}",
-                e
-            );
-            bail!(CryptoError::new(
-                CryptoErrorCodes::GenerateCSRError,
-                format!("openssl csr generate command failed - {}", e),
-                true
-            ))
-        }
-    };
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        info!(
-            func = "generate_csr",
-            package = PACKAGE_NAME,
-            "openssl csr generate command output - {}",
-            stdout
-        );
-        Ok(true)
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        error!(
-            func = "generate_csr",
-            package = PACKAGE_NAME,
-            "openssl error in generating csr, stderr - {}",
-            stderr
-        );
-        bail!(CryptoError::new(
-            CryptoErrorCodes::GenerateCSRError,
-            format!("openssl error in generating csr, stderr - {}", stderr),
-            true
-        ))
-    }
-}
-
-pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<u8>> {
-    // Load the private key from a file
-    let mut private_key_buf = Vec::new();
-    let mut file = match safe_open_file(private_key_path) {
-        Ok(v) => v,
-        Err(e) => {
-            error!(
-                func = "sign_with_private_key",
                 package = PACKAGE_NAME,
                 "failed to open private key file - {}",
                 e
@@ -290,7 +162,7 @@ pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<
         }
     };
 
-    match file.read_to_end(&mut private_key_buf) {
+    match file.read_to_string(&mut private_key_str) {
         Ok(v) => v,
         Err(e) => bail!(CryptoError::new(
             CryptoErrorCodes::ReadPrivateKeyError,
@@ -298,44 +170,151 @@ pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<
             true
         )),
     };
-
-    let private_key = match PKey::private_key_from_pem(&private_key_buf) {
+    let key_pair = match KeyPair::from_pem(&private_key_str) {
         Ok(v) => v,
-        Err(e) => bail!(CryptoError::new(
-            CryptoErrorCodes::OpenPrivateKeyError,
-            format!("failed to open private key - {}", e),
-            true
-        )),
-    };
-
-    // Sign the message using the private key
-    let mut signer = match Signer::new(openssl::hash::MessageDigest::sha256(), &private_key) {
-        Ok(v) => v,
-        Err(e) => bail!(CryptoError::new(
-            CryptoErrorCodes::LoadSignerError,
-            format!("failed to load openssl signer - {}", e),
-            true
-        )),
-    };
-    match signer.update(data) {
-        Ok(v) => v,
-        Err(e) => bail!(CryptoError::new(
-            CryptoErrorCodes::UpdateSignerError,
-            format!("failed to update openssl signer - {}", e),
-            true
-        )),
-    };
-    match signer.sign_to_vec() {
-        Ok(v) => {
-            tracing::info!("signature completed: {:?}", v);
-            return Ok(v);
+        Err(e) => {
+            error!(
+                func = "generate_csr",
+                package = PACKAGE_NAME,
+                "failed to read private key file - {}",
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::ReadPrivateKeyError,
+                format!("failed to read private key file - {}", e),
+                true
+            ))
         }
-        Err(e) => bail!(CryptoError::new(
-            CryptoErrorCodes::UpdateSignerError,
-            format!("failed to sign data - {}", e),
-            true
-        )),
     };
+    let mut distinguished_name = DistinguishedName::new();
+    distinguished_name.push(DnType::CommonName, common_name);
+    let mut params_rsa: CertificateParams = Default::default();
+    params_rsa.alg = &PKCS_RSA_SHA256;
+    params_rsa.distinguished_name = distinguished_name;
+    params_rsa.key_pair = Some(key_pair);
+    let cert = Certificate::from_params(params_rsa).unwrap();
+    let csr = match cert.serialize_request_pem() {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = "generate_csr",
+                package = PACKAGE_NAME,
+                "failed to serialize csr - {}",
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::GenerateCSRError,
+                format!("failed to serialize csr - {}", e),
+                true
+            ))
+        }
+    };
+    // write csr to path
+    match safe_write_to_path(&csr_file_path, csr.as_bytes()) {
+        Ok(_) => return Ok(true),
+        Err(e) => {
+            error!(
+                func = "generate_csr",
+                package = PACKAGE_NAME,
+                "failed to write csr file - {}",
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::WritePrivateKeyError,
+                format!("failed to write csr file - {}", e),
+                true
+            ))
+        }
+    }
+}
+
+pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<u8>> {
+    let file_path = match construct_dir_path(private_key_path) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = "sign_with_private_key",
+                package = PACKAGE_NAME,
+                "failed to construct path - {}, error - {}",
+                private_key_path,
+                e
+            );
+            bail!(e)
+        }
+    };
+    let path_str = match file_path.into_os_string().into_string() {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = "sign_with_private_key",
+                package = PACKAGE_NAME,
+                "failed to convert path to string - {}, error - {:?}",
+                private_key_path,
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::FilePathError,
+                format!("failed to convert path to string - {:?}", e),
+                true
+            ))
+        }
+    };
+
+    let mut private_key = match safe_open_file(private_key_path) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = "sign_with_private_key",
+                package = PACKAGE_NAME,
+                "failed to open private key file - {}, error - {}",
+                private_key_path,
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::ReadPrivateKeyError,
+                format!("failed to open private key file - {}", e),
+                true
+            ))
+        }
+    };
+    let mut private_key_str = String::new();
+    match private_key.read_to_string(&mut private_key_str) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = "sign_with_private_key",
+                package = PACKAGE_NAME,
+                "failed to read private key file - {}",
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::ReadPrivateKeyError,
+                format!("failed to read private key file - {}", e),
+                true
+            ))
+        }
+    };
+    // Load the private key from a file
+    let private_key = match RsaPrivateKey::from_pkcs8_pem(&private_key_str) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = "sign_with_private_key",
+                package = PACKAGE_NAME,
+                "failed to load private key from file - {}, error - {}",
+                private_key_path,
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::ReadPrivateKeyError,
+                format!("failed to load private key from file - {}", e),
+                true
+            ))
+        }
+    };
+    let signer = SigningKey::<Sha256>::new(private_key);
+    let signature = signer.sign(data);
+    Ok(signature.to_vec())
 }
 
 fn safe_create_dir(path: &str) -> Result<bool> {
@@ -378,4 +357,59 @@ fn safe_create_dir(path: &str) -> Result<bool> {
         path
     );
     Ok(true)
+}
+
+pub fn read_public_key(file_path: &str) -> Result<CapturedX509Certificate> {
+    let fn_name = "read_public_key";
+    let mut public_key_buf = Vec::new();
+    let mut file = match safe_open_file(file_path) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to open private key file on path - {}, error - {}",
+                file_path,
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::ReadPrivateKeyError,
+                format!("failed to open private key file - {}", e),
+                true
+            ))
+        }
+    };
+
+    match file.read_to_end(&mut public_key_buf) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to read private key file - {}",
+                e
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::ReadPrivateKeyError,
+                format!("failed to read private key file - {}", e),
+                true
+            ))
+        }
+    };
+    match CapturedX509Certificate::from_pem(public_key_buf) {
+        Ok(cert) => return Ok(cert),
+        Err(err) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error deserializing pem -{}",
+                err
+            );
+            bail!(CryptoError::new(
+                CryptoErrorCodes::PemDeserializeError,
+                format!("error deserializing pem",),
+                true
+            ))
+        }
+    };
 }

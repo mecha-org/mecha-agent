@@ -14,10 +14,9 @@ use crypto::x509::generate_rsa_private_key;
 use events::Event;
 use futures::StreamExt;
 use identity::handler::IdentityMessage;
-use messaging::async_nats::Message;
+
 use messaging::handler::MessagingMessage;
 use messaging::Bytes;
-use messaging::Message as NatsMessage;
 use messaging::Subscriber as NatsSubscriber;
 use reqwest::Client as RequestClient;
 use reqwest::StatusCode;
@@ -61,7 +60,6 @@ pub struct ProvisioningServerResponseGeneric<T> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
 pub struct ProvisioningManifest {
     pub machine_id: String,
     pub cert_sign_url: String,
