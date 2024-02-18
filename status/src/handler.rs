@@ -14,7 +14,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::service::{get_time_interval, send_status, SendStatusOptions};
+use crate::service::{get_time_interval, machine_platform_info, send_status, SendStatusOptions};
 
 pub struct StatusHandler {
     event_tx: broadcast::Sender<Event>,
@@ -96,7 +96,6 @@ impl StatusHandler {
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<StatusMessage>) -> Result<()> {
         info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
         let mut event_rx = self.event_tx.subscribe();
-
         loop {
             select! {
                     msg = message_rx.recv() => {
@@ -122,6 +121,7 @@ impl StatusHandler {
                         match event.unwrap() {
                             Event::Messaging(events::MessagingEvent::Connected) => {
                                 // start
+                                let _ = machine_platform_info(self.identity_tx.clone(), self.messaging_tx.clone()).await;
                                 let _ = &self.set_timer().await;
                             },
                             Event::Messaging(events::MessagingEvent::Disconnected) => {
