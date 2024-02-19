@@ -8,6 +8,10 @@ pub enum StatusErrorCodes {
     InitMessagingClientError,
     ChannelSendMessageError,
     ChannelRecvTimeoutError,
+    FetchPlatformInfoError,
+    FetchMachineIdError,
+    FetchLoadAverageError,
+    FetchUptimeError,
 }
 
 impl fmt::Display for StatusErrorCodes {
@@ -22,6 +26,18 @@ impl fmt::Display for StatusErrorCodes {
             }
             StatusErrorCodes::ChannelRecvTimeoutError => {
                 write!(f, "StatusErrorCodes: ChannelRecvTimeoutError",)
+            }
+            StatusErrorCodes::FetchPlatformInfoError => {
+                write!(f, "StatusErrorCodes: FetchPlatformInfoError",)
+            }
+            StatusErrorCodes::FetchMachineIdError => {
+                write!(f, "StatusErrorCodes: FetchMachineIdError",)
+            }
+            StatusErrorCodes::FetchLoadAverageError => {
+                write!(f, "StatusErrorCodes: FetchLoadAverageError",)
+            }
+            StatusErrorCodes::FetchUptimeError => {
+                write!(f, "StatusErrorCodes: FetchUptimeError",)
             }
         }
     }
