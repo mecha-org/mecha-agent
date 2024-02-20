@@ -1,6 +1,6 @@
 use crate::service::{
-    await_deprovision_message, de_provision, generate_code, ping, provision_by_code,
-    subscribe_to_nats, PingResponse,
+    await_deprovision_message, await_re_issue_cert_message, de_provision, generate_code, ping,
+    provision_by_code, subscribe_to_nats, PingResponse,
 };
 use anyhow::{bail, Result};
 use events::Event;
@@ -77,26 +77,28 @@ impl ProvisioningHandler {
         let identity_tx = self.identity_tx.clone();
         let event_tx = self.event_tx.clone();
         let mut timer = tokio::time::interval(std::time::Duration::from_secs(50));
-        let de_prov_subscriber =
-            match subscribe_to_nats(identity_tx.clone(), messaging_tx.clone(), event_tx.clone())
-                .await
-            {
-                Ok(v) => v,
-                Err(e) => {
-                    error!(
-                        func = "subscribe_to_nats",
-                        package = PACKAGE_NAME,
-                        "subscribe to nats error - {:?}",
-                        e
-                    );
-                    bail!(e)
-                }
-            };
+        let subscribers = match subscribe_to_nats(identity_tx.clone(), messaging_tx.clone()).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    func = "subscribe_to_nats",
+                    package = PACKAGE_NAME,
+                    "subscribe to nats error - {:?}",
+                    e
+                );
+                bail!(e)
+            }
+        };
         let mut futures = JoinSet::new();
         futures.spawn(await_deprovision_message(
             identity_tx.clone(),
-            event_tx,
-            de_prov_subscriber,
+            event_tx.clone(),
+            subscribers.de_provisioning_request.unwrap(),
+        ));
+        futures.spawn(await_re_issue_cert_message(
+            identity_tx.clone(),
+            event_tx.clone(),
+            subscribers.re_issue_certificate.unwrap(),
         ));
         // create spawn for timer
         let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {

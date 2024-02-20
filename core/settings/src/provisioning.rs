@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct ProvisioningSettings {
     pub server_url: String,
+    pub cert_sign_url: String,
     pub paths: CertificatePaths,
 }
 
@@ -10,6 +11,7 @@ impl Default for ProvisioningSettings {
     fn default() -> Self {
         Self {
             server_url: String::from("http://localhost:3000"),
+            cert_sign_url: String::from("/cert-sign"),
             paths: CertificatePaths {
                 machine: MachineCertificate {
                     private_key: String::from("~/.mecha/agent/.keys/machine.key"),
