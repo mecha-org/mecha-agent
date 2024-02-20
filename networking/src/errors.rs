@@ -1,7 +1,5 @@
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
-use tracing::error;
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub enum NetworkingErrorCodes {
@@ -29,11 +27,14 @@ pub enum NetworkingErrorCodes {
     CertsGenerateError,
     MachineSettingsEnrollmentUrlFoundError,
     CertReadFileError,
-    SignCertError,
     SignCertDecodeError,
     SignCertConvertStringError,
     SignCertFileCreateError,
     SignCertFileSaveError,
+    SignCertRequestServerError,
+    SignCertRequestBadRequestError,
+    SignCertRequestNotFoundError,
+    SignCertRequestUnknownError,
     CaCertDecodeError,
     CaCertConvertStringError,
     CaCertFileCreateError,
@@ -54,6 +55,9 @@ pub enum NetworkingErrorCodes {
     CertVerifyError,
     MachineSettingsNetworkingFirewallRulesNotFoundError,
     ExtractNetworkingFirewallRulesPayloadError,
+    ChannelSendMessageError,
+    ChannelReceiveMessageError,
+    CleanupNebulaProcessError,
 }
 
 impl fmt::Display for NetworkingErrorCodes {
@@ -144,9 +148,6 @@ impl fmt::Display for NetworkingErrorCodes {
             NetworkingErrorCodes::CertReadFileError => {
                 write!(f, "NetworkingErrorCodes: CertReadFileError")
             }
-            NetworkingErrorCodes::SignCertError => {
-                write!(f, "NetworkingErrorCodes: SignCertError")
-            }
             NetworkingErrorCodes::SignCertDecodeError => {
                 write!(f, "NetworkingErrorCodes: SignCertDecodeError")
             }
@@ -158,6 +159,18 @@ impl fmt::Display for NetworkingErrorCodes {
             }
             NetworkingErrorCodes::SignCertFileSaveError => {
                 write!(f, "NetworkingErrorCodes: SignCertFileSaveError")
+            }
+            NetworkingErrorCodes::SignCertRequestServerError => {
+                write!(f, "NetworkingErrorCodes: SignCertRequestServerError")
+            }
+            NetworkingErrorCodes::SignCertRequestBadRequestError => {
+                write!(f, "NetworkingErrorCodes: SignCertRequestBadRequestError")
+            }
+            NetworkingErrorCodes::SignCertRequestNotFoundError => {
+                write!(f, "NetworkingErrorCodes: SignCertRequestNotFoundError")
+            }
+            NetworkingErrorCodes::SignCertRequestUnknownError => {
+                write!(f, "NetworkingErrorCodes: SignCertRequestUnknownError")
             }
             NetworkingErrorCodes::NebulaBaseConfigParseError => {
                 write!(f, "NetworkingErrorCodes: NebulaBaseConfigParseError")
@@ -228,6 +241,15 @@ impl fmt::Display for NetworkingErrorCodes {
                     "NetworkingErrorCodes: ExtractNetworkingFirewallRulesPayloadError"
                 )
             }
+            NetworkingErrorCodes::ChannelSendMessageError => {
+                write!(f, "NetworkingErrorCodes: ChannelSendMessageError")
+            }
+            NetworkingErrorCodes::ChannelReceiveMessageError => {
+                write!(f, "NetworkingErrorCodes: ChannelReceiveMessageError")
+            }
+            NetworkingErrorCodes::CleanupNebulaProcessError => {
+                write!(f, "NetworkingErrorCodes: CleanupNebulaProcessError")
+            }
         }
     }
 }
@@ -250,16 +272,9 @@ impl std::fmt::Display for NetworkingError {
 
 impl NetworkingError {
     pub fn new(code: NetworkingErrorCodes, message: String, capture_error: bool) -> Self {
-        let trace_id = find_current_trace_id();
-        error!(
-            target = "networking",
-            "error: (code: {:?}, message: {})", code, message
-        );
         if capture_error {
-            let error = &anyhow::anyhow!(code).context(format!(
-                "error: (code: {:?}, message: {} trace:{:?})",
-                code, message, trace_id
-            ));
+            let error = &anyhow::anyhow!(code)
+                .context(format!("error: (code: {:?}, message: {})", code, message));
             capture_anyhow(error);
         }
         Self { code, message }

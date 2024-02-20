@@ -1,4 +1,6 @@
-use anyhow::Result;
+use crate::errors::{MessagingError, MessagingErrorCodes};
+use crate::service::{get_machine_id, Messaging};
+use anyhow::{bail, Result};
 use events::Event;
 use identity::handler::IdentityMessage;
 use nats_client::{jetstream::JetStreamClient, Bytes, Subscriber};
@@ -8,9 +10,9 @@ use tokio::{
     sync::{broadcast, mpsc, oneshot},
 };
 use tonic::async_trait;
-use tracing::info;
+use tracing::{error, info};
 
-use crate::service::{Messaging, MessagingScope};
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
 pub enum MessagingMessage {
     Connect {
@@ -57,69 +59,93 @@ impl MessagingHandler {
         Self {
             event_tx: options.event_tx,
             status: ServiceStatus::STARTED,
-            messaging_client: Messaging::new(MessagingScope::System, true),
+            messaging_client: Messaging::new(true),
             identity_tx: options.identity_tx,
         }
     }
-    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<MessagingMessage>) {
-        // start the service
+    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<MessagingMessage>) -> Result<()> {
+        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
         let _ = &self.start().await;
         let mut event_rx = self.event_tx.subscribe();
         loop {
             select! {
-                            msg = message_rx.recv() => {
-                                if msg.is_none() {
-                                    continue;
-                                }
-
-                                match msg.unwrap() {
-                                    MessagingMessage::Send{reply_to, message, subject} => {
-                                        let res = self.messaging_client.publish(&subject.as_str(), Bytes::from(message)).await;
-                                        let _ = reply_to.send(res);
-
-                                    }
-                                    MessagingMessage::Request{reply_to, message, subject} => {
-                                        let res = self.messaging_client.request(&subject.as_str(), Bytes::from(message)).await;
-                                        let _ = reply_to.send(res);
-                                    },
-                                    MessagingMessage::Connect { reply_to } => {
-                                        let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
-                                        let _ = reply_to.send(res);
-                                    },
-                                    MessagingMessage::Disconnect { reply_to } => todo!(),
-                                    MessagingMessage::Reconnect { reply_to } => {
-                                        let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
-                                        let _ = reply_to.send(res);
-                                    },
-                                    MessagingMessage::Subscriber { reply_to, subject } => {
-                                        let res = self.messaging_client.subscribe(subject.as_str()).await;
-                                        let _ = reply_to.send(res);
-                                    },
-                                    MessagingMessage::InitJetStream { reply_to } => {
-                                        let res = self.messaging_client.init_jetstream().await;
-                                        let _ = reply_to.send(res);
-                                    }
-                                };
-                            }
-            // Receive events from other services
-            event = event_rx.recv() => {
-                if event.is_err() {
-                    continue;
+                msg = message_rx.recv() => {
+                    if msg.is_none() {
+                        continue;
+                    }
+                    match msg.unwrap() {
+                        MessagingMessage::Send{reply_to, message, subject} => {
+                            let res = self.messaging_client.publish(&subject.as_str(), Bytes::from(message)).await;
+                            let _ = reply_to.send(res);
+                        }
+                        MessagingMessage::Request{reply_to, message, subject} => {
+                            let res = self.messaging_client.request(&subject.as_str(), Bytes::from(message)).await;
+                            let _ = reply_to.send(res);
+                        },
+                        MessagingMessage::Connect { reply_to } => {
+                            let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
+                            let _ = reply_to.send(res);
+                        },
+                        MessagingMessage::Reconnect { reply_to } => {
+                            let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
+                            let _ = reply_to.send(res);
+                        },
+                        MessagingMessage::Subscriber { reply_to, subject } => {
+                            let res = self.messaging_client.subscribe(subject.as_str()).await;
+                            let _ = reply_to.send(res);
+                        },
+                        MessagingMessage::InitJetStream { reply_to } => {
+                            let res = self.messaging_client.init_jetstream().await;
+                            let _ = reply_to.send(res);
+                        }
+                        _ => {}
+                    };
                 }
-                match event.unwrap() {
-                    Event::Provisioning(events::ProvisioningEvent::Provisioned) => {
-                        info!("Messaging service received provisioning event");
-                        println!("Messaging service received provisioning event");
-                        let _ = &self.start().await;
-                    },
-                    Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
-                        let _ = &self.stop().await;
-                    },
-                    Event::Messaging(_) => {},
-                    Event::Settings(_) => {},
+                // Receive events from other services
+                event = event_rx.recv() => {
+                    if event.is_err() {
+                        continue;
+                    }
+                    match event.unwrap() {
+                        Event::Provisioning(events::ProvisioningEvent::Provisioned) => {
+                            info!(
+                                func = "run",
+                                package = env!("CARGO_PKG_NAME"),
+                                "messaging service received provisioning event"
+                            );
+                            let _ = &self.start().await;
+                        },
+                        Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
+                            info!(
+                                func = "run",
+                                package = env!("CARGO_PKG_NAME"),
+                                "messaging service received deprovisioning event"
+                            );
+                            let _ = &self.stop().await;
+                        },
+                        Event::Nats(nats_client::NatsEvent::Disconnected) => {
+                            let _ = match self.event_tx.send(Event::Messaging(events::MessagingEvent::Disconnected)) {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    error!(
+                                        func = "run",
+                                        package = PACKAGE_NAME,
+                                        "error sending messaging service disconnected event - {}",
+                                        e
+                                    );
+                                    bail!(MessagingError::new(
+                                        MessagingErrorCodes::EventSendError,
+                                        format!("error sending messaging service disconnected - {}", e),
+                                        true
+                                    ));
+                                }
+                            };
+                            let _ = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
+                        },
+                      _ => {}
+                    }
                 }
             }
-                        }
         }
     }
 }
@@ -127,17 +153,25 @@ impl MessagingHandler {
 #[async_trait]
 impl ServiceHandler for MessagingHandler {
     async fn start(&mut self) -> Result<bool> {
-        self.status = ServiceStatus::STARTED;
-        match self
-            .messaging_client
-            .connect(&self.identity_tx, self.event_tx.clone())
-            .await
-        {
-            Ok(_) => {}
+        let machine_id = match get_machine_id(self.identity_tx.clone()).await {
+            Ok(id) => id,
             Err(e) => {
-                println!("Error connecting to NATS: {:?}", e);
+                return Ok(false);
             }
         };
+        if !machine_id.is_empty() {
+            self.status = ServiceStatus::STARTED;
+            match self
+                .messaging_client
+                .connect(&self.identity_tx, self.event_tx.clone())
+                .await
+            {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("Error connecting to messaging service: {:?}", e);
+                }
+            };
+        }
         Ok(true)
     }
 

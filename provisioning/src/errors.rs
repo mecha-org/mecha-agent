@@ -1,63 +1,91 @@
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
-use tracing::error;
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
+use tonic::Status;
 
+const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 #[derive(Debug, Default, Clone, Copy)]
 pub enum ProvisioningErrorCodes {
     #[default]
-    ManifestLookupUnknownError,
-    ManifestLookupServerError,
-    ManifestLookupNotFoundError,
-    ManifestLookupBadRequestError,
-    ManifestParseResponseError,
+    UnknownError,
+    UnauthorizedError,
+    NotFoundError,
+    BadRequestError,
+    UnreachableError,
+    InternalServerError,
     CSRSignReadFileError,
-    CSRSignUnknownError,
-    CSRSignServerError,
-    CSRSignNotFoundError,
-    CSRSignBadRequestError,
-    CSRSignResponseParseError,
     CertificateWriteError,
+    SendEventError,
+    SettingsDatabaseDeleteError,
+    ParseResponseError,
+    ChannelSendMessageError,
+    ChannelReceiveMessageError,
+    MachineMismatchError,
+    ExtractMessagePayloadError,
+    DeprovisioningError,
+    SubscribeToNatsError,
+    PayloadDeserializationError,
+    InvalidMachineIdError,
 }
 
 impl fmt::Display for ProvisioningErrorCodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ProvisioningErrorCodes::ManifestLookupUnknownError => {
-                write!(f, "ProvisioningErrorCodes: ManifestLookupUnknownError")
+            ProvisioningErrorCodes::UnknownError => {
+                write!(f, "ProvisioningErrorCodes: UnknownError")
             }
-            ProvisioningErrorCodes::ManifestLookupServerError => {
-                write!(f, "ProvisioningErrorCodes: ManifestLookupServerError")
+            ProvisioningErrorCodes::UnauthorizedError => {
+                write!(f, "ProvisioningErrorCodes: UnauthorizedError")
             }
-            ProvisioningErrorCodes::ManifestLookupNotFoundError => {
-                write!(f, "ProvisioningErrorCodes: ManifestLookupNotFoundError")
+            ProvisioningErrorCodes::NotFoundError => {
+                write!(f, "ProvisioningErrorCodes: NotFoundError")
             }
-            ProvisioningErrorCodes::ManifestLookupBadRequestError => {
-                write!(f, "ProvisioningErrorCodes: ManifestLookupBadRequestError")
+            ProvisioningErrorCodes::BadRequestError => {
+                write!(f, "ProvisioningErrorCodes: BadRequestError")
             }
-            ProvisioningErrorCodes::ManifestParseResponseError => {
-                write!(f, "ProvisioningErrorCodes: ManifestParseResponseError")
+            ProvisioningErrorCodes::UnreachableError => {
+                write!(f, "ProvisioningErrorCodes: UnreachableError")
+            }
+            ProvisioningErrorCodes::InternalServerError => {
+                write!(f, "ProvisioningErrorCodes: InternalServerError")
             }
             ProvisioningErrorCodes::CSRSignReadFileError => {
                 write!(f, "ProvisioningErrorCodes: CSRSignReadFileError")
             }
-            ProvisioningErrorCodes::CSRSignUnknownError => {
-                write!(f, "ProvisioningErrorCodes: CSRSignUnknownError")
-            }
-            ProvisioningErrorCodes::CSRSignServerError => {
-                write!(f, "ProvisioningErrorCodes: CSRSignServerError")
-            }
-            ProvisioningErrorCodes::CSRSignNotFoundError => {
-                write!(f, "ProvisioningErrorCodes: CSRSignNotFoundError")
-            }
-            ProvisioningErrorCodes::CSRSignBadRequestError => {
-                write!(f, "ProvisioningErrorCodes: CSRSignBadRequestError")
-            }
-            ProvisioningErrorCodes::CSRSignResponseParseError => {
-                write!(f, "ProvisioningErrorCodes: CSRSignResponseParseError")
-            }
             ProvisioningErrorCodes::CertificateWriteError => {
                 write!(f, "ProvisioningErrorCodes: CertificateWriteError")
+            }
+            ProvisioningErrorCodes::SendEventError => {
+                write!(f, "ProvisioningErrorCodes: SendEventError")
+            }
+            ProvisioningErrorCodes::SettingsDatabaseDeleteError => {
+                write!(f, "ProvisioningErrorCodes: SettingsDatabaseDeleteError")
+            }
+            ProvisioningErrorCodes::ParseResponseError => {
+                write!(f, "ProvisioningErrorCodes: ParseResponseError")
+            }
+            ProvisioningErrorCodes::ChannelSendMessageError => {
+                write!(f, "ProvisioningErrorCodes: ChannelSendMessageError")
+            }
+            ProvisioningErrorCodes::ChannelReceiveMessageError => {
+                write!(f, "ProvisioningErrorCodes: ChannelReceiveMessageError")
+            }
+            ProvisioningErrorCodes::MachineMismatchError => {
+                write!(f, "ProvisioningErrorCodes: MachineMismatchError")
+            }
+            ProvisioningErrorCodes::ExtractMessagePayloadError => {
+                write!(f, "ProvisioningErrorCodes: ExtractMessagePayloadError")
+            }
+            ProvisioningErrorCodes::DeprovisioningError => {
+                write!(f, "ProvisioningErrorCodes: DeprovisioningError")
+            }
+            ProvisioningErrorCodes::SubscribeToNatsError => {
+                write!(f, "ProvisioningErrorCodes: SubscribeToNatsError")
+            }
+            ProvisioningErrorCodes::PayloadDeserializationError => {
+                write!(f, "ProvisioningErrorCodes: PayloadDeserializationError")
+            }
+            ProvisioningErrorCodes::InvalidMachineIdError => {
+                write!(f, "ProvisioningErrorCodes: InvalidMachineIdError")
             }
         }
     }
@@ -81,18 +109,28 @@ impl std::fmt::Display for ProvisioningError {
 
 impl ProvisioningError {
     pub fn new(code: ProvisioningErrorCodes, message: String, capture_error: bool) -> Self {
-        let trace_id = find_current_trace_id();
-        error!(
-            target = "provisioning",
-            "error: (code: {:?}, message: {})", code, message
-        );
         if capture_error {
             let error = &anyhow::anyhow!(code).context(format!(
-                "error: (code: {:?}, message: {} trace:{:?})",
-                code, message, trace_id
+                "error: (code: {:?}, message: {}, package: {})",
+                code, message, PACKAGE_NAME
             ));
             capture_anyhow(error);
         }
         Self { code, message }
+    }
+}
+
+pub fn map_provisioning_error_to_tonic(code: ProvisioningErrorCodes, message: String) -> Status {
+    match code {
+        ProvisioningErrorCodes::UnauthorizedError => {
+            Status::new(tonic::Code::Unauthenticated, message)
+        }
+        ProvisioningErrorCodes::NotFoundError => Status::new(tonic::Code::NotFound, message),
+        ProvisioningErrorCodes::BadRequestError => {
+            Status::new(tonic::Code::InvalidArgument, message)
+        }
+        ProvisioningErrorCodes::UnreachableError => Status::new(tonic::Code::Unavailable, message),
+        // Add more mappings as needed
+        _ => Status::new(tonic::Code::Unknown, message),
     }
 }

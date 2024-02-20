@@ -3,30 +3,15 @@ use anyhow::{bail, Result};
 use init_tracing_opentelemetry::tracing_subscriber_ext::{
     build_logger_text, build_loglevel_filter_layer, build_otel_layer,
 };
-
-use mecha_agent::init::init_services;
 use sentry_tracing::EventFilter;
 use std::path::Path;
-use tracing::info;
-use tracing_appender::non_blocking;
-use tracing_appender::rolling::never;
-use tracing_subscriber::fmt::Layer;
-use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
-const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
-#[tokio::main]
-async fn main() -> Result<()> {
+use tracing_appender::{non_blocking, rolling::never};
+use tracing_subscriber::{fmt::Layer, layer::SubscriberExt, EnvFilter};
+pub fn set_tracing() -> Result<bool> {
     // Setting tracing
     let settings = match read_settings_yml() {
         Ok(settings) => settings,
-        Err(e) => {
-            tracing::error!(
-                func = "main",
-                package = PACKAGE_NAME,
-                "error reading settings.yml: {}",
-                e
-            );
-            AgentSettings::default()
-        }
+        Err(_) => AgentSettings::default(),
     };
 
     // enable error tracking on sentry
@@ -59,10 +44,12 @@ async fn main() -> Result<()> {
 
     let subscriber = tracing_subscriber::registry()
         .with(layer)
+        .with(EnvFilter::new(settings.logging.level.as_str()))
         .with(sentry_tracing::layer().event_filter(|_| EventFilter::Ignore))
         .with(build_loglevel_filter_layer()) //temp for terminal log
         .with(build_logger_text()) //temp for terminal log
         .with(build_otel_layer().unwrap()); // trace collection layer
+
     match tracing::subscriber::set_global_default(subscriber) {
         Ok(_) => (),
         Err(e) => bail!(e),
@@ -75,6 +62,5 @@ async fn main() -> Result<()> {
         result = "success",
         "tracing set up",
     );
-    let _ = init_services().await;
-    Ok(())
+    Ok(true)
 }

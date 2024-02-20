@@ -25,6 +25,6 @@ message GetMachineCertResponse {
   string expiry = 2;
   string fingerprint = 3;
   string public_cert = 4;
-  string intermediate_cert = 5;
+  string ca_bundle = 5;
   string root_cert = 6;
 }

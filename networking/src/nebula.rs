@@ -2,15 +2,17 @@ use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use sentry_anyhow::capture_anyhow;
 use serde::{Deserialize, Serialize};
+use std::env::temp_dir;
 use std::fmt;
+use std::process::Child;
 use std::{
     collections::HashMap,
     process::{Command, Output},
 };
-use tracing::{debug, error, info};
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
+use tracing::{debug, error, info, trace};
 
-use crate::utils::run_command;
+use crate::utils::spawn_command;
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 #[derive(Debug, Default, Clone, Copy)]
 pub enum NebulaErrorCodes {
     #[default]
@@ -72,16 +74,9 @@ impl std::fmt::Display for NebulaError {
 
 impl NebulaError {
     pub fn new(code: NebulaErrorCodes, message: String, capture_error: bool) -> Self {
-        let trace_id = find_current_trace_id();
-        error!(
-            target = "Nebula",
-            "error: (code: {:?}, message: {})", code, message
-        );
         if capture_error {
-            let error = &anyhow::anyhow!(code).context(format!(
-                "error: (code: {:?}, message: {} trace:{:?})",
-                code, message, trace_id
-            ));
+            let error = &anyhow::anyhow!(code)
+                .context(format!("error: (code: {:?}, message: {})", code, message));
             capture_anyhow(error);
         }
         Self { code, message }
@@ -231,7 +226,15 @@ pub struct NebulaCert {
 }
 
 pub fn decode_cert(cert_path: &str) -> Result<NebulaCert> {
-    let output: Output = match Command::new("nebula-cert")
+    let fn_name = "decode_cert";
+    trace!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "cert path is {}",
+        cert_path
+    );
+    let nebula_cert_bin_path = format!("{}/nebula-cert", temp_dir().display());
+    let output: Output = match Command::new(nebula_cert_bin_path)
         .arg("print")
         .arg("-path")
         .arg(cert_path)
@@ -240,6 +243,12 @@ pub fn decode_cert(cert_path: &str) -> Result<NebulaCert> {
     {
         Ok(output) => output,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to execute command: {}",
+                e
+            );
             bail!(NebulaError::new(
                 NebulaErrorCodes::NebulaCommandError,
                 format!("failed to execute command: {}", e),
@@ -248,8 +257,20 @@ pub fn decode_cert(cert_path: &str) -> Result<NebulaCert> {
         }
     };
 
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "command output - {:?}",
+        output
+    );
     if !output.status.success() {
         let error = String::from_utf8_lossy(&output.stderr);
+        error!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "failed to get output from command: {}",
+            error
+        );
         bail!(NebulaError::new(
             NebulaErrorCodes::NebulaCommandOutputError,
             format!("failed to get output from command: {}", error),
@@ -261,6 +282,12 @@ pub fn decode_cert(cert_path: &str) -> Result<NebulaCert> {
     let decoded_cert = match serde_json::from_str::<NebulaCert>(&stdout) {
         Ok(v) => v,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to deserialize: {}",
+                e
+            );
             bail!(NebulaError::new(
                 NebulaErrorCodes::NebulaCommandOutputDeserializeError,
                 format!("failed to deserialize: {}", e),
@@ -268,12 +295,21 @@ pub fn decode_cert(cert_path: &str) -> Result<NebulaCert> {
             ))
         }
     };
-
+    info!(func = fn_name, package = PACKAGE_NAME, "cert decoded!");
     Ok(decoded_cert)
 }
 
 pub fn verify_cert(ca_path: &str, cert_path: &str) -> Result<bool> {
-    let output: Output = match Command::new("nebula-cert")
+    let fn_name = "verify_cert";
+    trace!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "ca path is {}, cert path is {}",
+        ca_path,
+        cert_path
+    );
+    let nebula_cert_bin_path = format!("{}/nebula-cert", temp_dir().display());
+    let output: Output = match Command::new(nebula_cert_bin_path)
         .arg("verify")
         .arg("-ca")
         .arg(ca_path)
@@ -283,6 +319,12 @@ pub fn verify_cert(ca_path: &str, cert_path: &str) -> Result<bool> {
     {
         Ok(output) => output,
         Err(e) => {
+            info!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to execute command: {}",
+                e
+            );
             bail!(NebulaError::new(
                 NebulaErrorCodes::NebulaCommandError,
                 format!("failed to execute command: {}", e),
@@ -290,22 +332,40 @@ pub fn verify_cert(ca_path: &str, cert_path: &str) -> Result<bool> {
             ))
         }
     };
-
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "command output - {:?}",
+        output
+    );
     if !output.status.success() {
         let error = String::from_utf8_lossy(&output.stderr);
+        error!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "failed to get output from command: {}",
+            error
+        );
         bail!(NebulaError::new(
             NebulaErrorCodes::NebulaCommandOutputError,
             format!("failed to get output from command: {}", error),
             true
         ))
     }
-
+    info!(func = fn_name, package = PACKAGE_NAME, "cert verified!");
     Ok(true)
 }
 pub fn is_cert_valid(cert_path: &str) -> Result<bool> {
+    let fn_name = "is_cert_valid";
     let decoded_cert = match decode_cert(cert_path) {
         Ok(v) => v,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to decode cert: {}",
+                e
+            );
             bail!(NebulaError::new(
                 NebulaErrorCodes::NebulaCertDecodeError,
                 format!("failed to decode cert: {}", e),
@@ -316,14 +376,33 @@ pub fn is_cert_valid(cert_path: &str) -> Result<bool> {
 
     let is_valid =
         Utc::now() > decoded_cert.details.not_before && Utc::now() < decoded_cert.details.not_after;
-
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "cert validity - {}",
+        is_valid
+    );
     Ok(is_valid)
 }
 
-pub fn is_cert_verifed(ca_path: &str, cert_path: &str) -> Result<bool> {
+pub fn is_cert_verified(ca_path: &str, cert_path: &str) -> Result<bool> {
+    trace!(
+        func = "is_cert_verified",
+        package = PACKAGE_NAME,
+        "ca path is {}, cert path is {}",
+        ca_path,
+        cert_path
+    );
     let cert_verified = match verify_cert(ca_path, cert_path) {
         Ok(v) => v,
         Err(e) => {
+            error!(
+                func = "is_cert_verified",
+                package = PACKAGE_NAME,
+                "failed to verify cert on path - {}, error - {}",
+                cert_path,
+                e
+            );
             bail!(NebulaError::new(
                 NebulaErrorCodes::NebulaCertVerificationError,
                 format!("failed to verify cert: {}", e),
@@ -331,12 +410,18 @@ pub fn is_cert_verifed(ca_path: &str, cert_path: &str) -> Result<bool> {
             ))
         }
     };
-
+    info!(
+        func = "is_cert_verified",
+        package = PACKAGE_NAME,
+        "cert verification - {}",
+        cert_verified
+    );
     Ok(cert_verified)
 }
 
 pub fn generate_nebula_key_cert(pub_path: &str, key_path: &str) -> Result<bool> {
-    let mut command = Command::new("nebula-cert");
+    let nebula_cert_bin_path = format!("{}/nebula-cert", temp_dir().display());
+    let mut command = Command::new(nebula_cert_bin_path);
     command.arg("keygen");
     command.arg("-out-key");
     command.arg(key_path);
@@ -347,6 +432,11 @@ pub fn generate_nebula_key_cert(pub_path: &str, key_path: &str) -> Result<bool> 
         Ok(status) => match status.success() {
             true => Ok(true),
             false => {
+                error!(
+                    func = "generate_nebula_key_cert",
+                    package = PACKAGE_NAME,
+                    "nebula command status returned false"
+                );
                 bail!(NebulaError::new(
                     NebulaErrorCodes::NebulaCertsGenError,
                     format!("nebula command status returned false",),
@@ -355,6 +445,12 @@ pub fn generate_nebula_key_cert(pub_path: &str, key_path: &str) -> Result<bool> 
             }
         },
         Err(e) => {
+            error!(
+                func = "generate_nebula_key_cert",
+                package = PACKAGE_NAME,
+                "error while generating nebula certs, error - {}",
+                e.to_string()
+            );
             bail!(NebulaError::new(
                 NebulaErrorCodes::NebulaCertsGenError,
                 format!(
@@ -367,24 +463,48 @@ pub fn generate_nebula_key_cert(pub_path: &str, key_path: &str) -> Result<bool> 
     }
 }
 
-pub fn start_nebula(binary_path: &str, config_path: &str) -> Result<bool> {
-    let trace_id = find_current_trace_id();
-    let task = "start";
-    let target = "start_nebula";
-
+pub fn start_nebula(binary_path: &str, config_path: &str) -> Result<tokio::process::Child> {
+    let fn_name = "start_nebula";
+    trace!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "binary path - {}, config path - {}",
+        binary_path,
+        config_path
+    );
     let cmd = &format!("{}/nebula -config {}/config.yaml", binary_path, config_path);
 
-    debug!(task, target, trace_id, "start nebula command is {}", cmd);
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "command to run - {}",
+        cmd
+    );
 
-    let result = match run_command(cmd) {
+    let result = match spawn_command(cmd) {
         Ok(r) => r,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while running command to start nebula, error - {}",
+                e.to_string()
+            );
             bail!(NebulaError::new(
                 NebulaErrorCodes::NebulaStartError,
-                format!("error while running command, error - {}", e.to_string()),
+                format!(
+                    "error while running command to start nebula, error - {}",
+                    e.to_string()
+                ),
                 true
             ))
         }
     };
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "nebula started - {:?}",
+        result.id()
+    );
     Ok(result)
 }

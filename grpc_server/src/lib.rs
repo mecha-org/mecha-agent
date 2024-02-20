@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
 use tokio::sync::mpsc;
 use tonic::transport::Server;
-use tracing::info;
+use tracing::{error, info};
 pub mod errors;
 pub mod services;
 
@@ -68,13 +68,6 @@ pub async fn start_grpc_service(opt: GrpcServerOptions) -> Result<()> {
 
     let addr: SocketAddr = (ip, port).into();
 
-    info!(
-        task = "init_grpc_server",
-        result = "success",
-        "agent server listening on {} [grpc]",
-        addr
-    );
-
     let provisioning_service_handler = ProvisioningServiceHandler::new(opt.provisioning_tx.clone());
     let identity_service_handler = IdentityServiceHandler::new(opt.identity_tx);
     let messaging_service_handler = MessagingServiceHandler::new(opt.messaging_tx);
@@ -99,11 +92,25 @@ pub async fn start_grpc_service(opt: GrpcServerOptions) -> Result<()> {
         .await
     {
         Ok(s) => s,
-        Err(e) => bail!(AgentServerError::new(
-            AgentServerErrorCodes::InitGRPCServerError,
-            format!("error initializing grpc server - {}", e),
-            true
-        )),
+        Err(e) => {
+            error!(
+                func = "start_grpc_service",
+                package = env!("CARGO_PKG_NAME"),
+                "error initializing grpc server - {}",
+                e
+            );
+            bail!(AgentServerError::new(
+                AgentServerErrorCodes::InitGRPCServerError,
+                format!("error initializing grpc server - {}", e),
+                true
+            ))
+        }
     };
+    info!(
+        func = "start_grpc_service",
+        package = env!("CARGO_PKG_NAME"),
+        "grpc server started on - {}",
+        addr
+    );
     Ok(())
 }

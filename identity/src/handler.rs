@@ -8,6 +8,7 @@ use tokio::{
     sync::{broadcast, mpsc, oneshot},
 };
 use tonic::async_trait;
+use tracing::info;
 
 pub struct IdentityHandler {
     event_tx: broadcast::Sender<Event>,
@@ -36,7 +37,8 @@ impl IdentityHandler {
             status: ServiceStatus::INACTIVE,
         }
     }
-    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<IdentityMessage>) {
+    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<IdentityMessage>) -> Result<()> {
+        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
         // Start the service
         let _ = &self.start().await;
         loop {
@@ -48,7 +50,6 @@ impl IdentityHandler {
 
                     match msg.unwrap() {
                         IdentityMessage::GetMachineId { reply_to } => {
-                            // let code = generate_error();
                             let machine_id_result = get_machine_id();
                             let _ = reply_to.send(machine_id_result);
                         }

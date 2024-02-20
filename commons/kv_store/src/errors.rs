@@ -1,7 +1,5 @@
 use sentry_anyhow::capture_anyhow;
 use std::fmt;
-use tracing::error;
-use tracing_opentelemetry_instrumentation_sdk::find_current_trace_id;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub enum KeyValueStoreErrorCodes {
@@ -10,6 +8,7 @@ pub enum KeyValueStoreErrorCodes {
     DbInitializationError,
     RetrieveValueError,
     DbAcquireLockError,
+    InsertError,
 }
 
 impl fmt::Display for KeyValueStoreErrorCodes {
@@ -26,6 +25,9 @@ impl fmt::Display for KeyValueStoreErrorCodes {
             }
             KeyValueStoreErrorCodes::DbAcquireLockError => {
                 write!(f, "KeyValueStoreErrorCodes: DbAcquireLockError")
+            }
+            KeyValueStoreErrorCodes::InsertError => {
+                write!(f, "KeyValueStoreErrorCodes: InsertError")
             }
         }
     }
@@ -49,16 +51,9 @@ impl std::fmt::Display for KeyValueStoreError {
 
 impl KeyValueStoreError {
     pub fn new(code: KeyValueStoreErrorCodes, message: String, capture_error: bool) -> Self {
-        let trace_id = find_current_trace_id();
-        error!(
-            target = "key_value_store",
-            "error: (code: {:?}, message: {})", code, message
-        );
         if capture_error {
-            let error = &anyhow::anyhow!(code).context(format!(
-                "error: (code: {:?}, message: {} trace:{:?})",
-                code, message, trace_id
-            ));
+            let error = &anyhow::anyhow!(code)
+                .context(format!("error: (code: {:?}, message: {})", code, message));
             capture_anyhow(error);
         }
         Self { code, message }
