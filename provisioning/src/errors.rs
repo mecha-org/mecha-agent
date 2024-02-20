@@ -23,6 +23,8 @@ pub enum ProvisioningErrorCodes {
     ExtractMessagePayloadError,
     DeprovisioningError,
     SubscribeToNatsError,
+    PayloadDeserializationError,
+    InvalidMachineIdError,
 }
 
 impl fmt::Display for ProvisioningErrorCodes {
@@ -78,6 +80,12 @@ impl fmt::Display for ProvisioningErrorCodes {
             }
             ProvisioningErrorCodes::SubscribeToNatsError => {
                 write!(f, "ProvisioningErrorCodes: SubscribeToNatsError")
+            }
+            ProvisioningErrorCodes::PayloadDeserializationError => {
+                write!(f, "ProvisioningErrorCodes: PayloadDeserializationError")
+            }
+            ProvisioningErrorCodes::InvalidMachineIdError => {
+                write!(f, "ProvisioningErrorCodes: InvalidMachineIdError")
             }
         }
     }

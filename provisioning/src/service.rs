@@ -47,6 +47,11 @@ pub struct PingResponse {
 struct DeprovisionRequest {
     pub machine_id: String,
 }
+
+#[derive(Deserialize, Debug)]
+struct ReIssueCertificateRequest {
+    pub machine_id: String,
+}
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvisioningServerResponseGeneric<T> {
@@ -79,21 +84,27 @@ pub struct SignedCertificates {
     pub ca_bundle: Vec<String>,
 }
 
-pub enum ProvisioningSubscriber {
-    Deprovisioning { sub: NatsSubscriber },
+#[derive(Debug, Default)]
+pub struct ProvisioningSubscriber {
+    pub de_provisioning_request: Option<NatsSubscriber>,
+    pub re_issue_certificate: Option<NatsSubscriber>,
 }
-
+#[derive(Debug)]
+pub enum ProvisioningSubject {
+    DeProvision(String),
+    ReIssueCertificate(String),
+}
 pub async fn subscribe_to_nats(
     identity_tx: mpsc::Sender<IdentityMessage>,
     messaging_tx: mpsc::Sender<MessagingMessage>,
-    event_tx: Sender<Event>,
-) -> Result<NatsSubscriber> {
+) -> Result<ProvisioningSubscriber> {
+    let fn_name = "subscribe_to_nats";
     // Get machine id
     let machine_id = match get_machine_id(identity_tx.clone()).await {
         Ok(id) => id,
         Err(e) => {
             error!(
-                func = "subscribe",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error getting machine id - {}",
                 e
@@ -101,47 +112,76 @@ pub async fn subscribe_to_nats(
             bail!(e)
         }
     };
-    let (tx, rx) = oneshot::channel();
-    match messaging_tx
-        .send(MessagingMessage::Subscriber {
-            reply_to: tx,
-            subject: format!("machine.{}.deprovision", sha256::digest(machine_id.clone())),
-        })
-        .await
-    {
-        Ok(_) => {}
-        Err(e) => {
-            error!(
-                func = "init",
-                package = PACKAGE_NAME,
-                "error sending subscriber message - {}",
-                e
-            );
-            bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::ChannelSendMessageError,
-                format!("error sending subscriber message - {}", e),
-                true
-            ));
+    let list_of_subjects = vec![
+        ProvisioningSubject::DeProvision(format!(
+            "machine.{}.deprovision",
+            sha256::digest(machine_id.clone())
+        )),
+        ProvisioningSubject::ReIssueCertificate(format!(
+            "machine.{}.provisioning.cert.re_issue",
+            sha256::digest(machine_id.clone())
+        )),
+    ];
+    let mut provisioning_subscribers = ProvisioningSubscriber::default();
+    // Iterate over everything.
+    for subject in list_of_subjects {
+        let (tx, rx) = oneshot::channel();
+        let subject_string = match &subject {
+            ProvisioningSubject::DeProvision(s) => s.to_string(),
+            ProvisioningSubject::ReIssueCertificate(s) => s.to_string(),
+        };
+        match messaging_tx
+            .send(MessagingMessage::Subscriber {
+                reply_to: tx,
+                subject: subject_string,
+            })
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error sending get que subscriber for issue token- {}",
+                    e
+                );
+                bail!(ProvisioningError::new(
+                    ProvisioningErrorCodes::ChannelSendMessageError,
+                    format!("error sending subscriber message - {}", e),
+                    true
+                ));
+            }
         }
+        match recv_with_timeout(rx).await {
+            Ok(subscriber) => match &subject {
+                ProvisioningSubject::DeProvision(_) => {
+                    provisioning_subscribers.de_provisioning_request = Some(subscriber)
+                }
+                ProvisioningSubject::ReIssueCertificate(_) => {
+                    provisioning_subscribers.re_issue_certificate = Some(subscriber)
+                }
+            },
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while get networking subscriber - {:?}, error - {}",
+                    &subject,
+                    e
+                );
+                bail!(ProvisioningError::new(
+                    ProvisioningErrorCodes::ChannelReceiveMessageError,
+                    format!(
+                        "error get networking subscriber - {:?}, error - {}",
+                        &subject, e
+                    ),
+                    true
+                ));
+            }
+        };
     }
-    let de_prov_subscriber = match recv_with_timeout(rx).await {
-        Ok(id) => id,
-        Err(e) => {
-            error!(
-                func = "init",
-                package = PACKAGE_NAME,
-                "error receiving get machine id message - {}",
-                e
-            );
-            bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::ChannelReceiveMessageError,
-                format!("error receiving get machine id message - {}", e),
-                true
-            ));
-        }
-    };
 
-    Ok(de_prov_subscriber)
+    Ok(provisioning_subscribers)
 }
 
 pub async fn ping() -> Result<PingResponse> {
@@ -292,8 +332,9 @@ pub fn generate_code() -> Result<String> {
     5. Store the certificate, intermediate and root in the target path
 */
 pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<bool> {
+    let fn_name = "provision_by_code";
     tracing::trace!(
-        func = "provision_by_code",
+        func = fn_name,
         package = PACKAGE_NAME,
         "init code - {:?}",
         code
@@ -314,7 +355,7 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
     let manifest = match lookup_manifest(&settings, &code).await {
         Ok(manifest) => {
             debug!(
-                func = "provision_by_code",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "provisioning manifest - {:?}",
                 manifest
@@ -323,7 +364,7 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
         }
         Err(e) => {
             error!(
-                func = "provision_by_code",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error looking up manifest for code- {}",
                 &code
@@ -333,21 +374,73 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
     };
 
     info!(
-        func = "provision_by_code",
+        func = fn_name,
         package = PACKAGE_NAME,
         "manifest response :{:?}",
         manifest
     );
+    match perform_cryptography_operation(manifest.machine_id, manifest.cert_sign_url, settings)
+        .await
+    {
+        Ok(_) => (),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error performing cryptography operation - {}",
+                e
+            );
+            bail!(e)
+        }
+    }
+
+    match event_tx.send(Event::Provisioning(events::ProvisioningEvent::Provisioned)) {
+        Ok(_) => debug!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "provisioning event sent successfully"
+        ),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error sending provisioning event - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::SendEventError,
+                format!(
+                    "error sending provisioning event, code: {}, error - {}",
+                    1001, e
+                ),
+                true
+            ));
+        }
+    }
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        result = "success",
+        "machine provisioned successfully"
+    );
+    Ok(true)
+}
+async fn perform_cryptography_operation(
+    machine_id: String,
+    cert_sign_url: String,
+    settings: AgentSettings,
+) -> Result<bool> {
+    let fn_name = "perform_cryptography_operation";
     // 2. Generate the private key based
     match generate_rsa_private_key(&settings.provisioning.paths.machine.private_key) {
         Ok(_) => debug!(
-            func = "provision_by_code",
+            func = fn_name,
             package = PACKAGE_NAME,
             "private key generated successfully"
         ),
         Err(e) => {
             error!(
-                func = "provision_by_code",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error generating private key on path - {}",
                 &settings.provisioning.paths.machine.private_key
@@ -360,16 +453,16 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
     match generate_csr(
         &settings.provisioning.paths.machine.csr,
         &settings.provisioning.paths.machine.private_key,
-        &manifest.machine_id,
+        machine_id.as_str().clone(),
     ) {
         Ok(_) => debug!(
-            func = "provision_by_code",
+            func = fn_name,
             package = PACKAGE_NAME,
             "csr generated successfully"
         ),
         Err(e) => {
             error!(
-                func = "provision_by_code",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error generating csr - {}",
                 e
@@ -382,14 +475,14 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
     let signed_certificates = match sign_csr(
         &settings.provisioning.server_url,
         &settings.provisioning.paths.machine.csr,
-        &manifest.machine_id,
-        &manifest.cert_sign_url,
+        &machine_id.clone(),
+        &cert_sign_url,
     )
     .await
     {
         Ok(signed_cer) => {
             debug!(
-                func = "provision_by_code",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "csr signed successfully"
             );
@@ -397,10 +490,10 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
         }
         Err(e) => {
             error!(
-                func = "provision_by_code",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error signing csr for machine_id - {}",
-                &manifest.machine_id
+                &machine_id
             );
             bail!(e)
         }
@@ -420,7 +513,7 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
     ) {
         Ok(result) => {
             debug!(
-                func = "provision_by_code",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "certificates written successfully, result - {}",
                 result
@@ -429,7 +522,7 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
         }
         Err(e) => {
             error!(
-                func = "provision_by_code",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error writing certificates to path - {:?}",
                 &settings.provisioning.paths
@@ -437,36 +530,6 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
             bail!(e)
         }
     };
-
-    match event_tx.send(Event::Provisioning(events::ProvisioningEvent::Provisioned)) {
-        Ok(_) => debug!(
-            func = "provision_by_code",
-            package = PACKAGE_NAME,
-            "provisioning event sent successfully"
-        ),
-        Err(e) => {
-            error!(
-                func = "provision_by_code",
-                package = PACKAGE_NAME,
-                "error sending provisioning event - {}",
-                e
-            );
-            bail!(ProvisioningError::new(
-                ProvisioningErrorCodes::SendEventError,
-                format!(
-                    "error sending provisioning event, code: {}, error - {}",
-                    1001, e
-                ),
-                true
-            ));
-        }
-    }
-    info!(
-        func = "provision_by_code",
-        package = PACKAGE_NAME,
-        result = "success",
-        "machine provisioned successfully"
-    );
     Ok(true)
 }
 
@@ -1143,4 +1206,110 @@ pub async fn await_deprovision_message(
         }
     }
     Ok(())
+}
+
+pub async fn await_re_issue_cert_message(
+    identity_tx: mpsc::Sender<IdentityMessage>,
+    event_tx: Sender<Event>,
+    mut subscriber: NatsSubscriber,
+) -> Result<()> {
+    let fn_name = "await_re_issue_cert_message";
+    // Don't exit loop in any case by returning a response
+    while let Some(message) = subscriber.next().await {
+        println!("message received on re issue certificate");
+        // convert payload to string
+        match process_re_issue_certificate_request(message.subject.to_string(), message.payload)
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while processing re issue certificate request - {}",
+                    e
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn process_re_issue_certificate_request(subject: String, payload: Bytes) -> Result<bool> {
+    let fn_name = "process_services_re_issue_certificate_request";
+    let settings = match read_settings_yml() {
+        Ok(res) => res,
+        Err(err) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while deserializing message payload - {:?}",
+                err
+            );
+            AgentSettings::default()
+        }
+    };
+    // parse payload
+    let payload_str = match std::str::from_utf8(&payload) {
+        Ok(s) => s,
+        Err(e) => {
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::ExtractMessagePayloadError,
+                format!("error converting payload to string - {}", e),
+                true
+            ))
+        }
+    };
+    let request_payload: ReIssueCertificateRequest = match serde_json::from_str(&payload_str) {
+        Ok(s) => s,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while deserializing message payload - {}",
+                e
+            );
+            bail!(ProvisioningError::new(
+                ProvisioningErrorCodes::PayloadDeserializationError,
+                format!("error while deserializing message payload {}", e),
+                true
+            ))
+        }
+    };
+    let hashed_machine_id = sha256::digest(request_payload.machine_id.clone());
+    // Validate request machine id with current machine id is same or not
+    if !subject.contains(hashed_machine_id.as_str()) {
+        bail!(ProvisioningError::new(
+            ProvisioningErrorCodes::InvalidMachineIdError,
+            format!(
+                "invalid machine id in request - req_machine_id: {} ",
+                request_payload.machine_id
+            ),
+            true
+        ));
+    };
+    // Construct cert sign url
+    let cert_sign_url = format!(
+        "{}{}",
+        settings.provisioning.cert_sign_url, settings.provisioning.server_url
+    );
+    match perform_cryptography_operation(
+        request_payload.machine_id.clone(),
+        cert_sign_url,
+        settings,
+    )
+    .await
+    {
+        Ok(_) => (),
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error performing cryptography operation - {}",
+                e
+            );
+            bail!(e)
+        }
+    }
+    Ok(true)
 }
