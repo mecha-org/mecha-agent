@@ -1288,14 +1288,9 @@ async fn process_re_issue_certificate_request(subject: String, payload: Bytes) -
             true
         ));
     };
-    // Construct cert sign url
-    let cert_sign_url = format!(
-        "{}{}",
-        settings.provisioning.cert_sign_url, settings.provisioning.server_url
-    );
     match perform_cryptography_operation(
         request_payload.machine_id.clone(),
-        cert_sign_url,
+        settings.provisioning.cert_sign_url.clone(),
         settings,
     )
     .await
