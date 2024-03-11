@@ -73,8 +73,8 @@ fn collect_cpu_utilization(meter: Meter) -> Result<()> {
             total_cpu_usage += cpu.cpu_usage();
         }
         let attrs = vec![
-            Key::new("system.cpu.state").string("system"), //todo: value confirm with shoaib
-            Key::new("system.cpu.logical_number").i64(8),  //todo: value confirm with shoaib
+            Key::new("system.cpu.state").string("system"),
+            Key::new("system.cpu.logical_number").i64(cpus.len() as i64),
         ];
         observer.observe_f64(&cpu_utilization_obs_counter, total_cpu_usage as f64, &attrs);
     }) {
@@ -122,8 +122,8 @@ fn collect_cpu_load_average(meter: Meter) -> Result<()> {
             total_cpu_usage += cpu.cpu_usage();
         }
         let attrs = vec![
-            Key::new("system.cpu.state").string("system"), //todo: value confirm with shoaib
-            Key::new("system.cpu.logical_number").i64(8),  //todo: value confirm with shoaib
+            Key::new("system.cpu.state").string("system"),
+            Key::new("system.cpu.logical_number").i64(cpus.len() as i64),
         ];
         observer.observe_f64(&cpu_utilization_obs_counter, total_cpu_usage as f64, &attrs);
     }) {
