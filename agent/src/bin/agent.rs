@@ -5,13 +5,17 @@ use init_tracing_opentelemetry::tracing_subscriber_ext::{
 };
 
 use mecha_agent::init::init_services;
+use opentelemetry::global;
+use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use sentry_tracing::EventFilter;
 use std::path::Path;
+use telemetry::config::init_logs_config;
 use tracing::info;
 use tracing_appender::non_blocking;
 use tracing_appender::rolling::never;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -57,17 +61,22 @@ async fn main() -> Result<()> {
         None
     };
 
+    // configure the global logger to use our opentelemetry logger
+    let _ = init_logs_config();
+    let logger_provider = opentelemetry::global::logger_provider();
+    let tracing_bridge_layer = OpenTelemetryTracingBridge::new(&logger_provider);
+
     let subscriber = tracing_subscriber::registry()
         .with(layer)
+        .with(tracing_bridge_layer)
         .with(sentry_tracing::layer().event_filter(|_| EventFilter::Ignore))
         .with(build_loglevel_filter_layer()) //temp for terminal log
         .with(build_logger_text()) //temp for terminal log
-        .with(build_otel_layer().unwrap()); // trace collection layer
+        .with(build_otel_layer().unwrap());
     match tracing::subscriber::set_global_default(subscriber) {
         Ok(_) => (),
-        Err(e) => bail!(e),
+        Err(e) => bail!("Error setting global default subscriber: {}", e),
     };
-
     tracing::info!(
         //sample log
         func = "set_tracing",

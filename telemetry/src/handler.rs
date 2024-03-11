@@ -1,4 +1,8 @@
-use crate::service::{process_logs, process_metrics, telemetry_init};
+use crate::{
+    config::init_otlp_configuration,
+    metrics::initialize_metrics,
+    service::{process_logs, process_metrics, telemetry_init},
+};
 use anyhow::Result;
 use events::Event;
 use identity::handler::IdentityMessage;
@@ -152,7 +156,12 @@ impl TelemetryHandler {
                 }
                 match event.unwrap() {
                     Event::Messaging(events::MessagingEvent::Connected) => {
-                        let _ = &self.initialize_telemetry().await;
+                        // let _ = &self.initialize_telemetry().await; //todo: deprecated
+                        let _ = init_otlp_configuration();
+                        match initialize_metrics().await {
+                            Ok(_) => println!("metrics initialized"),
+                            Err(e) => println!("error initializing metrics: {:?}", e),
+                        }
                     },
                     Event::Messaging(events::MessagingEvent::Disconnected) => {
                         let _ = &self.kill_telemetry_process();
