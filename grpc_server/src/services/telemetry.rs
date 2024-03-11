@@ -14,6 +14,7 @@ use logs::{logs_service_server::LogsService, ExportLogsServiceRequest, ExportLog
 
 use crate::logs;
 use crate::metrics;
+use crate::metrics::metric::Data;
 
 #[derive(Debug, Clone)]
 pub struct TelemetryServiceHandler {
@@ -38,11 +39,25 @@ impl LogsService for LogsAgent {
         &self,
         request: Request<ExportLogsServiceRequest>,
     ) -> Result<Response<ExportLogsServiceResponse>, Status> {
+        println!("logs request received");
         let binding = request.metadata().clone();
-        let logs_type = binding.get("user").unwrap().to_str().unwrap();
+        let logs_type = match binding.get("user") {
+            Some(v) => {
+                println!("User: {:?}", v.to_str().unwrap());
+                v.to_str().unwrap()
+            }
+            None => "User",
+        };
         let logs = request.into_inner().clone().resource_logs;
+        // to print logs value
+        /* for met in logs.iter() {
+            for key in met.scope_logs.iter() {
+                for met_data in key.log_records.iter() {
+                    println!("Log: {:?}", met_data.body);
+                }
+            }
+        } */
         let encoded: Vec<u8> = bincode::serialize(&logs).unwrap();
-
         let (tx, _rx) = oneshot::channel();
         let _ = self
             .telemetry_service_handler
@@ -72,9 +87,34 @@ impl MetricsService for MetricsAgent {
         &self,
         request: Request<ExportMetricsServiceRequest>,
     ) -> Result<Response<ExportMetricsServiceResponse>, Status> {
+        println!("metrics request received");
         let binding = request.metadata().clone();
-        let metrics_type = binding.get("user").unwrap().to_str().unwrap();
+        let metrics_type = match binding.get("user") {
+            Some(v) => {
+                println!("User: {:?}", v.to_str().unwrap());
+                v.to_str().unwrap()
+            }
+            None => "User",
+        };
+        println!("metrics type: {}", metrics_type);
         let metrics = request.into_inner().clone().resource_metrics;
+        // to print metrics value
+        /*for met in metrics.iter() {
+            for key in met.scope_metrics.iter() {
+                for met_data in key.metrics.iter() {
+                    for data in met_data.data.iter() {
+                        match data {
+                            Data::Sum(counter) => {
+                                for val in counter.data_points.iter() {
+                                    println!("Sum: {:?}: {:?}", val.value, val.attributes);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        } */
         let encoded: Vec<u8> = bincode::serialize(&metrics).unwrap();
 
         let (tx, _rx) = oneshot::channel();
