@@ -31,12 +31,13 @@ pub fn init_otlp_configuration() -> metrics::Result<MeterProvider> {
 pub fn init_logs_config() -> Result<opentelemetry_sdk::logs::Logger, LogError> {
     opentelemetry_otlp::new_pipeline()
         .logging()
-        .with_log_config(
-            Config::default().with_resource(Resource::new(vec![KeyValue::new(
+        .with_log_config(Config::default().with_resource(Resource::new(vec![
+            KeyValue::new(
                 opentelemetry_semantic_conventions::resource::SERVICE_NAME,
                 "mecha-agent-service",
-            )])),
-        )
+            ),
+            KeyValue::new("stream_name", "log_stream"),
+        ])))
         .with_exporter(
             opentelemetry_otlp::new_exporter()
                 .tonic()

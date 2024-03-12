@@ -47,14 +47,6 @@ pub async fn initialize_metrics() -> Result<bool> {
     }
     Ok(true)
 }
-/*
-SYSTEM_CPU_UTILIZATION("system_cpu_time_seconds_total"),
-SYSTEM_MEMORY_USAGE("system_memory_usage_bytes"),
-SYSTEM_CPU_LOAD_AVERAGE_15M("system_cpu_load_average_15m_ratio"),
-SYSTEM_NETWORK_IO("system_network_io_bytes_total"),
-SYSTEM_DISK_IO("system_disk_io_bytes_total"),
-SYSTEM_FILESYSTEMS_USAGE("system_filesystem_usage_bytes");
-*/
 
 // SYSTEM_CPU_UTILIZATION("system_cpu_time_seconds_total"),
 fn collect_cpu_utilization(meter: Meter) -> Result<()> {
