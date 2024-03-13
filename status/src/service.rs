@@ -102,9 +102,7 @@ pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
         }
     };
     //calculate duration
-    let duration = Duration::seconds(uptime.as_secs_f64() as i64);
-    let days = duration.num_days();
-    let uptime_in_format = format!("{}d", days);
+    let system_uptime_duration = Duration::seconds(uptime.as_secs_f64() as i64);
     let load_avg = match sys_info::loadavg() {
         Ok(load_avg) => format!(
             "1m:{} 5m:{} 15m:{}",
@@ -128,7 +126,7 @@ pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
     let publish_payload = StatusPublishPayload {
         time: formatted_utc_time,
         machine_id: machine_id.clone(),
-        sys_uptime: uptime_in_format,
+        sys_uptime: system_uptime_duration.num_seconds().to_string(),
         sys_load_avg: load_avg,
     };
 
