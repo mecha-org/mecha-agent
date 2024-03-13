@@ -51,9 +51,9 @@ pub async fn initialize_metrics() -> Result<bool> {
 // SYSTEM_CPU_UTILIZATION("system_cpu_time_seconds_total"),
 fn collect_cpu_utilization(meter: Meter) -> Result<()> {
     let cpu_utilization_obs_counter = meter
-        .f64_observable_gauge("system.cpu.utilization")
-        .with_description("Difference in system.cpu.time since the last measurement, divided by the elapsed time and number of logical CPUs.")
-        .with_unit(Unit::new("1"))
+        .f64_observable_counter("system.cpu.time")
+        .with_description("Seconds each logical CPU spent on each mode")
+        .with_unit(Unit::new("s"))
         .init();
     match meter.register_callback(&[cpu_utilization_obs_counter.as_any()], move |observer| {
         let s =
@@ -61,7 +61,7 @@ fn collect_cpu_utilization(meter: Meter) -> Result<()> {
         let mut total_cpu_usage: f32 = 0.0;
         let cpus = s.cpus();
         for cpu in cpus {
-            println!("{}%", cpu.cpu_usage());
+            println!("{:?}: {}%", cpu.name(), cpu.cpu_usage());
             total_cpu_usage += cpu.cpu_usage();
         }
         let attrs = vec![
@@ -128,32 +128,43 @@ fn collect_cpu_load_average(meter: Meter) -> Result<()> {
 // SYSTEM_NETWORK_IO("system_network_io_bytes_total"),
 fn collect_network_io(meter: Meter) -> Result<()> {
     let network_io_obs_counter = meter
-        .f64_observable_up_down_counter("system.network.io")
+        .f64_observable_counter("system.network.io")
         .with_description("")
         .with_unit(Unit::new("By"))
         .init();
+
     match meter.register_callback(&[network_io_obs_counter.as_any()], move |observer| {
         let networks = Networks::new_with_refreshed_list();
-        let mut total_transmitted_bytes: u64 = 0;
+
         for (interface_name, network) in &networks {
-            total_transmitted_bytes += network.transmitted();
+            let total_transmitted_bytes = network.transmitted();
+            let total_received_bytes = network.received();
+
+            let attrs_transmit = vec![
+                Key::new("network.io.direction").string("transmit"),
+                Key::new("network.io.interface").string(interface_name.to_owned()),
+            ];
+            observer.observe_f64(
+                &network_io_obs_counter,
+                total_transmitted_bytes as f64,
+                &attrs_transmit,
+            );
+
+            let attrs_receive = vec![
+                Key::new("network.io.direction").string("receive"),
+                Key::new("network.io.interface").string(interface_name.to_owned()),
+            ];
+            observer.observe_f64(
+                &network_io_obs_counter,
+                total_received_bytes as f64,
+                &attrs_receive,
+            );
         }
-        let attrs = vec![Key::new("network.io.direction").string("transmit")];
-        observer.observe_f64(
-            &network_io_obs_counter,
-            total_transmitted_bytes as f64,
-            &attrs,
-        );
-        let mut total_received_bytes: u64 = 0;
-        for (interface_name, network) in &networks {
-            total_received_bytes += network.received();
-        }
-        let attrs = vec![Key::new("network.io.direction").string("receive")];
-        observer.observe_f64(&network_io_obs_counter, total_received_bytes as f64, &attrs);
     }) {
         Ok(_) => println!("callback registered"),
         Err(e) => println!("error registering callback: {:?}", e),
     };
+
     Ok(())
 }
 
