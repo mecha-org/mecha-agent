@@ -51,17 +51,18 @@ pub async fn initialize_metrics() -> Result<bool> {
 // SYSTEM_CPU_UTILIZATION("system_cpu_time_seconds_total"),
 fn collect_cpu_utilization(meter: Meter) -> Result<()> {
     let cpu_utilization_obs_counter = meter
-        .f64_observable_gauge("system.cpu.utilization")
-        .with_description("Difference in system.cpu.time since the last measurement, divided by the elapsed time and number of logical CPUs")
-        .with_unit(Unit::new("1"))
+        .f64_observable_counter("system.cpu.time")
+        .with_description("Seconds each logical CPU spent on each mode")
+        .with_unit(Unit::new("s"))
         .init();
     match meter.register_callback(&[cpu_utilization_obs_counter.as_any()], move |observer| {
         let s =
             System::new_with_specifics(RefreshKind::new().with_cpu(CpuRefreshKind::everything()));
+
         let mut total_cpu_usage: f32 = 0.0;
         let cpus = s.cpus();
         for cpu in cpus {
-            println!("{:?}: {}%", cpu.name(), cpu.cpu_usage());
+            println!("cpu destructure: {:?}", cpu);
             total_cpu_usage += cpu.cpu_usage();
         }
         let attrs = vec![
@@ -100,24 +101,18 @@ fn collect_memory_usage(meter: Meter) -> Result<()> {
 //SYSTEM_CPU_LOAD_AVERAGE_15M("system_cpu_load_average_15m_ratio"),
 fn collect_cpu_load_average(meter: Meter) -> Result<()> {
     let cpu_utilization_obs_counter = meter
-        .f64_observable_gauge("system.linux.cpu.load_15m")
+        .f64_observable_gauge("system.cpu.load_average.15m")
         .with_description("Difference in system.cpu.time since the last measurement, divided by the elapsed time and number of logical CPUs.")
-        .with_unit(Unit::new("By"))
+        .with_unit(Unit::new("1"))
         .init();
     match meter.register_callback(&[cpu_utilization_obs_counter.as_any()], move |observer| {
-        let s =
-            System::new_with_specifics(RefreshKind::new().with_cpu(CpuRefreshKind::everything()));
-        let mut total_cpu_usage: f32 = 0.0;
-        let cpus = s.cpus();
-        for cpu in cpus {
-            println!("{}%", cpu.cpu_usage());
-            total_cpu_usage += cpu.cpu_usage();
-        }
-        let attrs = vec![
-            Key::new("system.cpu.state").string("system"),
-            Key::new("system.cpu.logical_number").i64(cpus.len() as i64),
-        ];
-        observer.observe_f64(&cpu_utilization_obs_counter, total_cpu_usage as f64, &attrs);
+        let load_avg = System::load_average();
+        let attrs = vec![];
+        observer.observe_f64(
+            &cpu_utilization_obs_counter,
+            load_avg.fifteen as f64,
+            &attrs,
+        );
     }) {
         Ok(_) => println!("callback registered"),
         Err(e) => println!("error registering callback: {:?}", e),
