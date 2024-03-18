@@ -51,25 +51,25 @@ pub async fn initialize_metrics() -> Result<bool> {
 // SYSTEM_CPU_UTILIZATION("system_cpu_time_seconds_total"),
 fn collect_cpu_utilization(meter: Meter) -> Result<()> {
     let cpu_utilization_obs_counter = meter
-        .f64_observable_counter("system.cpu.time")
-        .with_description("Seconds each logical CPU spent on each mode")
-        .with_unit(Unit::new("s"))
+        .f64_observable_gauge("system.cpu.utilization")
+        .with_description("")
+        .with_unit(Unit::new("1"))
         .init();
     match meter.register_callback(&[cpu_utilization_obs_counter.as_any()], move |observer| {
-        let s =
+        let mut s =
             System::new_with_specifics(RefreshKind::new().with_cpu(CpuRefreshKind::everything()));
-
-        let mut total_cpu_usage: f32 = 0.0;
+        let mut total_cpu_usage_vec: Vec<f32> = vec![0.0];
         let cpus = s.cpus();
         for cpu in cpus {
-            println!("cpu destructure: {:?}", cpu);
-            total_cpu_usage += cpu.cpu_usage();
+            println!("cpu destructure: {:?}", cpu); //todo: remove
+            total_cpu_usage_vec.push(cpu.cpu_usage());
         }
-        let attrs = vec![
-            Key::new("system.cpu.state").string("system"),
-            Key::new("system.cpu.logical_number").i64(cpus.len() as i64),
-        ];
-        observer.observe_f64(&cpu_utilization_obs_counter, total_cpu_usage as f64, &attrs);
+        let attrs =
+            vec![Key::new("system.cpu.logical_number").i64(total_cpu_usage_vec.len() as i64)];
+
+        let result = calculate_average(&total_cpu_usage_vec);
+        println!("total cpu usage: {}", result);
+        observer.observe_f64(&cpu_utilization_obs_counter, result as f64, &attrs);
     }) {
         Ok(_) => println!("callback registered"),
         Err(e) => println!("error registering callback: {:?}", e),
@@ -77,6 +77,12 @@ fn collect_cpu_utilization(meter: Meter) -> Result<()> {
     Ok(())
 }
 
+fn calculate_average(numbers: &Vec<f32>) -> f64 {
+    let sum: f32 = numbers.iter().sum();
+    let count = numbers.len() as f64;
+    let average = sum as f64 / count;
+    average
+}
 // SYSTEM_MEMORY_USAGE("system_memory_usage_bytes"),
 fn collect_memory_usage(meter: Meter) -> Result<()> {
     let memory_utilization_obs_counter = meter
