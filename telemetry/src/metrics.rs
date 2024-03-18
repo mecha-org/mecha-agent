@@ -1,4 +1,5 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
+use log::error;
 use opentelemetry::{
     global,
     metrics::{Meter, Unit},
@@ -60,7 +61,14 @@ fn collect_cpu_utilization(meter: Meter) -> Result<()> {
             System::new_with_specifics(RefreshKind::new().with_cpu(CpuRefreshKind::everything()));
         let cpus = s.cpus();
         for cpu in cpus {
-            let attrs = vec![Key::new("system.cpu.logical_name").string(cpu.name().to_owned())];
+            let value = match cpu.name().to_owned().parse::<i64>() {
+                Ok(value) => value,
+                Err(e) => {
+                    error!("error parsing cpu name: {}, error: {:?}", cpu.name(), e);
+                    0
+                }
+            };
+            let attrs = vec![Key::new("system.cpu.logical_number").i64(value)];
 
             // total_cpu_usage += cpu.cpu_usage();
             observer.observe_f64(&cpu_utilization_obs_counter, cpu.cpu_usage() as f64, &attrs);
