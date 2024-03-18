@@ -1,4 +1,5 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
+use log::error;
 use opentelemetry::{
     global,
     metrics::{Meter, Unit},
@@ -51,24 +52,27 @@ pub async fn initialize_metrics() -> Result<bool> {
 // SYSTEM_CPU_UTILIZATION("system_cpu_time_seconds_total"),
 fn collect_cpu_utilization(meter: Meter) -> Result<()> {
     let cpu_utilization_obs_counter = meter
-        .f64_observable_counter("system.cpu.time")
-        .with_description("Seconds each logical CPU spent on each mode")
-        .with_unit(Unit::new("s"))
+        .f64_observable_gauge("system.cpu.utilization")
+        .with_description("")
+        .with_unit(Unit::new("1"))
         .init();
     match meter.register_callback(&[cpu_utilization_obs_counter.as_any()], move |observer| {
-        let s =
+        let mut s =
             System::new_with_specifics(RefreshKind::new().with_cpu(CpuRefreshKind::everything()));
-        let mut total_cpu_usage: f32 = 0.0;
         let cpus = s.cpus();
         for cpu in cpus {
-            println!("{:?}: {}%", cpu.name(), cpu.cpu_usage());
-            total_cpu_usage += cpu.cpu_usage();
+            let value = match cpu.name().to_owned().parse::<i64>() {
+                Ok(value) => value,
+                Err(e) => {
+                    error!("error parsing cpu name: {}, error: {:?}", cpu.name(), e);
+                    0
+                }
+            };
+            let attrs = vec![Key::new("system.cpu.logical_number").i64(value)];
+
+            // total_cpu_usage += cpu.cpu_usage();
+            observer.observe_f64(&cpu_utilization_obs_counter, cpu.cpu_usage() as f64, &attrs);
         }
-        let attrs = vec![
-            Key::new("system.cpu.state").string("system"),
-            Key::new("system.cpu.logical_number").i64(cpus.len() as i64),
-        ];
-        observer.observe_f64(&cpu_utilization_obs_counter, total_cpu_usage as f64, &attrs);
     }) {
         Ok(_) => println!("callback registered"),
         Err(e) => println!("error registering callback: {:?}", e),
@@ -87,7 +91,7 @@ fn collect_memory_usage(meter: Meter) -> Result<()> {
         &[memory_utilization_obs_counter.as_any()],
         move |observer| {
             let used_mem = System::new_all().used_memory();
-            let attrs = vec![Key::new("system.memory.state").string("used")];
+            let attrs = vec![Key::new("state").string("used")];
             observer.observe_f64(&memory_utilization_obs_counter, used_mem as f64, &attrs);
         },
     ) {
@@ -100,24 +104,18 @@ fn collect_memory_usage(meter: Meter) -> Result<()> {
 //SYSTEM_CPU_LOAD_AVERAGE_15M("system_cpu_load_average_15m_ratio"),
 fn collect_cpu_load_average(meter: Meter) -> Result<()> {
     let cpu_utilization_obs_counter = meter
-        .f64_observable_gauge("system.linux.cpu.load_15m")
+        .f64_observable_gauge("system.cpu.load_average.15m")
         .with_description("Difference in system.cpu.time since the last measurement, divided by the elapsed time and number of logical CPUs.")
-        .with_unit(Unit::new("By"))
+        .with_unit(Unit::new("1"))
         .init();
     match meter.register_callback(&[cpu_utilization_obs_counter.as_any()], move |observer| {
-        let s =
-            System::new_with_specifics(RefreshKind::new().with_cpu(CpuRefreshKind::everything()));
-        let mut total_cpu_usage: f32 = 0.0;
-        let cpus = s.cpus();
-        for cpu in cpus {
-            println!("{}%", cpu.cpu_usage());
-            total_cpu_usage += cpu.cpu_usage();
-        }
-        let attrs = vec![
-            Key::new("system.cpu.state").string("system"),
-            Key::new("system.cpu.logical_number").i64(cpus.len() as i64),
-        ];
-        observer.observe_f64(&cpu_utilization_obs_counter, total_cpu_usage as f64, &attrs);
+        let load_avg = System::load_average();
+        let attrs = vec![];
+        observer.observe_f64(
+            &cpu_utilization_obs_counter,
+            load_avg.fifteen as f64,
+            &attrs,
+        );
     }) {
         Ok(_) => println!("callback registered"),
         Err(e) => println!("error registering callback: {:?}", e),
@@ -141,8 +139,8 @@ fn collect_network_io(meter: Meter) -> Result<()> {
             let total_received_bytes = network.received();
 
             let attrs_transmit = vec![
-                Key::new("network.io.direction").string("transmit"),
-                Key::new("network.io.interface").string(interface_name.to_owned()),
+                Key::new("direction").string("transmit"),
+                Key::new("device").string(interface_name.to_owned()),
             ];
             observer.observe_f64(
                 &network_io_obs_counter,
@@ -151,8 +149,8 @@ fn collect_network_io(meter: Meter) -> Result<()> {
             );
 
             let attrs_receive = vec![
-                Key::new("network.io.direction").string("receive"),
-                Key::new("network.io.interface").string(interface_name.to_owned()),
+                Key::new("direction").string("receive"),
+                Key::new("device").string(interface_name.to_owned()),
             ];
             observer.observe_f64(
                 &network_io_obs_counter,
@@ -171,7 +169,7 @@ fn collect_network_io(meter: Meter) -> Result<()> {
 // SYSTEM_DISK_IO("system_disk_io_bytes_total"),
 fn collect_disk_io(meter: Meter) -> Result<()> {
     let disk_io_obs_counter = meter
-        .f64_observable_up_down_counter("system.disk.io")
+        .f64_observable_counter("system.disk.io")
         .with_description("")
         .with_unit(Unit::new("By"))
         .init();
@@ -181,7 +179,7 @@ fn collect_disk_io(meter: Meter) -> Result<()> {
         for (_pid, process) in s.processes() {
             total_disk_usage_read_direction += process.disk_usage().read_bytes;
         }
-        let attrs = vec![Key::new("system.io.direction").string("read")];
+        let attrs = vec![Key::new("direction").string("read")];
         observer.observe_f64(
             &disk_io_obs_counter,
             total_disk_usage_read_direction as f64,
@@ -192,7 +190,7 @@ fn collect_disk_io(meter: Meter) -> Result<()> {
         for (_pid, process) in s.processes() {
             total_disk_usage_write_direction += process.disk_usage().written_bytes;
         }
-        let attrs = vec![Key::new("system.io.direction").string("write")];
+        let attrs = vec![Key::new("direction").string("write")];
         observer.observe_f64(
             &disk_io_obs_counter,
             total_disk_usage_write_direction as f64,
@@ -214,22 +212,16 @@ fn collect_filesystem_usage(meter: Meter) -> Result<()> {
         .init();
     match meter.register_callback(&[filesystem_usage_obs_counter.as_any()], move |observer| {
         let disks = Disks::new_with_refreshed_list();
-        let mut total_space: u64 = 0;
+        let mut used_space: u64 = 0;
         for disk in disks.list() {
-            total_space += disk.total_space();
-        }
-        let mut available_space: u64 = 0;
-        for disk in disks.list() {
-            available_space += disk.available_space();
-        }
+            used_space += disk.total_space() - disk.available_space();
 
-        let total_filesystem_usage = total_space - available_space;
-        let attrs = vec![Key::new("system.filesystem.state").string("used")];
-        observer.observe_f64(
-            &filesystem_usage_obs_counter,
-            total_filesystem_usage as f64,
-            &attrs,
-        );
+            let mount_point = disk.mount_point().to_owned();
+            let mut attrs = vec![];
+            attrs.push(Key::new("state").string("used"));
+            attrs.push(Key::new("mountpoint").string(mount_point.to_str().unwrap().to_owned()));
+            observer.observe_f64(&filesystem_usage_obs_counter, used_space as f64, &attrs);
+        }
     }) {
         Ok(_) => println!("callback registered"),
         Err(e) => println!("error registering callback: {:?}", e),
