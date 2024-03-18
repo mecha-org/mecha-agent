@@ -58,7 +58,7 @@ fn collect_cpu_utilization(meter: Meter) -> Result<()> {
     match meter.register_callback(&[cpu_utilization_obs_counter.as_any()], move |observer| {
         let mut s =
             System::new_with_specifics(RefreshKind::new().with_cpu(CpuRefreshKind::everything()));
-        let mut total_cpu_usage_vec: Vec<f32> = vec![0.0];
+        let mut total_cpu_usage_vec: Vec<f32> = vec![];
         let cpus = s.cpus();
         for cpu in cpus {
             println!("cpu destructure: {:?}", cpu); //todo: remove
