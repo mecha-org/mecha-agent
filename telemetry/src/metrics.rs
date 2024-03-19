@@ -91,8 +91,18 @@ fn collect_memory_usage(meter: Meter) -> Result<()> {
         &[memory_utilization_obs_counter.as_any()],
         move |observer| {
             let used_mem = System::new_all().used_memory();
-            let attrs = vec![Key::new("state").string("used")];
-            observer.observe_f64(&memory_utilization_obs_counter, used_mem as f64, &attrs);
+            let attrs_used = vec![Key::new("state").string("used")];
+            observer.observe_f64(
+                &memory_utilization_obs_counter,
+                used_mem as f64,
+                &attrs_used,
+            );
+            let attrs_free = vec![Key::new("state").string("free")];
+            observer.observe_f64(
+                &memory_utilization_obs_counter,
+                System::new_all().free_memory() as f64,
+                &attrs_free,
+            );
         },
     ) {
         Ok(_) => println!("callback registered"),
@@ -175,27 +185,21 @@ fn collect_disk_io(meter: Meter) -> Result<()> {
         .init();
     match meter.register_callback(&[disk_io_obs_counter.as_any()], move |observer| {
         let s = System::new_all();
-        let mut total_disk_usage_read_direction: u64 = 0;
-        for (_pid, process) in s.processes() {
-            total_disk_usage_read_direction += process.disk_usage().read_bytes;
-        }
-        let attrs = vec![Key::new("direction").string("read")];
-        observer.observe_f64(
-            &disk_io_obs_counter,
-            total_disk_usage_read_direction as f64,
-            &attrs,
-        );
 
-        let mut total_disk_usage_write_direction: u64 = 0;
         for (_pid, process) in s.processes() {
-            total_disk_usage_write_direction += process.disk_usage().written_bytes;
+            let read_bytes_data = process.disk_usage().read_bytes;
+
+            let attrs_direction_read = vec![Key::new("direction").string("transmit")];
+            observer.observe_f64(
+                &disk_io_obs_counter,
+                read_bytes_data as f64,
+                &attrs_direction_read,
+            );
+
+            let write_bytes_data = process.disk_usage().written_bytes;
+            let attrs_write = vec![Key::new("direction").string("write")];
+            observer.observe_f64(&disk_io_obs_counter, write_bytes_data as f64, &attrs_write);
         }
-        let attrs = vec![Key::new("direction").string("write")];
-        observer.observe_f64(
-            &disk_io_obs_counter,
-            total_disk_usage_write_direction as f64,
-            &attrs,
-        );
     }) {
         Ok(_) => println!("callback registered"),
         Err(e) => println!("error registering callback: {:?}", e),
@@ -215,7 +219,7 @@ fn collect_filesystem_usage(meter: Meter) -> Result<()> {
         let mut used_space: u64 = 0;
         for disk in disks.list() {
             used_space += disk.total_space() - disk.available_space();
-
+            println!("used space: {:?}", used_space);
             let mount_point = disk.mount_point().to_owned();
             let mut attrs = vec![];
             attrs.push(Key::new("state").string("used"));
