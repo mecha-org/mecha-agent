@@ -27,4 +27,5 @@ message GetMachineCertResponse {
   string public_cert = 4;
   string ca_bundle = 5;
   string root_cert = 6;
+  string serial_number = 7;
 }

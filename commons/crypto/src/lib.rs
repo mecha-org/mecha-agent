@@ -18,6 +18,7 @@ pub mod x509;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MachineCert {
+    pub serial_number: String,
     pub expiry: String,
     pub common_name: String,
     pub fingerprint: String,
@@ -51,6 +52,7 @@ pub fn get_machine_id() -> Result<String> {
             bail!(e)
         }
     };
+
     match public_key_cert.subject_common_name() {
         Some(v) => Ok(v.to_string()),
         None => {
@@ -67,7 +69,43 @@ pub fn get_machine_id() -> Result<String> {
         }
     }
 }
+pub fn get_serial_number() -> Result<String> {
+    let settings = match agent_settings::read_settings_yml() {
+        Ok(v) => v,
+        Err(e) => {
+            warn!(
+                func = "get_serial_number",
+                package = PACKAGE_NAME,
+                "error reading settings.yml - {}",
+                e
+            );
+            AgentSettings::default()
+        }
+    };
+    let public_key_path = settings.provisioning.paths.machine.cert.clone();
+    let public_key_cert = match read_public_key(&public_key_path) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = "get_serial_number",
+                package = PACKAGE_NAME,
+                "failed to read public key - {}",
+                e
+            );
+            bail!(e)
+        }
+    };
 
+    // Convert ASN.1 Integer to a hexadecimal string
+    let serial_number_hex = public_key_cert.serial_number_asn1();
+    let hex_string = serial_number_hex
+        .as_slice()
+        .iter()
+        .map(|byte| format!("{:02X}", byte))
+        .collect::<Vec<String>>()
+        .join(":");
+    Ok(hex_string)
+}
 pub fn get_machine_cert() -> Result<MachineCert> {
     let settings = match agent_settings::read_settings_yml() {
         Ok(v) => v,
@@ -118,7 +156,20 @@ pub fn get_machine_cert() -> Result<MachineCert> {
             ))
         }
     };
+    let serial_number = match get_serial_number() {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = "get_machine_cert",
+                package = PACKAGE_NAME,
+                "failed to get serial number - {}",
+                e
+            );
+            bail!(e)
+        }
+    };
     let response = MachineCert {
+        serial_number: serial_number,
         expiry: public_key_cert.validity_not_after().to_string(),
         common_name: public_key_cert.subject_common_name().unwrap().to_string(),
         fingerprint: b64_encode(fingerprint),
