@@ -5,6 +5,7 @@ use channel::recv_with_timeout;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
 use serde::{Deserialize, Serialize};
+use settings::handler::SettingMessage;
 use tokio::sync::{mpsc::Sender, oneshot};
 use tracing::{error, info, warn};
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -25,6 +26,7 @@ pub struct EncodeData {
     encoded: Vec<u8>,
     user_type: String,
     machine_id: String,
+    machine_alias: String,
 }
 
 #[derive(Debug)]
@@ -94,6 +96,7 @@ pub async fn process_metrics(
     metrics_type: String,
     identity_tx: Sender<IdentityMessage>,
     messaging_tx: Sender<MessagingMessage>,
+    settings_tx: Sender<SettingMessage>,
 ) -> Result<bool> {
     let fn_name = "process_metrics";
     let settings = match read_settings_yml() {
@@ -121,11 +124,25 @@ pub async fn process_metrics(
         }
     };
 
+    let machine_alias = match get_machine_alias(settings_tx.clone()).await {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to get machine alias - {}",
+                e
+            );
+            bail!(e)
+        }
+    };
+
     // Construct message payload
     let payload: String = match serde_json::to_string(&EncodeData {
         encoded: content,
         user_type: metrics_type,
         machine_id: machine_id.clone(),
+        machine_alias: machine_alias.clone(),
     }) {
         Ok(k) => k,
         Err(e) => {
@@ -195,6 +212,7 @@ pub async fn process_logs(
     content: Vec<u8>,
     identity_tx: Sender<IdentityMessage>,
     messaging_tx: Sender<MessagingMessage>,
+    settings_tx: Sender<SettingMessage>,
 ) -> Result<bool> {
     let fn_name = "process_logs";
     let settings = match read_settings_yml() {
@@ -221,12 +239,24 @@ pub async fn process_logs(
             bail!(e)
         }
     };
-
+    let machine_alias = match get_machine_alias(settings_tx.clone()).await {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to get machine alias - {}",
+                e
+            );
+            bail!(e)
+        }
+    };
     // Construct message payload
     let payload: String = match serde_json::to_string(&EncodeData {
         encoded: content,
         user_type: logs_type.to_string(),
         machine_id: machine_id.clone(),
+        machine_alias: machine_alias.clone(),
     }) {
         Ok(k) => k,
         Err(e) => {
@@ -329,6 +359,46 @@ async fn get_machine_id(identity_tx: Sender<IdentityMessage>) -> Result<String> 
     Ok(machine_id)
 }
 
+async fn get_machine_alias(setting_tx: Sender<SettingMessage>) -> Result<String> {
+    let fn_name = "get_machine_alias";
+    let (tx, rx) = oneshot::channel();
+    match setting_tx
+        .send(SettingMessage::GetSettingsByKey {
+            reply_to: tx,
+            key: "identity.machine.alias".to_string(),
+        })
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to send message - {}",
+                e
+            );
+            bail!(TelemetryError::new(
+                TelemetryErrorCodes::ChannelSendMessageError,
+                format!("failed to send message - {}", e),
+                true
+            ))
+        }
+    }
+
+    let machine_alias = match recv_with_timeout(rx).await {
+        Ok(machine_alias) => machine_alias,
+        Err(err) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to receive message - {}",
+                err
+            );
+            bail!(err);
+        }
+    };
+    Ok(machine_alias)
+}
 pub async fn device_provision_status(identity_tx: Sender<IdentityMessage>) -> Result<bool> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     match identity_tx
