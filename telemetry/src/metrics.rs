@@ -61,6 +61,7 @@ fn collect_cpu_utilization(meter: Meter) -> Result<()> {
             System::new_with_specifics(RefreshKind::new().with_cpu(CpuRefreshKind::everything()));
         let cpus = s.cpus();
         for cpu in cpus {
+            println!("cpu info:: {:?}", cpu); //todo: remove it once we are sure about the cpu info
             let value = match cpu.name().to_owned().parse::<i64>() {
                 Ok(value) => value,
                 Err(e) => {
@@ -90,7 +91,9 @@ fn collect_memory_usage(meter: Meter) -> Result<()> {
     match meter.register_callback(
         &[memory_utilization_obs_counter.as_any()],
         move |observer| {
-            let used_mem = System::new_all().used_memory();
+            let mut mem = System::new_all();
+            mem.refresh_memory();
+            let used_mem = mem.used_memory();
             let attrs_used = vec![Key::new("state").string("used")];
             observer.observe_f64(
                 &memory_utilization_obs_counter,
@@ -100,7 +103,7 @@ fn collect_memory_usage(meter: Meter) -> Result<()> {
             let attrs_free = vec![Key::new("state").string("free")];
             observer.observe_f64(
                 &memory_utilization_obs_counter,
-                System::new_all().free_memory() as f64,
+                mem.free_memory() as f64,
                 &attrs_free,
             );
         },
@@ -143,11 +146,13 @@ fn collect_network_io(meter: Meter) -> Result<()> {
 
     match meter.register_callback(&[network_io_obs_counter.as_any()], move |observer| {
         let networks = Networks::new_with_refreshed_list();
-
         for (interface_name, network) in &networks {
             let total_transmitted_bytes = network.transmitted();
             let total_received_bytes = network.received();
-
+            println!(
+                "interface_name: {:?}, total_transmitted_bytes: {:?}, total_received_bytes: {:?}",
+                interface_name, total_transmitted_bytes, total_received_bytes
+            ); // todo: remove it once we are sure about the network info
             let attrs_transmit = vec![
                 Key::new("direction").string("transmit"),
                 Key::new("device").string(interface_name.to_owned()),
@@ -188,8 +193,7 @@ fn collect_disk_io(meter: Meter) -> Result<()> {
 
         for (_pid, process) in s.processes() {
             let read_bytes_data = process.disk_usage().read_bytes;
-
-            let attrs_direction_read = vec![Key::new("direction").string("transmit")];
+            let attrs_direction_read = vec![Key::new("direction").string("read")];
             observer.observe_f64(
                 &disk_io_obs_counter,
                 read_bytes_data as f64,
