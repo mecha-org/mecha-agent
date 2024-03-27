@@ -89,10 +89,17 @@ fn collect_memory_usage(meter: Meter) -> Result<()> {
         .with_description("Reports memory in use by state.")
         .with_unit(Unit::new("By"))
         .init();
+    let guard = RwLock::new(System::new());
     match meter.register_callback(
         &[memory_utilization_obs_counter.as_any()],
         move |observer| {
-            let mut mem = System::new_all();
+            let mut mem = match guard.write() {
+                Ok(guard) => guard,
+                Err(e) => {
+                    error!("error getting write lock: {:?}", e);
+                    return;
+                }
+            };
             mem.refresh_memory();
             let used_mem = mem.used_memory();
             let attrs_used = vec![Key::new("state").string("used")];
@@ -119,17 +126,15 @@ fn collect_memory_usage(meter: Meter) -> Result<()> {
 fn collect_cpu_load_average(meter: Meter) -> Result<()> {
     let cpu_utilization_obs_counter = meter
         .f64_observable_gauge("system.cpu.load_average.15m")
-        .with_description("Difference in system.cpu.time since the last measurement, divided by the elapsed time and number of logical CPUs.")
+        .with_description("")
         .with_unit(Unit::new("1"))
         .init();
+
     match meter.register_callback(&[cpu_utilization_obs_counter.as_any()], move |observer| {
-        let load_avg = System::load_average();
+        let load_avg = System::load_average().fifteen;
+        println!("load average: {:?}", load_avg);
         let attrs = vec![];
-        observer.observe_f64(
-            &cpu_utilization_obs_counter,
-            load_avg.fifteen as f64,
-            &attrs,
-        );
+        observer.observe_f64(&cpu_utilization_obs_counter, load_avg as f64, &attrs);
     }) {
         Ok(_) => println!("callback registered"),
         Err(e) => println!("error registering callback: {:?}", e),
@@ -222,8 +227,17 @@ fn collect_filesystem_usage(meter: Meter) -> Result<()> {
         .with_description("")
         .with_unit(Unit::new("By"))
         .init();
+
+    let rw_guard = RwLock::new(Disks::new_with_refreshed_list());
     match meter.register_callback(&[filesystem_usage_obs_counter.as_any()], move |observer| {
-        let disks = Disks::new_with_refreshed_list();
+        let mut disks = match rw_guard.write() {
+            Ok(guard) => guard,
+            Err(e) => {
+                error!("error getting write lock in file system usage: {:?}", e);
+                return;
+            }
+        };
+        disks.refresh();
         let mut used_space: u64 = 0;
         for disk in disks.list() {
             used_space += disk.total_space() - disk.available_space();
