@@ -7,6 +7,7 @@ use anyhow::Result;
 use events::Event;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
+use settings::handler::SettingMessage;
 use tokio::{
     select,
     sync::{broadcast, mpsc, oneshot},
@@ -19,12 +20,14 @@ pub struct TelemetryHandler {
     event_tx: broadcast::Sender<Event>,
     pub messaging_tx: mpsc::Sender<MessagingMessage>,
     pub identity_tx: mpsc::Sender<IdentityMessage>,
+    pub settings_tx: mpsc::Sender<SettingMessage>,
     telemetry_task_token: Option<CancellationToken>,
 }
 pub struct TelemetryOptions {
     pub event_tx: broadcast::Sender<Event>,
     pub messaging_tx: mpsc::Sender<MessagingMessage>,
     pub identity_tx: mpsc::Sender<IdentityMessage>,
+    pub settings_tx: mpsc::Sender<SettingMessage>,
 }
 
 pub enum TelemetryMessage {
@@ -47,6 +50,7 @@ impl TelemetryHandler {
             identity_tx: options.identity_tx,
             messaging_tx: options.messaging_tx,
             telemetry_task_token: None,
+            settings_tx: options.settings_tx,
         }
     }
     async fn initialize_telemetry(&mut self) -> Result<bool> {
@@ -140,11 +144,11 @@ impl TelemetryHandler {
 
                     match msg.unwrap() {
                         TelemetryMessage::SendLogs {logs, logs_type, reply_to } => {
-                            let result = process_logs(logs_type, logs, self.identity_tx.clone(), self.messaging_tx.clone() ).await;
+                            let result = process_logs(logs_type, logs, self.identity_tx.clone(), self.messaging_tx.clone(), self.settings_tx.clone() ).await;
                             let _ = reply_to.send(result);
                         }
                         TelemetryMessage::SendMetrics {metrics, metrics_type, reply_to } => {
-                            let result = process_metrics(metrics, metrics_type, self.identity_tx.clone(), self.messaging_tx.clone()).await;
+                            let result = process_metrics(metrics, metrics_type, self.identity_tx.clone(), self.messaging_tx.clone(), self.settings_tx.clone()).await;
                             let _ = reply_to.send(result);
                         }
                     };

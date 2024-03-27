@@ -1,3 +1,5 @@
+use std::sync::RwLock;
+
 use anyhow::{bail, Result};
 use log::error;
 use opentelemetry::{
@@ -52,24 +54,23 @@ pub async fn initialize_metrics() -> Result<bool> {
 // SYSTEM_CPU_UTILIZATION("system_cpu_time_seconds_total"),
 fn collect_cpu_utilization(meter: Meter) -> Result<()> {
     let cpu_utilization_obs_counter = meter
-        .f64_observable_gauge("system.cpu.utilization")
-        .with_description("")
-        .with_unit(Unit::new("1"))
-        .init();
+    .f64_observable_gauge("system.cpu.utilization")
+    .with_description("Difference in system.cpu.time since the last measurement, divided by the elapsed time and number of logical CPUs")
+    .with_unit(Unit::new("1"))
+    .init();
+    let rw_guard = RwLock::new(System::new());
     match meter.register_callback(&[cpu_utilization_obs_counter.as_any()], move |observer| {
-        let mut s =
-            System::new_with_specifics(RefreshKind::new().with_cpu(CpuRefreshKind::everything()));
-        let cpus = s.cpus();
-        for cpu in cpus {
-            println!("cpu info:: {:?}", cpu); //todo: remove it once we are sure about the cpu info
-            let value = match cpu.name().to_owned().parse::<i64>() {
-                Ok(value) => value,
-                Err(e) => {
-                    error!("error parsing cpu name: {}, error: {:?}", cpu.name(), e);
-                    0
-                }
-            };
-            let attrs = vec![Key::new("system.cpu.logical_number").i64(value)];
+        let mut sys = match rw_guard.write() {
+            Ok(guard) => guard,
+            Err(e) => {
+                error!("error getting write lock: {:?}", e);
+                return;
+            }
+        };
+        sys.refresh_cpu();
+        for cpu in sys.cpus() {
+            println!("cpu details: {:?}", cpu);
+            let attrs = vec![Key::new("system.cpu.logical_number").string(cpu.name().to_owned())];
 
             // total_cpu_usage += cpu.cpu_usage();
             observer.observe_f64(&cpu_utilization_obs_counter, cpu.cpu_usage() as f64, &attrs);
@@ -143,16 +144,19 @@ fn collect_network_io(meter: Meter) -> Result<()> {
         .with_description("")
         .with_unit(Unit::new("By"))
         .init();
-
+    let rw_guard = RwLock::new(Networks::new_with_refreshed_list());
     match meter.register_callback(&[network_io_obs_counter.as_any()], move |observer| {
-        let networks = Networks::new_with_refreshed_list();
-        for (interface_name, network) in &networks {
+        let mut networks = match rw_guard.write() {
+            Ok(guard) => guard,
+            Err(e) => {
+                error!("error getting write lock: {:?}", e);
+                return;
+            }
+        };
+        networks.refresh();
+        for (interface_name, network) in networks.iter() {
             let total_transmitted_bytes = network.transmitted();
             let total_received_bytes = network.received();
-            println!(
-                "interface_name: {:?}, total_transmitted_bytes: {:?}, total_received_bytes: {:?}",
-                interface_name, total_transmitted_bytes, total_received_bytes
-            ); // todo: remove it once we are sure about the network info
             let attrs_transmit = vec![
                 Key::new("direction").string("transmit"),
                 Key::new("device").string(interface_name.to_owned()),

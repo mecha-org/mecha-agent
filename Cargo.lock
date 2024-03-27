@@ -3191,6 +3191,7 @@ dependencies = [
  "serde",
  "serde_json",
  "services",
+ "settings",
  "sha256",
  "sysinfo",
  "tokio",

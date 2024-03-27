@@ -61,6 +61,7 @@ pub async fn init_services() -> Result<bool> {
         event_tx: event_tx.clone(),
         messaging_tx: messaging_tx.clone(),
         identity_tx: identity_tx.clone(),
+        settings_tx: setting_tx.clone(),
     })
     .await;
 

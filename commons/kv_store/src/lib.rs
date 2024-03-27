@@ -104,7 +104,7 @@ impl KeyValueStoreClient {
         let last_inserted = db.get(key);
         match last_inserted {
             Ok(s) => {
-                info!(
+                debug!(
                     func = "get",
                     package = PACKAGE_NAME,
                     "retrieved value from db key - {}",

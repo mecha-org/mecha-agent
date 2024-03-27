@@ -100,6 +100,7 @@ impl IdentityService for IdentityServiceHandler {
                 public_cert: machine_cert.public_cert,
                 ca_bundle: machine_cert.ca_bundle,
                 root_cert: machine_cert.root_cert,
+                serial_number: machine_cert.serial_number,
             }))
         } else {
             Err(Status::from_error(reply.unwrap_err().into()))
