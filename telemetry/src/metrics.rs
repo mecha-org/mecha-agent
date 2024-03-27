@@ -144,16 +144,19 @@ fn collect_network_io(meter: Meter) -> Result<()> {
         .with_description("")
         .with_unit(Unit::new("By"))
         .init();
-
+    let rw_guard = RwLock::new(Networks::new_with_refreshed_list());
     match meter.register_callback(&[network_io_obs_counter.as_any()], move |observer| {
-        let networks = Networks::new_with_refreshed_list();
-        for (interface_name, network) in &networks {
+        let mut networks = match rw_guard.write() {
+            Ok(guard) => guard,
+            Err(e) => {
+                error!("error getting write lock: {:?}", e);
+                return;
+            }
+        };
+        networks.refresh();
+        for (interface_name, network) in networks.iter() {
             let total_transmitted_bytes = network.transmitted();
             let total_received_bytes = network.received();
-            println!(
-                "interface_name: {:?}, total_transmitted_bytes: {:?}, total_received_bytes: {:?}",
-                interface_name, total_transmitted_bytes, total_received_bytes
-            ); // todo: remove it once we are sure about the network info
             let attrs_transmit = vec![
                 Key::new("direction").string("transmit"),
                 Key::new("device").string(interface_name.to_owned()),
