@@ -17,7 +17,6 @@ messaging = { path = "../messaging" }
 channel = { path = "../commons/channel" }
 provisioning = { path = "../provisioning" }
 settings = { path = "../settings" }
-networking = { path = "../networking" }
 telemetry = { path = "../telemetry" }
 tokio = { version = "1.27.0", features = ["full"] }
 serde = { version  = "1.0.159", features = ["derive"]}

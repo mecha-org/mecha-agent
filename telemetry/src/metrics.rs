@@ -131,10 +131,14 @@ fn collect_cpu_load_average(meter: Meter) -> Result<()> {
         .init();
 
     match meter.register_callback(&[cpu_utilization_obs_counter.as_any()], move |observer| {
-        let load_avg = System::load_average().fifteen;
+        let load_avg = System::load_average();
         println!("load average: {:?}", load_avg);
         let attrs = vec![];
-        observer.observe_f64(&cpu_utilization_obs_counter, load_avg as f64, &attrs);
+        observer.observe_f64(
+            &cpu_utilization_obs_counter,
+            load_avg.fifteen as f64,
+            &attrs,
+        );
     }) {
         Ok(_) => println!("callback registered"),
         Err(e) => println!("error registering callback: {:?}", e),
@@ -228,7 +232,7 @@ fn collect_filesystem_usage(meter: Meter) -> Result<()> {
         .with_unit(Unit::new("By"))
         .init();
 
-    let rw_guard = RwLock::new(Disks::new_with_refreshed_list());
+    let rw_guard = RwLock::new(Disks::new());
     match meter.register_callback(&[filesystem_usage_obs_counter.as_any()], move |observer| {
         let mut disks = match rw_guard.write() {
             Ok(guard) => guard,
@@ -237,7 +241,7 @@ fn collect_filesystem_usage(meter: Meter) -> Result<()> {
                 return;
             }
         };
-        disks.refresh();
+        disks.refresh_list();
         let mut used_space: u64 = 0;
         for disk in disks.list() {
             used_space += disk.total_space() - disk.available_space();
