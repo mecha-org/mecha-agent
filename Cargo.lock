@@ -1224,6 +1224,7 @@ dependencies = [
  "identity",
  "init-tracing-opentelemetry",
  "messaging",
+ "networking",
  "opentelemetry 0.21.0",
  "opentelemetry-appender-tracing",
  "prost 0.12.3",
@@ -1344,6 +1345,21 @@ dependencies = [
  "nkeys 0.4.0",
  "sentry-anyhow",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "networking"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "events",
+ "identity",
+ "messaging",
+ "settings",
+ "tokio",
+ "tokio-util",
+ "tonic 0.10.2",
  "tracing",
 ]
 
