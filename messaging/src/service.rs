@@ -57,6 +57,7 @@ pub enum MessagingAuthTokenType {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GetAuthTokenRequest {
     machine_id: String,
+    network_id: Option<String>,
     #[serde(rename = "type")]
     _type: MessagingAuthTokenType,
     scope: MessagingScope,
@@ -380,6 +381,7 @@ pub async fn authenticate(
     let token = match get_auth_token(
         MessagingScope::User,
         &machine_id,
+        Some(settings.networking.peer_settings.network_id.clone()),
         &nonce,
         &signed_nonce,
         &nats_client_public_key,
@@ -548,6 +550,7 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
 async fn get_auth_token(
     scope: MessagingScope,
     machine_id: &str,
+    network_id: Option<String>,
     nonce: &str,
     signed_nonce: &str,
     nats_user_public_key: &str,
@@ -556,6 +559,7 @@ async fn get_auth_token(
     let fn_name = "get_auth_token";
     let request_body = GetAuthTokenRequest {
         machine_id: machine_id.to_string(),
+        network_id: network_id,
         _type: MessagingAuthTokenType::Device,
         scope: scope,
         nonce: nonce.to_string(),

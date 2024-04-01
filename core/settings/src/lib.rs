@@ -194,6 +194,7 @@ pub fn read_settings_yml() -> Result<AgentSettings> {
     let config: AgentSettings = match serde_yaml::from_reader(settings_file_handle) {
         Ok(config) => config,
         Err(e) => {
+            println!("error parsing the settings.yml - {}", e.to_string());
             bail!(SettingsError::new(
                 SettingsErrorCodes::ParseError,
                 format!("error parsing the settings.yml - {}", e.to_string()),
