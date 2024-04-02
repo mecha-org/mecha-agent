@@ -1,7 +1,6 @@
 use crate::{
-    config::{init_logs_config, init_otlp_configuration},
     metrics::initialize_metrics,
-    service::{process_logs, process_metrics, telemetry_init},
+    service::{process_logs, process_metrics},
 };
 use anyhow::Result;
 use events::Event;
@@ -12,10 +11,8 @@ use settings::handler::SettingMessage;
 use tokio::{
     select,
     sync::{broadcast, mpsc, oneshot},
-    task::JoinHandle,
 };
-use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::info;
 
 pub struct TelemetryHandler {
     event_tx: broadcast::Sender<Event>,
@@ -82,44 +79,10 @@ impl TelemetryHandler {
                 }
                 match event.unwrap() {
                     Event::Messaging(events::MessagingEvent::Connected) => {
+                        println!("messaging connected");
                         match initialize_metrics().await {
                             Ok(_) => println!("metrics initialized"),
                             Err(e) => println!("error initializing metrics: {:?}", e),
-                        }
-                    },
-                    Event::Messaging(events::MessagingEvent::Disconnected) => {
-                        info!(
-                            func = "run",
-                            package = env!("CARGO_PKG_NAME"),
-                            "settings messaging disconnected event received"
-                        );
-
-                        global::shutdown_meter_provider();
-                    },
-                    Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
-                        global::shutdown_meter_provider();
-                    },
-                    Event::Settings(events::SettingEvent::Updated { settings }) => {
-                        info!(
-                            func = "run",
-                            package = env!("CARGO_PKG_NAME"),
-                            "settings updated event received"
-                        );
-                        match settings.get("telemetry.metrics.enabled") {
-                            Some(value) => {
-                                if value == "true" {
-                                    match initialize_metrics().await {
-                                        Ok(_) => println!("metrics initialized"),
-                                        Err(e) => println!("error initializing metrics: {:?}", e),
-                                    }
-                                    // Start telemetry service
-                                } else if value == "false" {
-                                    global::shutdown_meter_provider();
-                                } else {
-                                    // Can be add other function to perform
-                                }
-                            },
-                            None => {},
                         }
                     },
                     _ => {}
