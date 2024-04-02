@@ -193,12 +193,8 @@ pub async fn sync_settings(
         }
     };
     while let Some(Ok(message)) = messages.next().await {
-        let _status = process_message(
-            message.clone(),
-            key_value_store.clone(),
-            messaging_tx.clone(),
-        )
-        .await;
+        let _status =
+            process_message(message.clone(), messaging_tx.clone(), event_tx.clone()).await;
         // Acknowledges a message delivery
         match message.ack().await {
             Ok(res) => println!("message Acknowledged {:?}", res),
@@ -245,9 +241,9 @@ pub async fn sync_settings(
 pub async fn await_settings_message(
     consumer: Consumer<Config>,
     messaging_tx: Sender<MessagingMessage>,
+    event_tx: broadcast::Sender<Event>,
 ) -> Result<bool> {
     let fn_name = "await_settings_message";
-    let key_value_store = KeyValueStoreClient::new();
     let mut messages = match consumer.messages().await {
         Ok(s) => s,
         Err(e) => {
@@ -266,13 +262,7 @@ pub async fn await_settings_message(
     };
 
     while let Some(Ok(message)) = messages.next().await {
-        match process_message(
-            message.clone(),
-            key_value_store.clone(),
-            messaging_tx.clone(),
-        )
-        .await
-        {
+        match process_message(message.clone(), messaging_tx.clone(), event_tx.clone()).await {
             Ok(_) => {}
             Err(err) => {
                 error!(
@@ -378,8 +368,8 @@ pub async fn set_settings(
 }
 async fn process_message(
     message: Message,
-    mut kv_store: KeyValueStoreClient,
     messaging_tx: Sender<MessagingMessage>,
+    event_tx: broadcast::Sender<Event>,
 ) -> Result<bool> {
     let fn_name = "process_message";
     trace!(
@@ -404,7 +394,7 @@ async fn process_message(
         };
     let mut settings_payload: HashMap<String, String> = HashMap::new();
     settings_payload.insert(add_task_payload.key, add_task_payload.value);
-    match kv_store.set(settings_payload) {
+    match set_settings(event_tx.clone(), settings_payload).await {
         Ok(s) => s,
         Err(err) => {
             error!(
