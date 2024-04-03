@@ -15,6 +15,7 @@ use events::Event;
 use futures::StreamExt;
 use identity::handler::IdentityMessage;
 
+use kv_store::KeyValueStoreClient;
 use messaging::handler::MessagingMessage;
 use messaging::Bytes;
 use messaging::Subscriber as NatsSubscriber;
@@ -554,7 +555,9 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
         &settings.provisioning.paths.ca_bundle.cert,
         &settings.provisioning.paths.root.cert,
     ]) {
-        Ok(_) => (),
+        Ok(_) => {
+            println!("certificates deleted successfully")
+        }
         Err(e) => {
             error!(
                 func = "de_provision",
@@ -619,7 +622,29 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
             ))
         }
     };
-    //2. Delete db
+
+    // 2. Flush database
+    let key_value_store = KeyValueStoreClient::new();
+    match key_value_store.flush_database() {
+        Ok(_) => {
+            println!("db flushed successfully");
+            debug!(
+                func = "de_provision",
+                package = PACKAGE_NAME,
+                "db flushed successfully"
+            )
+        }
+        Err(e) => {
+            error!(
+                func = "de_provision",
+                package = PACKAGE_NAME,
+                "error flushing db - {}",
+                e
+            );
+            bail!(e);
+        }
+    }
+    //3. Delete db
     match fs::remove_dir_all(&db_path) {
         Ok(_) => {
             debug!(

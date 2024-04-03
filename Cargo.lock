@@ -2311,6 +2311,7 @@ dependencies = [
  "fs",
  "futures",
  "identity",
+ "kv_store",
  "messaging",
  "reqwest",
  "sentry",
