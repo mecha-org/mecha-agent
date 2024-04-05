@@ -1,18 +1,21 @@
+use std::str::FromStr;
+
 use anyhow::Result;
-use defguard_wireguard_rs::{InterfaceConfiguration, WireguardApiUserspace, WireguardInterfaceApi};
+use defguard_wireguard_rs::{
+    host::Peer, key::Key, net::IpAddrMask, InterfaceConfiguration, WireguardApiUserspace,
+    WireguardInterfaceApi,
+};
 use serde::{Deserialize, Serialize};
+use tracing::{error, warn};
 use x25519_dalek::PublicKey;
 
 use rand::rngs::OsRng;
 use x25519_dalek::StaticSecret;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct WgConfig {
-    pub secret_key: String,
-    pub public_key: String,
     pub ip_address: String,
     pub port: u32,
-    pub interface_name: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -21,6 +24,15 @@ pub struct WgKeys {
     pub public_key: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PeerConfiguration {
+    pub name: String, // peer name
+    pub public_key: String,
+    pub endpoint: Vec<String>,
+    pub allowed_ips: Vec<String>,
+}
+//crate name
+const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 #[derive(Clone)]
 pub struct Wireguard {
     pub api: WireguardApiUserspace,
@@ -32,22 +44,33 @@ impl Wireguard {
         Self { api, ifname }
     }
 
-    pub fn setup_wireguard(&mut self, wg_config: &WgConfig) -> Result<bool> {
+    pub fn setup_wireguard(&mut self, wg_config: &WgConfig, private_key: String) -> Result<bool> {
+        let fn_name = "setup wireguard";
         let ifname = self.ifname.clone();
 
         // Remove existing
         match self.api.remove_interface() {
             Ok(_) => println!("Interface {ifname} removed."),
             Err(e) => {
-                println!("Error removing interface: {}", e);
+                warn!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "failed to remove interface  - {}",
+                    e
+                );
             }
         };
 
         // create interface
         match self.api.create_interface() {
-            Ok(_) => (),
+            Ok(_) => (println!("Interface {ifname} created.")),
             Err(e) => {
-                println!("Error creating interface: {}", e);
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "failed to create interface - {}",
+                    e
+                );
                 return Err(e.into());
             }
         };
@@ -55,7 +78,7 @@ impl Wireguard {
         // interface configuration
         let interface_config = InterfaceConfiguration {
             name: ifname.clone(),
-            prvkey: wg_config.secret_key.clone(),
+            prvkey: private_key,
             address: format!("{}/24", wg_config.ip_address.clone()),
             port: wg_config.port,
             peers: vec![],
@@ -72,6 +95,44 @@ impl Wireguard {
         // pause();
 
         Ok(true)
+    }
+
+    pub fn add_peer(
+        &mut self,
+        peer_configuration: PeerConfiguration,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        println!("peer configuration: {:?}", peer_configuration.clone());
+        let PeerConfiguration { public_key, .. } = peer_configuration;
+        let peer_key: Key = Key::from_str(&public_key).unwrap();
+        let mut peer = Peer::new(peer_key.clone());
+
+        // Your WireGuard server endpoint which peer connects too
+        if peer_configuration.endpoint.len() > 0 {
+            peer.endpoint = Some(
+                peer_configuration
+                    .endpoint
+                    .first()
+                    .unwrap()
+                    .parse()
+                    .unwrap(),
+            );
+        }
+        peer.persistent_keepalive_interval = Some(25);
+
+        // Peer allowed ips
+        for allowed_ip in peer_configuration.allowed_ips {
+            let addr = IpAddrMask::from_str(format!("{}/32", &allowed_ip).as_str())?;
+            peer.allowed_ips.push(addr);
+        }
+
+        match self.api.configure_peer(&peer) {
+            Ok(_) => println!("Peer {:?} configured.", peer_configuration.name),
+            Err(e) => {
+                println!("Error configuring peer: {}", e);
+                return Err(e.into());
+            }
+        }
+        Ok(())
     }
 }
 

@@ -1464,10 +1464,17 @@ version = "1.0.0"
 dependencies = [
  "agent_settings",
  "anyhow",
+ "channel",
+ "crypto",
  "events",
+ "futures",
  "identity",
  "messaging",
+ "sentry-anyhow",
+ "serde",
+ "serde_json",
  "settings",
+ "sha256",
  "tokio",
  "tokio-util",
  "tonic 0.10.2",
@@ -3955,6 +3962,7 @@ dependencies = [
  "defguard_wireguard_rs",
  "rand",
  "serde",
+ "tracing",
  "x25519-dalek",
 ]
 

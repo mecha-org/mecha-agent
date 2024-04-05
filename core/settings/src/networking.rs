@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct WireguardSettings {
     pub tun: String,
-    pub port: u16,
+    pub port: u32,
     pub userspace: String,
 }
 
