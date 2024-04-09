@@ -30,3 +30,4 @@ serde_json = "1.0.33"
 serde = { version  = "1.0.159", features = ["derive"]}
 crypto = { path = "../commons/crypto" }
 futures = "0.3.28"
+local-ip-address = "0.6.1"

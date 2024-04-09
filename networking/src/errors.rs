@@ -15,6 +15,7 @@ pub enum NetworkingErrorCodes {
     ExtractMessagePayloadError,
     PayloadDeserializationError,
     MessageAcknowledgeError,
+    NetworkingInitError,
 }
 
 impl fmt::Display for NetworkingErrorCodes {
@@ -49,6 +50,9 @@ impl fmt::Display for NetworkingErrorCodes {
             }
             NetworkingErrorCodes::MessageAcknowledgeError => {
                 write!(f, "NetworkingErrorCodes: MessageAcknowledgeError")
+            }
+            NetworkingErrorCodes::NetworkingInitError => {
+                write!(f, "NetworkingErrorCodes: NetworkingInitError")
             }
         }
     }

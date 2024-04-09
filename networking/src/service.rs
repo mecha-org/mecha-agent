@@ -6,6 +6,7 @@ use channel::recv_with_timeout;
 use crypto::random::generate_random_alphanumeric;
 use futures::StreamExt;
 use identity::handler::IdentityMessage;
+use messaging::Subscriber as NatsSubscriber;
 use messaging::{
     async_nats::jetstream::consumer::{pull::Config, Consumer},
     handler::MessagingMessage,
@@ -39,7 +40,96 @@ struct Candidates {
     stun: Option<SocketAddr>,
     turn: Option<SocketAddr>,
 }
+#[derive(Debug, Default)]
+pub struct NetworkingSubscriber {
+    pub handshake_request: Option<NatsSubscriber>,
+}
+#[derive(Debug)]
+pub enum NetworkingSubject {
+    HandshakeRequest(String),
+}
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
+pub async fn subscribe_to_nats(
+    identity_tx: mpsc::Sender<IdentityMessage>,
+    messaging_tx: mpsc::Sender<MessagingMessage>,
+    channel_id: String,
+    network_id: String,
+) -> Result<NetworkingSubscriber> {
+    let fn_name = "subscribe_to_nats";
+    // Get machine id
+    let machine_id = match get_machine_id(identity_tx.clone()).await {
+        Ok(id) => id,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error getting machine id - {}",
+                e
+            );
+            bail!(e)
+        }
+    };
+    let list_of_subjects = vec![NetworkingSubject::HandshakeRequest(format!(
+        "network.{}.node.handshake.{channel_id}",
+        sha256::digest(network_id.clone())
+    ))];
+    let mut networking_subscriber = NetworkingSubscriber::default();
+    // Iterate over everything.
+    for subject in list_of_subjects {
+        let (tx, rx) = oneshot::channel();
+        let subject_string = match &subject {
+            NetworkingSubject::HandshakeRequest(s) => s.to_string(),
+        };
+        match messaging_tx
+            .send(MessagingMessage::Subscriber {
+                reply_to: tx,
+                subject: subject_string,
+            })
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error sending get que subscriber for issue token- {}",
+                    e
+                );
+                bail!(NetworkingError::new(
+                    NetworkingErrorCodes::ChannelSendMessageError,
+                    format!("error sending subscriber message - {}", e),
+                    true
+                ));
+            }
+        }
+        match recv_with_timeout(rx).await {
+            Ok(subscriber) => match &subject {
+                NetworkingSubject::HandshakeRequest(_) => {
+                    networking_subscriber.handshake_request = Some(subscriber)
+                }
+            },
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while get networking subscriber - {:?}, error - {}",
+                    &subject,
+                    e
+                );
+                bail!(NetworkingError::new(
+                    NetworkingErrorCodes::ChannelReceiveMessageError,
+                    format!(
+                        "error get networking subscriber - {:?}, error - {}",
+                        &subject, e
+                    ),
+                    true
+                ));
+            }
+        };
+    }
+
+    Ok(networking_subscriber)
+}
 pub async fn configure_wireguard(
     messaging_tx: Sender<MessagingMessage>,
     identity_tx: Sender<IdentityMessage>,
