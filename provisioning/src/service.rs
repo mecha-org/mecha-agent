@@ -76,6 +76,7 @@ pub struct ProvisioningManifest {
 pub struct SignCSRRequest {
     pub csr: String,
     pub machine_id: String,
+    pub request_type: CertSignRequestType,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -94,6 +95,11 @@ pub struct ProvisioningSubscriber {
 pub enum ProvisioningSubject {
     DeProvision(String),
     ReIssueCertificate(String),
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub enum CertSignRequestType {
+    Provision,
+    ReIssue,
 }
 pub async fn subscribe_to_nats(
     identity_tx: mpsc::Sender<IdentityMessage>,
@@ -380,8 +386,13 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
         "manifest response :{:?}",
         manifest
     );
-    match perform_cryptography_operation(manifest.machine_id, manifest.cert_sign_url, settings)
-        .await
+    match perform_cryptography_operation(
+        manifest.machine_id,
+        manifest.cert_sign_url,
+        settings,
+        CertSignRequestType::Provision,
+    )
+    .await
     {
         Ok(_) => (),
         Err(e) => {
@@ -430,6 +441,7 @@ async fn perform_cryptography_operation(
     machine_id: String,
     cert_sign_url: String,
     settings: AgentSettings,
+    request_type: CertSignRequestType,
 ) -> Result<bool> {
     let fn_name = "perform_cryptography_operation";
     // 2. Generate the private key based
@@ -478,6 +490,7 @@ async fn perform_cryptography_operation(
         &settings.provisioning.paths.machine.csr,
         &machine_id.clone(),
         &cert_sign_url,
+        request_type,
     )
     .await
     {
@@ -918,6 +931,7 @@ async fn sign_csr(
     csr_path: &str,
     machine_id: &str,
     cert_signing_url: &str,
+    request_type: CertSignRequestType,
 ) -> Result<SignedCertificates> {
     trace!(
         func = "sign_csr",
@@ -980,6 +994,7 @@ async fn sign_csr(
     let sign_csr_request_body = SignCSRRequest {
         csr: csr_pem,
         machine_id: machine_id.to_string(),
+        request_type: request_type,
     };
 
     // Format url for signing the csr
@@ -1317,6 +1332,7 @@ async fn process_re_issue_certificate_request(subject: String, payload: Bytes) -
         request_payload.machine_id.clone(),
         settings.provisioning.cert_sign_url.clone(),
         settings,
+        CertSignRequestType::ReIssue,
     )
     .await
     {
