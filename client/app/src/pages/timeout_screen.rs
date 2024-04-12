@@ -21,12 +21,6 @@ pub struct TimeoutScreen {
 }
 
 #[derive(Debug)]
-enum AppInput {
-    Increment,
-    Decrement,
-}
-
-#[derive(Debug)]
 pub enum TimeoutOutput {
     refreshPressed,
     BackPressed, // tmep

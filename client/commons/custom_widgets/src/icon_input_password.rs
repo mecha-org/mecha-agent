@@ -1,14 +1,9 @@
-use gtk::{
-    gdk, gio,
-    glib::{clone, object::ObjectExt},
-    prelude::*,
-    subclass::*,
-};
+use gtk::{gdk, gio, glib::clone, prelude::*};
 use relm4::{
     gtk::{self, GestureClick},
     ComponentParts, RelmWidgetExt, SimpleComponent,
 };
-use tracing::{error, info};
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub struct IconInputPasswordCss {

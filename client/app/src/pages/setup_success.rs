@@ -21,7 +21,7 @@ pub struct Settings {
 
 pub struct SetupSuccess {
     settings: Settings,
-    machine_info: Option<MachineInformation>,
+    machine_id: String,
 }
 
 #[derive(Debug)]
@@ -58,7 +58,7 @@ impl SimpleComponent for SetupSuccess {
 
         let model = SetupSuccess {
             settings: init,
-            machine_info: None,
+            machine_id: String::from(""),
         };
 
         let main_content_box = gtk::Box::builder()
@@ -137,7 +137,7 @@ impl SimpleComponent for SetupSuccess {
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
             InputMessage::ActiveScreen(text) => {
-                println!("active screen: {:?}", text);
+                tracing::info!("active screen: {:?}", text);
             }
         }
     }

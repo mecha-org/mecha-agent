@@ -96,7 +96,6 @@ impl SimpleComponent for SetupFailed {
 
         // bold
         let label: gtk::Label = gtk::Label::builder()
-            // .label("Error setting up your machine")
             .label("Error connecting to service")
             .css_classes(["setup-status-label"])
             .build();
@@ -109,15 +108,9 @@ impl SimpleComponent for SetupFailed {
             .halign(gtk::Align::Center)
             .build();
 
-        // let info_label: gtk::Label = gtk::Label::builder()
-        //     .label("Error Message:")
-        //     .hexpand(true)
-        //     .css_classes(["setup-fail-info"])
-        //     .build();
-
         let info_desc: gtk::Label = gtk::Label::builder()
             .label("Low internet connectivity")
-            .css_classes(["setup-fail-info"])
+            .css_classes(["setup-fail-info", "capitalize"])
             .justify(gtk::Justification::Center)
             .build();
 
@@ -180,6 +173,8 @@ impl SimpleComponent for SetupFailed {
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         match message {
             InputMessage::ShowError(message, from_screen) => {
+                tracing::info!("active screen: setup_failed from screen  {:?}", from_screen);
+
                 self.error_message = message.clone();
                 self.from_screen = from_screen.clone();
             }

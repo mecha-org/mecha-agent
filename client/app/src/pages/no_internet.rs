@@ -74,14 +74,8 @@ impl SimpleComponent for NoInternet {
             .hexpand(true)
             .build();
 
-        // let label2 = gtk::Label::builder()
-        //     .label("complete the setup")
-        //     .hexpand(true)
-        //     .build();
-
         main_content_box.append(&image_from);
         main_content_box.append(&label1);
-        // main_content_box.append(&label2);
 
         // footer_box
         let footer_box = gtk::Box::builder()

@@ -15,6 +15,8 @@ use relm4::{
     AsyncComponentSender,
 };
 use std::time::Duration;
+use tracing::{debug, info};
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
 pub struct Settings {
     pub modules: Modules,
@@ -27,7 +29,7 @@ pub struct ConfigureMachine {
 
 #[derive(Debug)]
 pub enum ConfigureOutput {
-    SetupSuccess(MachineInformation),
+    SetupSuccess(String),
     ShowError(String),
     Timeout,
 }
@@ -124,7 +126,7 @@ impl AsyncComponent for ConfigureMachine {
     ) {
         match message {
             InputMessage::ActiveScreen(text) => {
-                println!("active screen: {:?}", text);
+                info!("active screen: {:?}", text);
                 let sender: AsyncComponentSender<ConfigureMachine> = sender.clone();
                 let _ = get_machine_info(sender).await;
             }
@@ -134,10 +136,7 @@ impl AsyncComponent for ConfigureMachine {
     fn update_view(&self, widgets: &mut Self::Widgets, sender: AsyncComponentSender<Self>) {}
 }
 
-async fn async_api_call() -> Result<MachineInformation> {
-    // // Simulate a long-running API call
-    // tokio::time::sleep(Duration::from_secs(20)).await; // TEMP - TO CHECK TIMEOUT
-
+async fn machine_info_sevice_call() -> Result<MachineInformation> {
     let result = match services::get_machine_info().await {
         Ok(res) => res,
         Err(err) => {
@@ -146,23 +145,27 @@ async fn async_api_call() -> Result<MachineInformation> {
     };
     Ok(result)
 }
+
 async fn get_machine_info(sender: AsyncComponentSender<ConfigureMachine>) {
-    let result = tokio::time::timeout(Duration::from_secs(15), async_api_call()).await;
+    let fn_name = "configure_machine_screen -> get_machine_info";
+    let result = tokio::time::timeout(Duration::from_secs(15), machine_info_sevice_call()).await;
 
     match result {
         Ok(res) => match res {
             Ok(res) => {
-                let _ = tokio::time::sleep(Duration::from_secs(7)).await;
-                let _ = sender.output(ConfigureOutput::SetupSuccess(res));
+                let _ = sender.output(ConfigureOutput::SetupSuccess(res.machine_id));
             }
-            Err(err) => {
-                eprintln!("Async API call failed: {}", err);
+            Err(e) => {
+                debug!(func = fn_name, PACKAGE_NAME, "API Error {:?}", e);
                 let _ = tokio::time::sleep(Duration::from_millis(3000)).await;
-                let _ = sender.output(ConfigureOutput::ShowError("Connection refused".to_owned()));
+                let _ = sender.output(ConfigureOutput::ShowError(e.to_string()));
             }
         },
-        Err(_) => {
-            eprintln!("Async API call timed out after 15 seconds");
+        Err(e) => {
+            debug!(
+                func = fn_name,
+                PACKAGE_NAME, "API Error After Timeout {:?}", e
+            );
             let _ = sender.output(ConfigureOutput::Timeout);
         }
     }

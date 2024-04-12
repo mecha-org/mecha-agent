@@ -1,5 +1,12 @@
+use std::time::Duration;
+
+use crate::{
+    handlers::machine_info::handler::get_status,
+    services::{get_machine_info, MachineInformation},
+    settings::{Modules, WidgetConfigs},
+};
+use custom_utils::{get_image_bytes, get_image_from_path, get_image_from_url};
 use gtk::prelude::*;
-use image::codecs::webp;
 use relm4::{
     component::{AsyncComponent, AsyncComponentParts},
     gtk::{
@@ -11,14 +18,9 @@ use relm4::{
     },
     AsyncComponentSender,
 };
-
-use crate::{
-    handlers::machine_info::handler::machine_status_service,
-    services::MachineInformation,
-    settings::{Modules, WidgetConfigs},
-};
-use custom_utils::{get_image_bytes, get_image_from_path, get_image_from_url};
 use tonic::async_trait;
+use tracing::{debug, error, info};
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
 pub struct Settings {
     pub modules: Modules,
@@ -32,18 +34,14 @@ pub struct MachineInfo {
     icon_path: Option<String>,
     status: bool,
     icon_bytes: Option<relm4::gtk::glib::Bytes>,
-}
-
-#[derive(Debug)]
-enum AppInput {
-    Increment,
-    Decrement,
+    toast_text: String, // machine_info: Option<MachineInformation>,
 }
 
 #[derive(Debug)]
 pub enum InputMessage {
-    ActiveScreen(Option<MachineInformation>),
-    ShowStatus(bool),
+    ActiveScreen(String),
+    ShowStatus(bool, String),
+    UpdateMachineInfo(MachineInformation),
 }
 
 #[derive(Debug)]
@@ -111,8 +109,7 @@ impl AsyncComponent for MachineInfo {
 
         // bold
         let machine_name: gtk::Label = gtk::Label::builder()
-            // .label("Shoaib's Compute")
-            .label("".to_string())
+            .label("My Machine".to_string())
             .halign(gtk::Align::Center)
             .css_classes(["about-device-name"])
             .build();
@@ -183,11 +180,14 @@ impl AsyncComponent for MachineInfo {
         sentence_box.append(&sentence);
         main_content_box.append(&sentence_box);
 
+        let toast_text = String::from("Fetching Machine Info...");
+
         let toast_label = gtk::Label::builder()
-            .label(String::from("Machine Agent not running"))
+            .label(toast_text.to_owned())
             .halign(gtk::Align::Center)
             .css_classes(["custom-toast"])
             .build();
+        toast_label.set_visible(true);
 
         let toast_overlay = gtk::Overlay::builder().build();
         toast_overlay.add_overlay(&toast_label);
@@ -212,31 +212,6 @@ impl AsyncComponent for MachineInfo {
           let _ =  sender.output(DevicePageOutput::Exit);
         }));
 
-        // let back_icon_img: gtk::Image = get_image_from_path(
-        //    widget_configs.footer.back_icon,
-        //    &[],
-        // );
-        // let back_button = Button::builder().build();
-        // back_button.set_child(Some(&back_icon_img));
-        // back_button.add_css_class("footer-container-button");
-
-        // back_button.connect_clicked(clone!(@strong sender => move |_| {
-        //     let _ =  sender.output(DevicePageOutput::BackPressed);
-        //   }));
-
-        // let trash_icon_img: gtk::Image = get_image_from_path(
-        //     widget_configs.footer.trash_icon,
-        //     &[],
-        // );
-        // let trash_button = Button::new();
-        // trash_button.set_child(Some(&trash_icon_img));
-        // trash_button.add_css_class("footer-container-button");
-
-        // trash_button.connect_clicked(clone!(@strong sender => move |_| {
-        //     let _ =  sender.output(DevicePageOutput::NextPressed);
-        //   }));
-        // footer_box.append(&trash_button);
-
         footer_box.append(&button_box);
         footer_box.append(&exit_button);
 
@@ -247,11 +222,12 @@ impl AsyncComponent for MachineInfo {
 
         let model = MachineInfo {
             settings: init,
-            machine_id: String::from(""),
-            name: String::from(""),
+            machine_id: String::from("-"),
+            name: String::from("My Machine"),
             icon_path: Some(String::from("")),
             status: false,
             icon_bytes: None,
+            toast_text: toast_text,
         };
 
         let widgets = AppWidgets {
@@ -273,19 +249,24 @@ impl AsyncComponent for MachineInfo {
         _root: &Self::Root,
     ) {
         match message {
-            InputMessage::ActiveScreen(response) => {
-                if let Some(response) = &response {
-                    self.machine_id = response.machine_id.to_owned();
-                    self.name = response.name.to_owned();
-                    self.icon_path = response.icon.to_owned();
-                    self.icon_bytes = get_image_bytes(self.icon_path.clone()).await;
-                };
+            InputMessage::ActiveScreen(machine_id) => {
+                info!("active screen: {:?}", machine_id);
+                let sender: AsyncComponentSender<MachineInfo> = sender.clone();
 
-                let sender: relm4::Sender<InputMessage> = sender.input_sender().clone();
-                _ = init_services(sender).await;
+                self.machine_id = machine_id.to_owned();
+                self.toast_text = String::from("Fetching Machine Information...");
+
+                let _ = machine_info_init_services(sender).await;
             }
-            InputMessage::ShowStatus(status) => {
+            InputMessage::ShowStatus(status, error_toast) => {
                 self.status = status;
+                self.toast_text = error_toast;
+            }
+            InputMessage::UpdateMachineInfo(data) => {
+                self.machine_id = data.machine_id;
+                self.name = data.name;
+                self.icon_path = data.icon;
+                self.icon_bytes = get_image_bytes(self.icon_path.clone()).await;
             }
         }
     }
@@ -293,6 +274,8 @@ impl AsyncComponent for MachineInfo {
     fn update_view(&self, widgets: &mut Self::Widgets, sender: AsyncComponentSender<Self>) {
         widgets.name_label.set_label(&self.name);
         widgets.id_label.set_label(&self.machine_id);
+        widgets.active_status_icon.set_visible(false);
+        widgets.not_active_status_icon.set_visible(true);
 
         if self.status == true {
             if let Some(bytes) = self.icon_bytes.clone() {
@@ -303,26 +286,98 @@ impl AsyncComponent for MachineInfo {
                     .style_context()
                     .add_class("device-info-icon");
             }
+            widgets.active_status_icon.set_visible(true);
+            widgets.not_active_status_icon.set_visible(false);
+            widgets.toast_label.set_visible(false);
         } else {
             widgets.not_active_status_icon.set_visible(true);
             widgets.active_status_icon.set_visible(false);
 
-            widgets.toast_label.set_label(&String::from(
-                "Machine Agent not running or not internet connectivity",
-            ));
+            widgets.toast_label.set_label(&self.toast_text.clone());
+            // widgets.toast_label.set_label(&String::from(
+            //     "Machine Agent not running or not internet connectivity",
+            // ));
             widgets.toast_label.set_visible(true);
             widgets.toast_label.set_hexpand(true);
         }
-        widgets.active_status_icon.set_visible(true);
-        widgets.not_active_status_icon.set_visible(false);
-
-        widgets.toast_label.set_visible(false);
     }
 }
 
-async fn init_services(sender: relm4::Sender<InputMessage>) {
-    let sender_clone_1 = sender.clone();
+async fn machine_info_init_services(sender: AsyncComponentSender<MachineInfo>) {
+    let fn_name = "machine_info_init_services";
+    let error_toast = String::from("Machine Agent not running or not internet connectivity");
+    info!(func = fn_name, package = PACKAGE_NAME);
+
     let _ = relm4::spawn(async move {
-        let _ = machine_status_service(sender_clone_1).await;
+        loop {
+            let _ = tokio::time::sleep(Duration::from_secs(10)).await;
+
+            let (get_status_result, get_machine_info_result) =
+                tokio::join!(get_status(), get_machine_info());
+
+            match (get_status_result, get_machine_info_result) {
+                (Ok(ping_res), Ok(machine_info_res)) => {
+                    info!(
+                        func = fn_name,
+                        package = PACKAGE_NAME,
+                        "MACHINE INFO IS {:?}",
+                        machine_info_res.clone()
+                    );
+
+                    let _ = sender.input_sender().send(InputMessage::ShowStatus(
+                        ping_res.code == "success",
+                        String::from(""),
+                    ));
+
+                    let _ = sender
+                        .input_sender()
+                        .send(InputMessage::UpdateMachineInfo(machine_info_res.to_owned()));
+                }
+                (Ok(_), Err(ping_error)) => {
+                    debug!(
+                        func = fn_name,
+                        package = PACKAGE_NAME,
+                        "PING STATUS ERROR {:?}",
+                        ping_error
+                    );
+                    let _ = sender
+                        .input_sender()
+                        .send(InputMessage::ShowStatus(false, error_toast.to_owned()));
+                }
+                (Err(machine_info_error), Ok(_)) => {
+                    debug!(
+                        func = fn_name,
+                        package = PACKAGE_NAME,
+                        "MACHINE INFO ERROR {:?}",
+                        machine_info_error
+                    );
+
+                    let _ = sender
+                        .input_sender()
+                        .send(InputMessage::ShowStatus(false, error_toast.to_owned()));
+                }
+                (Err(err_1), Err(err_2)) => {
+                    debug!(
+                        func = fn_name,
+                        package = PACKAGE_NAME,
+                        "DEBUG ERR_1 {:?} & ERR_2 {:?}",
+                        err_1,
+                        err_2
+                    );
+
+                    error!(
+                        func = fn_name,
+                        package = PACKAGE_NAME,
+                        "error ===> ERR_1 {:?} & ERR_2 {:?}",
+                        err_1,
+                        err_2
+                    );
+
+                    let _ = sender
+                        .input_sender()
+                        .send(InputMessage::ShowStatus(false, error_toast.to_owned()));
+                }
+            }
+        }
     });
 }

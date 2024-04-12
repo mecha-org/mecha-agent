@@ -1,5 +1,5 @@
 use crate::{
-    server::provision_client::ProvisionManagerClient,
+    handlers::machine_info::handler::get_status,
     settings::{Modules, WidgetConfigs},
 };
 use async_trait::async_trait;
@@ -16,6 +16,7 @@ use relm4::{
     AsyncComponentSender,
 };
 use std::time::Duration;
+use tracing::{error, info, trace};
 
 pub struct Settings {
     pub modules: Modules,
@@ -25,6 +26,7 @@ pub struct CheckInternet {
     settings: Settings,
     task: Option<relm4::prelude::adw::glib::JoinHandle<()>>,
 }
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
 #[derive(Debug)]
 enum AppInput {}
@@ -141,13 +143,13 @@ impl AsyncComponent for CheckInternet {
     ) {
         match message {
             InputMessage::ActiveScreen(text) => {
-                println!("active screen: {:?}", text);
+                info!("active screen: {:?}", text);
                 let sender: relm4::Sender<InputMessage> = sender.input_sender().clone();
                 let relm_task: relm4::prelude::adw::glib::JoinHandle<()> =
                     relm4::spawn_local(async move {
                         let time_duration = Duration::from_millis(7000);
                         let _ = tokio::time::sleep(time_duration).await;
-                        let _ = init_services(sender).await;
+                        let _ = check_internet_init_services(sender).await;
                     });
 
                 self.task = Some(relm_task);
@@ -169,26 +171,40 @@ impl AsyncComponent for CheckInternet {
     }
 }
 
-async fn init_services(sender: relm4::Sender<InputMessage>) {
-    match ProvisionManagerClient::new().await {
-        Ok(mut client) => match client.ping().await {
-            Ok(response) => {
-                if response.code == "success" {
-                    let _ = sender.send(InputMessage::NextScreen);
-                } else {
-                    let _ = sender.send(InputMessage::ConnectionNotFound);
-                }
+async fn check_internet_init_services(sender: relm4::Sender<InputMessage>) {
+    let fn_name = "check_internet_init_services";
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "Check Internet Screen - ping"
+    );
+
+    match get_status().await {
+        Ok(response) => {
+            if response.code == "success" {
+                trace!(
+                    fn_name,
+                    package = PACKAGE_NAME,
+                    "ping success ==> moving to Link Machine Screen"
+                );
+                let _ = sender.send(InputMessage::NextScreen);
+            } else {
+                trace!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "ping false ==> moving to No Internet Connection Screen",
+                );
+                let _ = sender.send(InputMessage::ConnectionNotFound);
             }
-            Err(error) => {
-                eprintln!("ping error: {}", error);
-                let _ = sender.send(InputMessage::ShowError("Try after some time!".to_owned()));
-            }
-        },
-        Err(error) => {
-            eprintln!("Client error :: {} ", error);
-            let _ = sender.send(InputMessage::ShowError(
-                "Machine Agent is not running".to_owned(),
-            ));
         }
-    };
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "Error in checking ping {:?}",
+                e
+            );
+            let _ = sender.send(InputMessage::ShowError(e.to_string()));
+        }
+    }
 }

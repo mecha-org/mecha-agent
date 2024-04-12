@@ -1,16 +1,11 @@
 use gtk::gdk::Display;
-use gtk::{
-    gdk, gio,
-    glib::{clone, object::ObjectExt},
-    prelude::*,
-    subclass::*,
-};
+use gtk::{gdk, gio, glib::clone, prelude::*};
 use relm4::gtk::STYLE_PROVIDER_PRIORITY_APPLICATION;
 use relm4::{
     gtk::{self, CssProvider, GestureClick},
     ComponentParts, RelmWidgetExt, SimpleComponent,
 };
-use tracing::{error, info};
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub struct IconInputCss {

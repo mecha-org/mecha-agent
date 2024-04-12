@@ -1,13 +1,12 @@
-use std::thread;
-use std::time::Instant;
-use std::{io::Error, time::Duration};
+use crate::server::provision_client::ProvisionManagerClient;
 use anyhow::{bail, Result};
 use relm4::Sender;
-use tokio::time::sleep;
+use std::{io::Error, time::Duration};
 use tokio::{select, sync::mpsc, time};
-use crate::server::provision_client::ProvisionManagerClient;
 
 use crate::pages::link_machine::InputMessage as Message;
+use tracing::{debug, error, info, trace};
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
 #[derive(Debug)]
 enum HandleMessage {
@@ -16,17 +15,15 @@ enum HandleMessage {
     TimeoutCodeRes { response: Result<f64> },
 }
 
-pub struct LinkMachineHandler {
-}
+pub struct LinkMachineHandler {}
 
 impl LinkMachineHandler {
-
     pub fn new() -> Self {
-        Self { 
-        }
+        Self {}
     }
 
     pub async fn run(&mut self, sender: Sender<Message>) -> Result<(), Error> {
+        let fn_name = "LinkMachineHandler - run";
 
         let (event_tx, mut event_rx) = mpsc::channel(128);
 
@@ -37,28 +34,25 @@ impl LinkMachineHandler {
             g_code_handler.run(g_code_message_rx).await;
         });
 
-        
         let (p_code_message_tx, p_code_message_rx) = mpsc::channel(128);
         let mut p_code_handler = ProvisionCodeHandler::new(event_tx.clone());
-        
+
         let p_code_t = tokio::spawn(async move {
             p_code_handler.run(p_code_message_rx).await;
         });
 
-
         // let (t_code_message_tx, t_code_message_rx) = mpsc::channel(128);
         // let mut t_code_handler = TimeoutCodeHandler::new(event_tx);
-        
+
         // let t_code_t = tokio::spawn(async move {
         //     t_code_handler.run(t_code_message_rx).await;
         // });
 
-        let _ = sender.send(Message::ProvisioningTasks { 
-            g: g_code_t, 
+        let _ = sender.send(Message::ProvisioningTasks {
+            g: g_code_t,
             p: p_code_t,
-            // t: t_code_t 
+            // t: t_code_t
         });
-
 
         let mut process_time: f64 = 1.0;
 
@@ -78,22 +72,22 @@ impl LinkMachineHandler {
 
                                         // let _ = t_code_message_tx.send(TCodeHandlerMessage::CodeChanged { code: code.clone() }).await;
 
-                                        // let mut target_value = 1.0 as f64;  
+                                        // let mut target_value = 1.0 as f64;
                                         // println!("remaining time : {} ", target_value-0.1);
-                                        // let _ = sender.send(Message::UpdateTimer(0.9983)); 
+                                        // let _ = sender.send(Message::UpdateTimer(0.9983));
 
-                                        // let mut interval = time::interval(time::Duration::from_secs(1)); 
+                                        // let mut interval = time::interval(time::Duration::from_secs(1));
                                         //     while process_time > 0.0 {
                                         //         interval.tick().await;
                                         //         process_time -= 0.01;
                                         //         println!("fraction_value {:?} ", process_time.to_owned());
-                                        //         let _ = sender.send(Message::UpdateTimer(process_time.to_owned())); 
+                                        //         let _ = sender.send(Message::UpdateTimer(process_time.to_owned()));
                                         //     }
                                         // process_time = 1.0;
 
-                                    }, 
+                                    },
                                     Err(e) => {
-                                        let _ = sender.send(Message::GenerateCodeError("Error".to_owned()));
+                                        let _ = sender.send(Message::GenerateCodeError(e.to_string()));
                                     }
                                 }
                             }
@@ -102,14 +96,14 @@ impl LinkMachineHandler {
                                 match response {
                                     Ok(value) => {
                                         println!("timeout value {:?}  ", value.clone());
-                                        let _ = sender.send(Message::UpdateTimer(value)); 
+                                        let _ = sender.send(Message::UpdateTimer(value));
                                     },
                                     Err(e) => {
                                         println!("error in tcode {}", e);
                                         let _ = sender.send(Message::GenerateCodeError("Error".to_owned()));
                                     }
                                 }
-                            } 
+                            }
                             HandleMessage::ProvisionCodeRes { response } => {
                                 match response {
                                     Ok(success) => {
@@ -123,7 +117,8 @@ impl LinkMachineHandler {
                                         }
                                     },
                                     Err(e) => {
-                                        let _ = sender.send(Message::ProvisionSuccess);
+                                        debug!(fn_name, package = PACKAGE_NAME, "error in provision code {:?} ", e.to_string());
+                                        let _ = sender.send(Message::ShowError(e.to_string()));
                                     }
                                 }
                             }
@@ -133,11 +128,8 @@ impl LinkMachineHandler {
         }
         // g_code_t.await.unwrap();
         // p_code_t.await.unwrap();
-
     }
-  
 }
-  
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RunningStatus {
@@ -165,6 +157,8 @@ impl GenerateCodeHandler {
     }
 
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<GCodeHandlerMessage>) {
+        let fn_name = "GenerateCodeHandler-run";
+
         let mut g_code_interval = time::interval(Duration::from_secs(60));
 
         loop {
@@ -177,15 +171,23 @@ impl GenerateCodeHandler {
 
                             match generate_code_response {
                                 Ok(response) => {
+                                    info!(fn_name, package = PACKAGE_NAME, "generated code {:?}", response.code.clone());
                                     let _ = self.event_tx.send(HandleMessage::GenerateCodeRes {response: Ok(response.code.clone()) }).await;
                                     self.is_calling = false;
                                 }
                                 Err(e) => {
-                                    eprintln!("Error in generate code : {:?} ", e);
+                                    error!(
+                                        func = fn_name,
+                                        package = PACKAGE_NAME,
+                                        "Error in generating code {:?}",
+                                        e
+                                    );
+                                    let _ = self.event_tx.send(HandleMessage::GenerateCodeRes {response: Err(e) }).await;
+
                                 }
                             }
-                           
-                        } 
+
+                        }
                     }
                     msg = message_rx.recv() => {
                         if msg.is_none() {
@@ -205,9 +207,7 @@ impl GenerateCodeHandler {
     }
 }
 
-
-
-pub enum TCodeHandlerMessage { 
+pub enum TCodeHandlerMessage {
     ChangeRunningStatus { status: RunningStatus },
     CodeChanged { code: String },
 }
@@ -242,7 +242,7 @@ impl TimeoutCodeHandler {
 
                             process_time -= 0.01;
                             println!("fraction_value {:?} ", process_time.to_owned());
-                            let _ = self.event_tx.send(HandleMessage::TimeoutCodeRes { response : Ok(process_time.to_owned())}).await; 
+                            let _ = self.event_tx.send(HandleMessage::TimeoutCodeRes { response : Ok(process_time.to_owned())}).await;
                             self.is_calling = false;
 
                             if process_time <= 0.00 { process_time = 1.0;}
@@ -269,9 +269,6 @@ impl TimeoutCodeHandler {
     }
 }
 
-
-
-
 pub enum PCodeHandlerMessage {
     ChangeRunningStatus { status: RunningStatus },
     CodeChanged { code: String },
@@ -295,11 +292,12 @@ impl ProvisionCodeHandler {
     }
 
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<PCodeHandlerMessage>) {
+        let fn_name = "ProvisionCodeHandler-run";
+
         let mut p_code_interval = time::interval(Duration::from_secs(10));
         loop {
             select! {
                     _ = p_code_interval.tick() => {
-
                         if !self.is_calling && self.status == RunningStatus::START && self.code.is_some(){
                             self.is_calling = true;
                             let provisioning_res = p_code(self.code.clone().unwrap()).await;
@@ -316,7 +314,15 @@ impl ProvisionCodeHandler {
                                         self.is_calling = false;
                                     }
                                 },
-                                Err(e) => { 
+                                Err(e) => {
+                                    error!(
+                                        func = fn_name,
+                                        package = PACKAGE_NAME,
+                                        "Error in provisioning code {:?}",
+                                        e
+                                    );
+                                    let _ = self.event_tx.send(HandleMessage::ProvisionCodeRes {response: Err(e) }).await;
+
                                     self.is_calling = false;
                                 }
                             }
@@ -343,35 +349,31 @@ impl ProvisionCodeHandler {
     }
 }
 
-
 #[derive(Debug)]
 pub struct GenerateCodeResp {
     pub code: String,
-    pub message: String
+    pub message: String,
 }
 
 pub async fn g_code() -> anyhow::Result<GenerateCodeResp> {
-    let provision_manager_client_response = ProvisionManagerClient::new().await;
-    let mut provision_manager_client = match provision_manager_client_response {
+    let mut provision_manager_client = match ProvisionManagerClient::new().await {
         Ok(r) => r,
         Err(e) => {
-            bail!("Provision Handler-connect clinet error:: {}", e);
+            bail!(e);
         }
     };
 
     let generate_code_response = provision_manager_client.generate_code().await;
     let provisioning_code: GenerateCodeResp = match generate_code_response {
-        Ok(r) => {
-            GenerateCodeResp {
-                code: r.code,
-                message: String::from("")
-            }
+        Ok(r) => GenerateCodeResp {
+            code: r.code,
+            message: String::from(""),
         },
         Err(e) => {
-            eprintln!("Provision Handler-generate_code error:: {:?}", e);
+            // eprintln!("Provision Handler-generate_code error:: {:?}", e);
             GenerateCodeResp {
                 code: String::from(""),
-                message: e.to_string()
+                message: e.to_string(),
             }
         }
     };
@@ -382,33 +384,46 @@ pub async fn g_code() -> anyhow::Result<GenerateCodeResp> {
 #[derive(Debug)]
 pub struct ProvisioningStatusResponse {
     pub success: bool,
-    pub message: String
+    pub message: String,
 }
 
-pub async fn p_code(code: String) -> anyhow::Result<ProvisioningStatusResponse>  {
-    let provision_manager_client_response = ProvisionManagerClient::new().await;
-    let mut provision_manager_client = match provision_manager_client_response {
+pub async fn p_code(code: String) -> anyhow::Result<ProvisioningStatusResponse> {
+    let fn_name = "p_code - provision_code";
+
+    trace!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "Provisioning Code : {:?} ",
+        code.clone()
+    );
+
+    let mut provision_manager_client = match ProvisionManagerClient::new().await {
         Ok(r) => r,
         Err(e) => {
-            bail!("Provision Handler-connect clinet error:: {}", e);
+            bail!(e);
         }
     };
 
-    let provisioning_response: ProvisioningStatusResponse = match provision_manager_client.provision_by_code(code).await {
-        Ok(r) => {
-            ProvisioningStatusResponse {
-                success: true,
-                message: String::from("")
-
+    let provisioning_response: ProvisioningStatusResponse =
+        match provision_manager_client.provision_by_code(code).await {
+            Ok(response) => {
+                let mut message = String::from("");
+                if response.success == false {
+                    message = String::from("Something went wrong! Try after some time!");
+                }
+                let resp = ProvisioningStatusResponse {
+                    success: response.success,
+                    message: message,
+                };
+                resp
             }
-        },
-        Err(e) => {
-            ProvisioningStatusResponse {
-                success: false,
-                message: e.to_string()
+            Err(e) => {
+                let res = ProvisioningStatusResponse {
+                    success: false,
+                    message: e.to_string(),
+                };
+                res
             }
-        }
-    };
+        };
     Ok(provisioning_response)
-
 }

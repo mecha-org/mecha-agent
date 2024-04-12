@@ -195,8 +195,6 @@
 }
 
 .setup-fail-border-box {
-    /* border: 2px solid #202431; */
-    /* padding: 18px 16px 18px 16px; */
     border-radius: 6px;
     padding: 20px;
     margin: 0px 8px;
@@ -323,10 +321,6 @@
     margin: 6px;
 }
 
-.power-option-revealer {
-    min-height: 50px;
+.capitalize {
+    text-transform: capitalize;
 }
-
-.configure-revealer {
-    min-height: 20px;
-} 

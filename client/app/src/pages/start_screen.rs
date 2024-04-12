@@ -1,17 +1,25 @@
-use crate::settings::{Modules, WidgetConfigs};
-use custom_utils::{get_gif_from_path, get_image_from_path};
+use crate::{
+    handlers::start_screen::handler::machine_provision_status,
+    settings::{Modules, WidgetConfigs},
+};
+use custom_utils::get_image_from_path;
 use gtk::prelude::*;
 use relm4::{
     adw,
+    component::{AsyncComponent, AsyncComponentParts},
     gtk::{
         self,
-        glib::{clone, main_depth},
+        glib::clone,
         pango,
         prelude::{ButtonExt, StyleContextExt, WidgetExt},
         Button,
     },
-    ComponentParts, ComponentSender, SimpleComponent,
+    AsyncComponentSender,
 };
+use tonic::async_trait;
+use tracing::{debug, error, info};
+
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
 pub struct Settings {
     pub modules: Modules,
@@ -23,29 +31,32 @@ pub struct StartScreen {
 
 #[derive(Debug)]
 pub enum StartScreenOutput {
+    ShowCheckInternet,
+    ShowMachineInfo,
     BackPressed,
-    NextPressed,
 }
 
 pub struct AppWidgets {}
 
-impl SimpleComponent for StartScreen {
+#[async_trait(?Send)]
+impl AsyncComponent for StartScreen {
     type Init = Settings;
     type Input = ();
     type Output = StartScreenOutput;
     type Root = gtk::Box;
     type Widgets = AppWidgets;
+    type CommandOutput = ();
 
     fn init_root() -> Self::Root {
         gtk::Box::builder().build()
     }
 
     /// Initialize the UI and model.
-    fn init(
+    async fn init(
         init: Self::Init,
         root: Self::Root,
-        sender: ComponentSender<Self>,
-    ) -> relm4::ComponentParts<Self> {
+        sender: AsyncComponentSender<Self>,
+    ) -> AsyncComponentParts<Self> {
         let modules = init.modules.clone();
         let widget_configs = init.widget_configs.clone();
 
@@ -231,7 +242,8 @@ impl SimpleComponent for StartScreen {
         next_button.add_css_class("footer-container-button");
 
         next_button.connect_clicked(clone!(@strong sender => move |_| {
-          let _ =  sender.output(StartScreenOutput::NextPressed);
+            let sender: AsyncComponentSender<StartScreen> = sender.clone();
+            let _ = check_machine_provision(sender);
         }));
 
         back_button_box.append(&back_button);
@@ -246,8 +258,60 @@ impl SimpleComponent for StartScreen {
 
         let widgets = AppWidgets {};
 
-        ComponentParts { model, widgets }
+        AsyncComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {}
+    async fn update(
+        &mut self,
+        message: Self::Input,
+        sender: AsyncComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+    }
+}
+
+fn check_machine_provision(sender: AsyncComponentSender<StartScreen>) {
+    let fn_name = "check_machine_provision";
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "Start screen - get provision status"
+    );
+
+    let _ = relm4::spawn(async move {
+        let _ = match machine_provision_status().await {
+            Ok(response) => {
+                if response.status == true {
+                    debug!(
+                        fn_name,
+                        package = PACKAGE_NAME,
+                        "provision completed ==> check machine info"
+                    );
+                    let _ = sender
+                        .output_sender()
+                        .send(StartScreenOutput::ShowMachineInfo);
+                } else {
+                    debug!(
+                        fn_name,
+                        package = PACKAGE_NAME,
+                        "provision not done ==> moving to check internet"
+                    );
+                    let _ = sender
+                        .output_sender()
+                        .send(StartScreenOutput::ShowCheckInternet);
+                }
+            }
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "Error - getting provision status{:?}",
+                    e
+                );
+                let _ = sender
+                    .output_sender()
+                    .send(StartScreenOutput::ShowCheckInternet);
+            }
+        };
+    });
 }

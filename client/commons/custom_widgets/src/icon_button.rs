@@ -1,4 +1,4 @@
-use gtk::{gdk, gio, glib::clone, prelude::*, subclass::*};
+use gtk::{gdk, gio, glib::clone, prelude::*};
 use relm4::{
     gtk::{self, GestureClick},
     ComponentParts, RelmWidgetExt, SimpleComponent,

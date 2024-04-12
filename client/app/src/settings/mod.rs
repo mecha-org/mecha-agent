@@ -1,10 +1,9 @@
-
-use serde::{Deserialize, Serialize};
+use crate::errors::{ScreenError, ScreenErrorCodes};
 use anyhow::bail;
 use anyhow::Result;
-use tracing::{debug, info};
+use serde::{Deserialize, Serialize};
 use std::{env, fs::File, path::PathBuf};
-use crate::errors::{ScreenError, ScreenErrorCodes}; 
+use tracing::debug;
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct ScreenSettings {
@@ -24,7 +23,6 @@ impl Default for ScreenSettings {
         }
     }
 }
-
 
 /// # Window Settings
 ///
@@ -62,8 +60,8 @@ impl Default for WindowSettings {
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
-pub struct Modules{
-    pub pages_settings: PagesSettings
+pub struct Modules {
+    pub pages_settings: PagesSettings,
 }
 impl Default for Modules {
     fn default() -> Self {
@@ -72,7 +70,6 @@ impl Default for Modules {
         }
     }
 }
-
 
 /// # Custom Widgets config
 ///
@@ -97,7 +94,7 @@ pub struct FooterWidgetConfigs {
     pub settings_icon: Option<String>,
     pub refresh_icon: Option<String>,
     pub exit_icon: Option<String>,
-    pub trash_icon: Option<String>
+    pub trash_icon: Option<String>,
 }
 
 impl Default for FooterWidgetConfigs {
@@ -108,7 +105,7 @@ impl Default for FooterWidgetConfigs {
             settings_icon: None,
             refresh_icon: None,
             exit_icon: None,
-            trash_icon: None
+            trash_icon: None,
         }
     }
 }
@@ -122,7 +119,7 @@ pub struct PagesSettings {
     pub setup_success: SetupSuccessSettings,
     pub setup_failure: SetupFailedSettings,
     pub device_info: DeviceInfoSettings,
-    pub timeout_screen : TimeoutScreenSettings
+    pub timeout_screen: TimeoutScreenSettings,
 }
 
 impl Default for PagesSettings {
@@ -143,10 +140,10 @@ impl Default for PagesSettings {
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct StartScreenSettings {
     pub app_icon: Option<String>,
-    pub virtual_network_icon:  Option<String>,
-    pub real_time_icon:  Option<String>,
-    pub encypt_icon:  Option<String>,
-    pub info_icon:  Option<String>,
+    pub virtual_network_icon: Option<String>,
+    pub real_time_icon: Option<String>,
+    pub encypt_icon: Option<String>,
+    pub info_icon: Option<String>,
 }
 
 impl Default for StartScreenSettings {
@@ -163,7 +160,7 @@ impl Default for StartScreenSettings {
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct TimeoutScreenSettings {
-    pub timeout_image:  Option<String>,
+    pub timeout_image: Option<String>,
 }
 
 impl Default for TimeoutScreenSettings {
@@ -174,7 +171,6 @@ impl Default for TimeoutScreenSettings {
     }
 }
 
-
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct CheckInternetSettings {
     pub search_wifi: Option<String>,
@@ -182,9 +178,7 @@ pub struct CheckInternetSettings {
 
 impl Default for CheckInternetSettings {
     fn default() -> Self {
-        Self {
-            search_wifi: None,
-        }
+        Self { search_wifi: None }
     }
 }
 
@@ -221,9 +215,7 @@ pub struct SetupSuccessSettings {
 
 impl Default for SetupSuccessSettings {
     fn default() -> Self {
-        Self {
-            success: None,
-        }
+        Self { success: None }
     }
 }
 
@@ -234,9 +226,7 @@ pub struct SetupFailedSettings {
 
 impl Default for SetupFailedSettings {
     fn default() -> Self {
-        Self {
-            failure: None,
-        }
+        Self { failure: None }
     }
 }
 
@@ -282,7 +272,6 @@ pub fn read_settings_path_from_args() -> Option<String> {
     None
 }
 
-
 /// # Reads Settings YML
 ///
 /// Reads the `settings.yml` and parsers to pages/screens
@@ -299,9 +288,11 @@ pub fn read_settings_yml() -> Result<ScreenSettings> {
         file_path = PathBuf::from(file_path_in_args.unwrap());
     }
 
-    info!(
-        task = "read_settings",
-        "settings file location - {:?}", file_path
+    tracing::info!(
+        func = "read_settings",
+        package = env!("CARGO_PKG_NAME"),
+        "settings file location - {:?}",
+        file_path,
     );
 
     // open file
@@ -314,8 +305,6 @@ pub fn read_settings_yml() -> Result<ScreenSettings> {
             ));
         }
     };
-
-    // println!("settings_file_handle {:?}", settings_file_handle);
 
     // read and parse
     let config: ScreenSettings = match serde_yaml::from_reader(settings_file_handle) {

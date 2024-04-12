@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{
     handlers::provision::handler::LinkMachineHandler,
     settings::{Modules, WidgetConfigs},
@@ -17,7 +19,8 @@ use relm4::{
     },
     AsyncComponentSender,
 };
-use std::time::{Duration, Instant};
+use tracing::info;
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
 pub struct Settings {
     pub modules: Modules,
@@ -38,16 +41,10 @@ pub struct LinkMachine {
 }
 
 #[derive(Debug)]
-enum AppInput {
-    Increment,
-    Decrement,
-}
-
-#[derive(Debug)]
 pub enum LinkMachineOutput {
     BackPressed,
     NextPressed,
-    ShowError,
+    ShowError(String),
 }
 
 #[derive(Debug)]
@@ -309,12 +306,6 @@ impl AsyncComponent for LinkMachine {
 
         main_steps_box.append(&linking_step3_box);
 
-        // let toast = gtk::InfoBar::new();
-        // toast.set_message_type(gtk::MessageType::Error);
-        // toast.add_button("HELLO", gtk::ResponseType::None);
-        // // info_box.append(toast);
-
-        // main_content_box.append(&main_steps_box);
         info_box.append(&main_steps_box);
         main_content_box.append(&info_box);
 
@@ -373,10 +364,11 @@ impl AsyncComponent for LinkMachine {
     ) {
         match message {
             InputMessage::ActiveScreen(text) => {
+                info!("active screen: {:?}", text);
                 let sender: relm4::Sender<InputMessage> = sender.input_sender().clone();
                 let relm_task: relm4::prelude::adw::glib::JoinHandle<()> =
                     relm4::spawn_local(async move {
-                        let _ = init_services(sender).await;
+                        let _ = link_machine_init_services(sender).await;
                     });
                 self.task = Some(relm_task)
             }
@@ -392,12 +384,18 @@ impl AsyncComponent for LinkMachine {
                 self.progress = time_fraction.clone();
             }
             InputMessage::GenerateCodeError(error) => {
-                println!("Generate code error: {:?} ", error);
-                println!("SHOW TOAST!");
+                self.task.as_ref().unwrap().abort();
+                self.g.as_ref().unwrap().abort();
+                self.p.as_ref().unwrap().abort();
+
+                let _ = tokio::time::sleep(Duration::from_millis(5000)).await;
+                let _ = sender.output(LinkMachineOutput::ShowError(error));
             }
-            InputMessage::ShowError(text) => {
-                println!("Error to be shown:: {:?} ", text);
-                let _ = sender.output(LinkMachineOutput::ShowError);
+            InputMessage::ShowError(error) => {
+                self.task.as_ref().unwrap().abort();
+                self.g.as_ref().unwrap().abort();
+                self.p.as_ref().unwrap().abort();
+                let _ = sender.output(LinkMachineOutput::ShowError(error));
             }
             InputMessage::BackScreen => {
                 self.task.as_ref().unwrap().abort();
@@ -421,7 +419,10 @@ impl AsyncComponent for LinkMachine {
     }
 }
 
-async fn init_services(sender: relm4::Sender<InputMessage>) {
+async fn link_machine_init_services(sender: relm4::Sender<InputMessage>) {
+    let fn_name = "link_machine_init_services";
+    info!(func = fn_name, package = PACKAGE_NAME);
+
     let sender_clone_1 = sender.clone();
     let mut link_machine_handler = LinkMachineHandler::new();
 
