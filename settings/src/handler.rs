@@ -143,6 +143,7 @@ impl SettingHandler {
         futures.spawn(await_settings_message(
             consumer.clone(),
             messaging_tx.clone(),
+            self.event_tx.clone(),
         ));
         // create spawn for timer
         let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {

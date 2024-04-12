@@ -14,7 +14,10 @@ use crate::config::init_otlp_configuration;
 pub async fn initialize_metrics() -> Result<bool> {
     let fn_name = "initialize_custom_metrics";
     let _meter_provider = match init_otlp_configuration() {
-        Ok(provider) => provider,
+        Ok(provider) => {
+            global::set_meter_provider(provider.clone());
+            provider
+        }
         Err(e) => {
             println!(
                 "{}: error initializing otlp configuration: {:?}",
