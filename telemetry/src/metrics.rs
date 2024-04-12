@@ -235,7 +235,7 @@ fn collect_filesystem_usage(meter: Meter) -> Result<()> {
         .with_unit(Unit::new("By"))
         .init();
 
-    let rw_guard = RwLock::new(Disks::new());
+    let rw_guard = RwLock::new(Disks::new_with_refreshed_list());
     match meter.register_callback(&[filesystem_usage_obs_counter.as_any()], move |observer| {
         let mut disks = match rw_guard.write() {
             Ok(guard) => guard,
@@ -244,7 +244,7 @@ fn collect_filesystem_usage(meter: Meter) -> Result<()> {
                 return;
             }
         };
-        disks.refresh_list();
+        disks.refresh();
         let mut used_space: u64 = 0;
         for disk in disks.list() {
             used_space += disk.total_space() - disk.available_space();
