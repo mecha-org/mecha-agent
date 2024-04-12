@@ -7,68 +7,74 @@ use anyhow::{bail, Result};
 use crypto::random::generate_random_alphanumeric;
 use futures::StreamExt;
 use local_ip_address::list_afinet_netifas;
+use messaging::async_nats::Message;
 use messaging::handler::MessagingMessage;
-use messaging::Subscriber as NatsSubscriber;
+use messaging::{Bytes, Subscriber as NatsSubscriber};
 use serde::{Deserialize, Serialize};
 use std::io;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::Receiver;
 use tokio::task::JoinHandle;
 use tokio::{select, sync::oneshot};
 use tracing::{error, info, warn};
 
-use crate::handler::NetworkingMessage;
+use crate::errors::{NetworkingError, NetworkingErrorCodes};
+use crate::service::ChannelDetails;
 
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 
 pub enum HandshakeMessage {
     Request {
         machine_id: String,
-        reply_to: oneshot::Sender<Result<bool>>,
+        reply_subject: String,
     },
     HandshakeManifest {
         manifest: Manifest,
     },
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 struct Candidate {
     ip: Ipv4Addr,
     port: u32,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Manifest {
-    txn_id: u32,
+    txn_id: String,
     candidates: Option<Candidates>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 struct Candidates {
     local: Vec<Candidate>,
     stun: Option<Candidate>, //once we have function to get reflexive address, we can remove this option
 }
+#[derive(Serialize, Deserialize, Clone)]
 pub enum TransactionStatus {
     TxnState { machine_id: String, state: String },
 }
 
-#[derive()]
+#[derive(Clone)]
 pub struct HandshakeChannelHandler {
     pub id: String,
-    messaging_tx: mpsc::Sender<MessagingMessage>,
-    disco_socket: Option<tokio::net::UdpSocket>,
-    txns: HashMap<String, TransactionStatus>,
+    pub messaging_tx: mpsc::Sender<MessagingMessage>,
+    pub handshake_tx: mpsc::Sender<HandshakeMessage>,
+    pub txns: HashMap<String, TransactionStatus>,
 }
 impl HandshakeChannelHandler {
-    pub fn new(disco_url: String, messaging_tx: mpsc::Sender<MessagingMessage>) -> (Self, String) {
+    pub fn new(
+        disco_url: String,
+        messaging_tx: mpsc::Sender<MessagingMessage>,
+        handshake_tx: mpsc::Sender<HandshakeMessage>,
+    ) -> Self {
         let id = generate_random_alphanumeric(32);
-        (
-            Self {
-                id: id.clone(),
-                messaging_tx: messaging_tx,
-                disco_socket: None,
-                txns: HashMap::new(),
-            },
-            id,
-        )
+        Self {
+            id: id.clone(),
+            messaging_tx: messaging_tx,
+            handshake_tx: handshake_tx,
+            txns: HashMap::new(),
+        }
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<HandshakeMessage>) -> Result<()> {
         info!(func = "run", package = PACKAGE_NAME, "init");
@@ -93,9 +99,8 @@ impl HandshakeChannelHandler {
                     }
 
                     match msg.unwrap() {
-                        HandshakeMessage::Request { machine_id, reply_to } => {
-                            let result = self.send_handshake_manifest(machine_id).await;
-                            let _ = reply_to.send(result);
+                        HandshakeMessage::Request { machine_id, reply_subject } => {
+                            let _result = self.send_handshake_manifest(machine_id, reply_subject).await;
                         }
                         _ => {}
                     };
@@ -103,7 +108,12 @@ impl HandshakeChannelHandler {
             }
         }
     }
-    async fn send_handshake_manifest(&mut self, machine_id: String) -> Result<bool> {
+    async fn send_handshake_manifest(
+        &mut self,
+        machine_id: String,
+        reply_subject: String,
+    ) -> Result<bool> {
+        println!("handshake request received");
         let fn_name = "send_handshake_manifest";
         info!(func = fn_name, package = PACKAGE_NAME, "init");
         let settings: AgentSettings = match read_settings_yml() {
@@ -123,7 +133,8 @@ impl HandshakeChannelHandler {
             machine_id: machine_id,
             state: String::from("PENDING"),
         };
-        self.txns.insert(txn_id, txn);
+        self.txns.insert(txn_id.clone(), txn);
+        // println!("txn_id: {:?}", txn_id);
         let endpoints = match discover_endpoints() {
             Ok(endpoints) => endpoints,
             Err(e) => {
@@ -150,9 +161,10 @@ impl HandshakeChannelHandler {
             stun: None,
         };
         let manifest = Manifest {
-            txn_id: 1,
+            txn_id: txn_id,
             candidates: Some(candidates),
         };
+        println!("manifest: {:?}", manifest);
         // send reply to NATS
         // self.messaging_tx
         //     .send(MessagingMessage::Send { reply_to: (), message: (), subject: () } { manifest });
@@ -203,20 +215,74 @@ pub async fn await_networking_handshake_request(
     mut subscriber: NatsSubscriber,
     handshake_tx: mpsc::Sender<HandshakeMessage>,
 ) -> Result<()> {
-    let machine_id = "machine_id".to_string();
+    let fn_name = "await_networking_handshake_handler";
     // Don't exit loop in any case by returning a response
     while let Some(message) = subscriber.next().await {
-        let (tx, rx) = oneshot::channel();
-        let _ = handshake_tx
-            .send(HandshakeMessage::Request {
-                machine_id: machine_id.clone(),
-                reply_to: tx,
-            })
-            .await;
+        println!("message received on handshake channel");
+        match process_handshake_request(message, handshake_tx.clone()).await {
+            Ok(_) => {}
+            Err(err) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error processing message - {:?}",
+                    err
+                );
+            }
+        }
     }
     Ok(())
 }
 
+async fn process_handshake_request(
+    message: Message,
+    handshake_tx: mpsc::Sender<HandshakeMessage>,
+) -> Result<bool> {
+    let fn_name = "process_handshake_request";
+
+    // Process mesaage
+    let payload_str = match std::str::from_utf8(&message.payload) {
+        Ok(s) => s,
+        Err(e) => {
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ExtractMessagePayloadError,
+                format!("error converting payload to string - {}", e),
+                true
+            ))
+        }
+    };
+    let request_payload: ChannelDetails = match serde_json::from_str(&payload_str) {
+        Ok(s) => s,
+        Err(e) => bail!(NetworkingError::new(
+            NetworkingErrorCodes::PayloadDeserializationError,
+            format!("error while deserializing message payload {}", e),
+            true
+        )),
+    };
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "received handshake request: {:?}",
+        request_payload
+    );
+    let reply_to_subject = match message.reply {
+        Some(subject) => subject.to_string(),
+        None => {
+            warn!(
+                package = PACKAGE_NAME,
+                "No reply subject found in message: {:?}", message
+            );
+            String::from("") //TODO: need to discuss
+        }
+    };
+    let _ = handshake_tx
+        .send(HandshakeMessage::Request {
+            machine_id: request_payload.machine_id.clone(),
+            reply_subject: reply_to_subject,
+        })
+        .await;
+    Ok(true)
+}
 pub async fn start_disco() -> Result<()> {
     info!(func = "start_disco", package = PACKAGE_NAME, "init");
     let sock = match UdpSocket::bind("0.0.0.0:8080").await {

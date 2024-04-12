@@ -3,6 +3,7 @@ use anyhow::{bail, Result};
 use events::Event;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
+use serde_json::json;
 use settings::handler::SettingMessage;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinHandle, JoinSet};
@@ -31,12 +32,10 @@ pub struct NetworkingHandler {
 }
 
 pub enum NetworkingMessage {
-    Request {
-        machine_id: String,
-        reply_to: oneshot::Sender<Result<bool>>,
-    },
     HandshakeManifest {
         manifest: Manifest,
+        reply_subject: String,
+        reply_to: oneshot::Sender<Result<bool>>,
     },
 }
 
@@ -77,14 +76,13 @@ impl NetworkingHandler {
             }
         };
 
-        let (handshake_t, handshake_tx, channel_id) =
-            init_handshake_handler(self.messaging_tx.clone()).await;
         // safety: check for existing cancel token, and cancel it
         let exist_subscriber_token = &self.subscriber_token;
         if exist_subscriber_token.is_some() {
             let _ = exist_subscriber_token.as_ref().unwrap().cancel();
         }
-
+        //Todo: handler this unwrap
+        let handshake_handler = self.handshake_handler.as_ref().unwrap();
         // create a new token
         let subscriber_token = CancellationToken::new();
         let subscriber_token_cloned = subscriber_token.clone();
@@ -95,7 +93,7 @@ impl NetworkingHandler {
         let subscribers = match subscribe_to_nats(
             identity_tx.clone(),
             messaging_tx.clone(),
-            channel_id,
+            handshake_handler.id.clone(),
             settings.networking.peer_settings.network_id,
         )
         .await
@@ -114,7 +112,7 @@ impl NetworkingHandler {
         let mut futures = JoinSet::new();
         futures.spawn(await_networking_handshake_request(
             subscribers.handshake_request.unwrap(),
-            handshake_tx.clone(),
+            handshake_handler.handshake_tx.clone(),
         ));
         // create spawn for timer
         let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {
@@ -155,6 +153,8 @@ impl NetworkingHandler {
         if exist_consumer_token.is_some() {
             let _ = exist_consumer_token.as_ref().unwrap().cancel();
         }
+        //TODO: handle this error unwrap
+        let handshake_handler = self.handshake_handler.as_ref().unwrap();
         // create a new token
         let consumer_token = CancellationToken::new();
         let consumer_token_cloned = consumer_token.clone();
@@ -181,6 +181,7 @@ impl NetworkingHandler {
             consumer.clone(),
             messaging_tx.clone(),
             self.wireguard.as_ref().unwrap().clone(),
+            handshake_handler.id.clone(),
         ));
         // create spawn for timer
         let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {
@@ -208,6 +209,7 @@ impl NetworkingHandler {
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<NetworkingMessage>) -> Result<()> {
         info!(func = "run", package = PACKAGE_NAME, "init");
+        let (handshake_t, handshake_tx) = self.init_handshake_handler().await;
         let mut event_rx = self.event_tx.subscribe();
         loop {
             select! {
@@ -217,7 +219,13 @@ impl NetworkingHandler {
                     }
 
                     match msg.unwrap() {
-                        _ => {}
+                        NetworkingMessage::HandshakeManifest { manifest, reply_subject, reply_to } => {
+                           let _ = self.messaging_tx.send(MessagingMessage::Send {
+                                subject: reply_subject,
+                                message: json!(manifest).to_string(),
+                                reply_to: reply_to,
+                            }).await;
+                        },
                     };
                 },
                 // Receive events from other services
@@ -232,7 +240,7 @@ impl NetworkingHandler {
                                 package = PACKAGE_NAME,
                                 "connected event in networking"
                             );
-                            match configure_wireguard(self.messaging_tx.clone(), self.identity_tx.clone()).await {
+                            match configure_wireguard(self.messaging_tx.clone(), self.identity_tx.clone(), self.handshake_handler.as_ref().unwrap().id.clone()).await {
                                 Ok(wireguard) => {
                                     info!(
                                         func = "run",
@@ -274,37 +282,36 @@ impl NetworkingHandler {
             }
         }
     }
-}
-
-async fn init_handshake_handler(
-    messaging_tx: mpsc::Sender<MessagingMessage>,
-) -> (
-    task::JoinHandle<Result<()>>,
-    mpsc::Sender<HandshakeMessage>,
-    String,
-) {
-    let (handshake_tx, handshake_rx) = mpsc::channel(32);
-    let (mut handler, channel_id) =
-        HandshakeChannelHandler::new("networking".to_string(), messaging_tx.clone());
-    let handshake_t = tokio::spawn(async move {
-        match handler.run(handshake_rx).await {
-            Ok(_) => (),
-            Err(e) => {
-                error!(
-                    func = "init_status_service",
-                    package = PACKAGE_NAME,
-                    "error init/run status service: {:?}",
-                    e
-                );
-                bail!(NetworkingError::new(
-                    NetworkingErrorCodes::NetworkingInitError,
-                    format!("error init/run status service: {:?}", e),
-                    true
-                ));
+    async fn init_handshake_handler(
+        &mut self,
+    ) -> (task::JoinHandle<Result<()>>, mpsc::Sender<HandshakeMessage>) {
+        let (handshake_tx, handshake_rx) = mpsc::channel(32);
+        let (mut handler) = HandshakeChannelHandler::new(
+            "networking".to_string(),
+            self.messaging_tx.clone(),
+            handshake_tx.clone(),
+        );
+        self.handshake_handler = Some(handler.clone());
+        let handshake_t = tokio::spawn(async move {
+            match handler.run(handshake_rx).await {
+                Ok(_) => (),
+                Err(e) => {
+                    error!(
+                        func = "init_status_service",
+                        package = PACKAGE_NAME,
+                        "error init/run status service: {:?}",
+                        e
+                    );
+                    bail!(NetworkingError::new(
+                        NetworkingErrorCodes::NetworkingInitError,
+                        format!("error init/run status service: {:?}", e),
+                        true
+                    ));
+                }
             }
-        }
-        Ok(())
-    });
+            Ok(())
+        });
 
-    (handshake_t, handshake_tx, channel_id)
+        (handshake_t, handshake_tx)
+    }
 }

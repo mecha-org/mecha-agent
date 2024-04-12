@@ -35,6 +35,13 @@ struct NetworkDetails {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct ChannelDetails {
+    pub machine_id: String,
+    pub network_id: String,
+    pub channel: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 struct Candidates {
     local: Option<SocketAddr>,
     stun: Option<SocketAddr>,
@@ -56,19 +63,7 @@ pub async fn subscribe_to_nats(
     network_id: String,
 ) -> Result<NetworkingSubscriber> {
     let fn_name = "subscribe_to_nats";
-    // Get machine id
-    let machine_id = match get_machine_id(identity_tx.clone()).await {
-        Ok(id) => id,
-        Err(e) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "error getting machine id - {}",
-                e
-            );
-            bail!(e)
-        }
-    };
+
     let list_of_subjects = vec![NetworkingSubject::HandshakeRequest(format!(
         "network.{}.node.handshake.{channel_id}",
         sha256::digest(network_id.clone())
@@ -133,6 +128,7 @@ pub async fn subscribe_to_nats(
 pub async fn configure_wireguard(
     messaging_tx: Sender<MessagingMessage>,
     identity_tx: Sender<IdentityMessage>,
+    channel: String,
 ) -> Result<Wireguard> {
     let fn_name = "configure_wireguard";
     // read settings from settings.yml
@@ -203,31 +199,21 @@ pub async fn configure_wireguard(
             bail!(e)
         }
     };
+    // Exchange the channel details
     let (tx, rx) = tokio::sync::oneshot::channel();
     let subject = format!(
-        "machine.{}.networking.network.{}.node.{}",
+        "machine.{}.networking.network.{}.channel",
         digest(machine_id.clone()),
         digest(settings.networking.peer_settings.network_id.clone()),
-        digest(format!(
-            "{}:{}",
-            settings.networking.peer_settings.ipv4_address,
-            settings.networking.peer_settings.ipv6_address
-        ))
     );
-    let payload = NetworkDetails {
+    println!("subject to publish channel details: {:?}", subject);
+    let payload = ChannelDetails {
         machine_id: machine_id.clone(),
         network_id: settings.networking.peer_settings.network_id.clone(),
-        ipv4_addr: settings.networking.peer_settings.ipv4_address.clone(),
-        ipv6_addr: settings.networking.peer_settings.ipv6_address.clone(),
-        pub_key: keys.public_key.clone(),
-        candidates: Candidates {
-            local: None,
-            stun: None,
-            turn: None,
-        },
+        channel: channel,
     };
 
-    // Publish its own peer information
+    // Publish channel information
     let _ = match messaging_tx
         .send(MessagingMessage::Send {
             reply_to: tx,
@@ -261,6 +247,7 @@ pub async fn await_consumer_message(
     consumer: Consumer<Config>,
     messaging_tx: Sender<MessagingMessage>,
     wireguard: Wireguard,
+    channel: String,
 ) -> Result<bool> {
     println!("awaiting consumer message");
     let fn_name = "await_consumer_message";
@@ -298,6 +285,8 @@ pub async fn await_consumer_message(
             settings.networking.clone(),
             message.clone(),
             wireguard.clone(),
+            channel.clone(),
+            messaging_tx.clone(),
         )
         .await
         {
@@ -337,6 +326,8 @@ async fn process_message(
     settings: NetworkingSettings,
     message: Message,
     mut wireguard: Wireguard,
+    channel: String,
+    messaging_tx: Sender<MessagingMessage>,
 ) -> Result<bool> {
     let fn_name = "process_message";
     trace!(
@@ -345,37 +336,7 @@ async fn process_message(
         "processing message - {:?}",
         message
     );
-    let node_id_hash = digest(format!(
-        "{}:{}",
-        settings.peer_settings.ipv4_address, settings.peer_settings.ipv6_address
-    ));
-    // Do not process message if it is from same node
-    if message.subject.contains(&node_id_hash) {
-        info!(
-            func = fn_name,
-            package = PACKAGE_NAME,
-            "message from same node, ignoring"
-        );
-        match message.ack().await {
-            Ok(_) => {
-                println!("networking node message acknowledged")
-            }
-            Err(e) => {
-                error!(
-                    func = fn_name,
-                    package = PACKAGE_NAME,
-                    "error acknowledging message - {:?}",
-                    e
-                );
-                bail!(NetworkingError::new(
-                    NetworkingErrorCodes::MessageAcknowledgeError,
-                    format!("error acknowledging message - {:?}", e),
-                    true
-                ))
-            }
-        };
-        return Ok(true);
-    }
+
     // Process mesaage
     let payload_str = match std::str::from_utf8(&message.payload) {
         Ok(s) => s,
@@ -387,7 +348,7 @@ async fn process_message(
             ))
         }
     };
-    let request_payload: NetworkDetails = match serde_json::from_str(&payload_str) {
+    let request_payload: ChannelDetails = match serde_json::from_str(&payload_str) {
         Ok(s) => s,
         Err(e) => bail!(NetworkingError::new(
             NetworkingErrorCodes::PayloadDeserializationError,
@@ -395,23 +356,65 @@ async fn process_message(
             true
         )),
     };
-    let peer_configuration = PeerConfiguration {
-        name: request_payload.machine_id.clone(),
-        public_key: request_payload.pub_key.clone(),
-        endpoint: vec![],
-        allowed_ips: vec![],
-    };
-    println!("peer configuration {:?}", peer_configuration.clone());
-    match wireguard.add_peer(peer_configuration) {
-        Ok(_) => (),
+    // Do not process message if it is from same channel
+    // if channel.contains(&request_payload.channel) {
+    //     println!("channel id matched!");
+    //     info!(
+    //         func = fn_name,
+    //         package = PACKAGE_NAME,
+    //         "message from same node, ignoring"
+    //     );
+    //     match message.ack().await {
+    //         Ok(_) => {
+    //             println!("networking node message acknowledged")
+    //         }
+    //         Err(e) => {
+    //             error!(
+    //                 func = fn_name,
+    //                 package = PACKAGE_NAME,
+    //                 "error acknowledging message - {:?}",
+    //                 e
+    //             );
+    //             bail!(NetworkingError::new(
+    //                 NetworkingErrorCodes::MessageAcknowledgeError,
+    //                 format!("error acknowledging message - {:?}", e),
+    //                 true
+    //             ))
+    //         }
+    //     };
+    //     return Ok(true);
+    // }
+    let subject_to_publish_channel_info = format!(
+        "network.{}.node.handshake.{}",
+        digest(settings.peer_settings.network_id.clone()),
+        request_payload.channel.clone()
+    );
+    println!(
+        "subject to publish handshake request {}",
+        subject_to_publish_channel_info
+    );
+    let (tx, _) = oneshot::channel();
+    match messaging_tx
+        .send(MessagingMessage::Send {
+            reply_to: tx,
+            message: json!(request_payload).to_string(),
+            subject: subject_to_publish_channel_info,
+        })
+        .await
+    {
+        Ok(_) => {}
         Err(e) => {
             error!(
                 func = fn_name,
                 package = PACKAGE_NAME,
-                "error adding peer - {:?}",
+                "error sending get que subscriber for issue token- {}",
                 e
             );
-            bail!("error while adding peer {:?}", e)
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelSendMessageError,
+                format!("error sending subscriber message - {}", e),
+                true
+            ));
         }
     }
     match message.ack().await {
@@ -454,6 +457,18 @@ pub async fn create_pull_consumer(
                 "settings.yml not found, using default settings"
             );
             AgentSettings::default()
+        }
+    };
+    let machine_id = match get_machine_id(identity_tx.clone()).await {
+        Ok(id) => id,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                error = e.to_string().as_str(),
+                "Error getting machine id"
+            );
+            bail!(e)
         }
     };
     let (tx, rx) = oneshot::channel();
@@ -525,7 +540,11 @@ pub async fn create_pull_consumer(
         &consumer_name
     );
     let network_id = settings.networking.peer_settings.network_id.clone();
-    let filter_subject = format!("networking.networks.{}.nodes.*", digest(network_id));
+    let filter_subject = format!(
+        "networking.networks.{}.channels.{}",
+        digest(network_id),
+        digest(machine_id)
+    );
     println!("filter subject {:?}", filter_subject);
     let consumer = match jet_stream_client
         .create_consumer(stream, filter_subject, consumer_name.clone())
