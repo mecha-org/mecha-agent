@@ -39,8 +39,9 @@ jobs:
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           rustup default 1.75.0
+
       - name: Install cross
-        uses: cargo install cross --git https://github.com/cross-rs/cross --branch main
+        run: cargo install cross --git https://github.com/cross-rs/cross --branch main
 
       - name: Install cargo-deb
         run: cargo install cargo-deb
