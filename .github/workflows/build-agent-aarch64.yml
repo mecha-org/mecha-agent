@@ -71,7 +71,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt install \
-          libssl-dev \
+          libssl-dev:arm64 \
           libcrypto-dev:arm64
 
       - name: Build [${{ matrix.package }}]
