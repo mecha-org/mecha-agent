@@ -74,9 +74,7 @@ jobs:
           libssl-dev \
           libssl-dev:arm64 \
           libprotobuf-dev \
-          libprofobuf-dev:arm64 \
-          protobuf-compiler \
-          protobuf-compiler:arm64
+          protobuf-compiler
 
       - name: Build [${{ matrix.package }}]
         if: matrix.os == 'ubuntu-22.04'
