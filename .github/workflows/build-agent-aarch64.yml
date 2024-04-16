@@ -71,8 +71,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt install \
-          libssl-dev:arm64 \
-          libcrypto-dev:arm64
+          libssl-dev
 
       - name: Build [${{ matrix.package }}]
         if: matrix.os == 'ubuntu-22.04'
@@ -91,7 +90,7 @@ jobs:
         continue-on-error: true
         run: |
           cd ${{ matrix.path }}
-          cargo deb --no-build --target ${{matrix.target}} --package ${{ matrix.package }}
+          cargo deb --no-build --target ${{matrix.target}} --package ${{ matrix.package }} --no-strip
           ls -la
       - name: Prepare artifacts [${{ matrix.package }}]
         if: matrix.os == 'ubuntu-22.04'
