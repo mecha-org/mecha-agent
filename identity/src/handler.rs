@@ -38,7 +38,11 @@ impl IdentityHandler {
         }
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<IdentityMessage>) -> Result<()> {
-        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
+        info!(
+            func = "run",
+            package = env!("CARGO_PKG_NAME"),
+            "identity service initiated"
+        );
         // Start the service
         let _ = &self.start().await;
         loop {

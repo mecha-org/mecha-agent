@@ -14,7 +14,7 @@ use nats_client::{
     Bytes, Message,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{de, json};
 use sha256::digest;
 use tokio::sync::{broadcast, mpsc::Sender, oneshot};
 use tracing::{debug, error, info, trace};
@@ -82,11 +82,6 @@ pub async fn create_pull_consumer(
             ))
         }
     };
-    debug!(
-        func = fn_name,
-        package = PACKAGE_NAME,
-        "jetstream client created"
-    );
     let stream_name = "machine_settings";
     let stream = match jet_stream_client.get_stream(stream_name.to_string()).await {
         Ok(s) => s,
@@ -166,7 +161,7 @@ pub async fn create_pull_consumer(
             bail!(e)
         }
     };
-
+    info!(func = fn_name, package = PACKAGE_NAME, "consumer created");
     Ok(consumer)
 }
 pub async fn sync_settings(
@@ -206,7 +201,7 @@ pub async fn sync_settings(
             ),
         };
     }
-    debug!(
+    trace!(
         func = fn_name,
         package = PACKAGE_NAME,
         "message delivery acknowledged"
@@ -236,6 +231,11 @@ pub async fn sync_settings(
             ))
         }
     }
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "settings synced successfully"
+    );
     Ok(true)
 }
 pub async fn await_settings_message(
@@ -276,7 +276,11 @@ pub async fn await_settings_message(
 
         // Acknowledges a message delivery
         match message.ack().await {
-            Ok(res) => println!("message Acknowledged {:?}", res),
+            Ok(_res) => trace!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "message Acknowledged",
+            ),
             Err(err) => {
                 error!(
                     func = fn_name,
@@ -287,16 +291,11 @@ pub async fn await_settings_message(
             }
         };
     }
-    info!(
-        func = fn_name,
-        package = PACKAGE_NAME,
-        "message delivery acknowledged"
-    );
     Ok(true)
 }
 
 pub async fn get_settings_by_key(key: String) -> Result<String> {
-    trace!(
+    debug!(
         func = "get_settings_by_key",
         package = PACKAGE_NAME,
         "getting settings by key - {:?}",
@@ -326,6 +325,12 @@ pub async fn set_settings(
     event_tx: broadcast::Sender<Event>,
     settings: HashMap<String, String>,
 ) -> Result<bool> {
+    debug!(
+        func = "set_settings",
+        package = PACKAGE_NAME,
+        "set settings - {:?}",
+        settings
+    );
     let mut key_value_store = KeyValueStoreClient::new();
     let result = match key_value_store.set(settings.clone()) {
         Ok(s) => s,
@@ -372,7 +377,7 @@ async fn process_message(
     event_tx: broadcast::Sender<Event>,
 ) -> Result<bool> {
     let fn_name = "process_message";
-    trace!(
+    debug!(
         func = fn_name,
         package = PACKAGE_NAME,
         "processing message - {:?}",
@@ -381,7 +386,15 @@ async fn process_message(
     // Process mesaage
     let add_task_payload: AddTaskRequestPayload =
         match parse_message_payload(message.payload.clone()) {
-            Ok(s) => s,
+            Ok(s) => {
+                debug!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "message payload parsed - {:?}",
+                    s
+                );
+                s
+            }
             Err(e) => {
                 error!(
                     func = fn_name,
@@ -392,6 +405,11 @@ async fn process_message(
                 bail!(e)
             }
         };
+    trace!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "message payload parsed"
+    );
     let mut settings_payload: HashMap<String, String> = HashMap::new();
     settings_payload.insert(add_task_payload.key, add_task_payload.value);
     match set_settings(event_tx.clone(), settings_payload).await {
@@ -410,12 +428,6 @@ async fn process_message(
     let ack_payload = SettingsAckPayload {
         status: "SYNC_COMPLETE".to_string(),
     };
-    debug!(
-        func = fn_name,
-        package = PACKAGE_NAME,
-        "ack payload - {:?}",
-        ack_payload
-    );
 
     // Specify the header name you want to retrieve
     let header_name = "Ack-To";
@@ -447,7 +459,9 @@ async fn process_message(
             })
             .await
         {
-            Ok(_) => {}
+            Ok(_) => {
+                trace!(func = fn_name, package = PACKAGE_NAME, "ack message sent")
+            }
             Err(err) => {
                 error!(
                     func = fn_name,
@@ -471,7 +485,7 @@ async fn process_message(
         bail!(DeviceSettingError::new(
             DeviceSettingErrorCodes::AckHeaderNotFoundError,
             format!("ack header not found"),
-            true
+            false
         ));
     }
     info!(
@@ -482,51 +496,13 @@ async fn process_message(
     Ok(true)
 }
 
-async fn get_machine_id(identity_tx: Sender<IdentityMessage>) -> Result<String> {
-    let (tx, rx) = oneshot::channel();
-    match identity_tx
-        .send(IdentityMessage::GetMachineId { reply_to: tx })
-        .await
-    {
-        Ok(_) => {}
-        Err(err) => {
-            error!(
-                func = "get_machine_id",
-                package = PACKAGE_NAME,
-                "error sending get machine id message - {:?}",
-                err
-            );
-            bail!(DeviceSettingError::new(
-                DeviceSettingErrorCodes::ChannelSendMessageError,
-                format!(
-                    "error sending get machine id message - {:?}",
-                    err.to_string()
-                ),
-                true
-            ))
-        }
-    }
-
-    let machine_id = match recv_with_timeout(rx).await {
-        Ok(machine_id) => machine_id,
-        Err(err) => {
-            error!(
-                func = "get_machine_id",
-                package = PACKAGE_NAME,
-                "error receiving get machine id message - {:?}",
-                err
-            );
-            bail!(DeviceSettingError::new(
-                DeviceSettingErrorCodes::ChannelReceiveMessageError,
-                format!("error receiving get machine id message - {:?}", err),
-                true
-            ))
-        }
-    };
-    Ok(machine_id)
-}
-
 fn parse_message_payload(payload: Bytes) -> Result<AddTaskRequestPayload> {
+    debug!(
+        func = "parse_message_payload",
+        package = PACKAGE_NAME,
+        "parsing message payload - {:?}",
+        payload
+    );
     let payload_value = match std::str::from_utf8(&payload) {
         Ok(s) => s,
         Err(e) => {

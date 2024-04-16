@@ -58,11 +58,8 @@ impl ProvisioningHandler {
     }
 
     pub async fn subscribe_to_nats(&mut self) -> Result<()> {
-        info!(
-            func = "subscribe_to_nats",
-            package = env!("CARGO_PKG_NAME"),
-            "init"
-        );
+        let fn_name = "subscribe_to_nats";
+        info!(func = fn_name, package = PACKAGE_NAME, "init");
 
         // safety: check for existing cancel token, and cancel it
         let exist_subscriber_token = &self.subscriber_token;
@@ -106,7 +103,7 @@ impl ProvisioningHandler {
                 select! {
                         _ = subscriber_token.cancelled() => {
                             info!(
-                                func = "subscribe_to_nats",
+                                func = fn_name,
                                 package = PACKAGE_NAME,
                                 result = "success",
                                 "subscribe to nats cancelled"
@@ -116,14 +113,7 @@ impl ProvisioningHandler {
                     result = futures.join_next() => {
                         if result.unwrap().is_ok() {}
                     },
-                    _ = timer.tick() => {
-                        info!(
-                            func = "subscribe_to_nats",
-                            package = PACKAGE_NAME,
-                            result = "success",
-                            "subscribe to nats timer tick"
-                        );
-                    }
+                    _ = timer.tick() => {}
                 }
             }
             // return Ok(());
@@ -142,7 +132,12 @@ impl ProvisioningHandler {
         Ok(true)
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<ProvisioningMessage>) -> Result<()> {
-        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
+        let fn_name = "run";
+        info!(
+            fn_name,
+            package = PACKAGE_NAME,
+            "provisioning service initiated"
+        );
         let mut event_rx = self.event_tx.subscribe();
         loop {
             select! {
@@ -181,8 +176,8 @@ impl ProvisioningHandler {
                     match event.unwrap() {
                         Event::Messaging(events::MessagingEvent::Connected) => {
                             info!(
-                                func = "run",
-                                package = env!("CARGO_PKG_NAME"),
+                                func = fn_name,
+                                package = PACKAGE_NAME,
                                 "connected event in provisioning"
                             );
                             // start
@@ -190,8 +185,8 @@ impl ProvisioningHandler {
                                 Ok(_) => {},
                                 Err(e) => {
                                     error!(
-                                        func = "run",
-                                        package = env!("CARGO_PKG_NAME"),
+                                        func = fn_name,
+                                        package = PACKAGE_NAME,
                                         "subscribe to nats error - {:?}",
                                         e
                                     );
@@ -200,16 +195,16 @@ impl ProvisioningHandler {
                         },
                         Event::Messaging(events::MessagingEvent::Disconnected) => {
                             info!(
-                                func = "run",
-                                package = env!("CARGO_PKG_NAME"),
+                                func = fn_name,
+                                package = PACKAGE_NAME,
                                 "disconnected event in provisioning"
                             );
                             let _ = &self.clear_nats_subscription();
                         },
                         Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
                             info!(
-                                func = "run",
-                                package = env!("CARGO_PKG_NAME"),
+                                func = fn_name,
+                                package = PACKAGE_NAME,
                                 "deprovisioned event in provisioning"
                             );
                             let _ = &self.clear_nats_subscription();

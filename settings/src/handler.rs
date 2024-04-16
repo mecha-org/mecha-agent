@@ -72,7 +72,7 @@ impl SettingHandler {
                 Err(e) => {
                     error!(
                         func = fn_name,
-                        package = env!("CARGO_PKG_NAME"),
+                        package = PACKAGE_NAME,
                         "error creating pull consumer, error -  {:?}",
                         e
                     );
@@ -188,7 +188,12 @@ impl SettingHandler {
         Ok(true)
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<SettingMessage>) -> Result<()> {
-        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
+        let fn_name = "run";
+        info!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "settings service initiated"
+        );
         let mut event_rx = self.event_tx.subscribe();
         loop {
             select! {
@@ -224,18 +229,18 @@ impl SettingHandler {
                     }
                     match event.unwrap() {
                         Event::Messaging(events::MessagingEvent::Connected) => {
-                            info!(
-                                func = "run",
-                                package = env!("CARGO_PKG_NAME"),
+                            info!{
+                                func = fn_name,
+                                package = PACKAGE_NAME,
                                 "connected event in settings service"
-                            );
+                            }
                             let _ = self.sync_settings().await;
                             let _ = self.settings_consumer().await;
                         }
                         Event::Messaging(events::MessagingEvent::Disconnected) => {
                             info!(
-                                func = "run",
-                                package = env!("CARGO_PKG_NAME"),
+                                func = fn_name,
+                                package = PACKAGE_NAME,
                                 "disconnected event in settings service"
                             );
                             let _ = self.clear_sync_settings_subscriber();
@@ -243,8 +248,8 @@ impl SettingHandler {
                         }
                         Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
                             info!(
-                                func = "run",
-                                package = env!("CARGO_PKG_NAME"),
+                                func = fn_name,
+                                package = PACKAGE_NAME,
                                 "deprovisioned event in settings service"
                             );
                             let _ = self.clear_sync_settings_subscriber();

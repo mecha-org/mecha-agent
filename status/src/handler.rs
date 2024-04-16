@@ -94,7 +94,11 @@ impl StatusHandler {
     }
 
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<StatusMessage>) -> Result<()> {
-        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
+        info!(
+            func = "run",
+            package = env!("CARGO_PKG_NAME"),
+            "status service initiated"
+        );
         let mut event_rx = self.event_tx.subscribe();
         loop {
             select! {
