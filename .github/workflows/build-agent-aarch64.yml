@@ -47,7 +47,7 @@ jobs:
         run: cargo install cargo-deb
 
       - name: Install gcc for arm64
-        run: sudo apt install gcc-11-aarch64-linux-gnu
+        run: sudo apt install -y gcc-11-aarch64-linux-gnu
 
       - name: Add arm64 architecture
         run: sudo dpkg --add-architecture arm64
@@ -72,9 +72,6 @@ jobs:
         run: |
           sudo apt install \
           libssl-dev \
-          libssl-dev:arm64 \
-          libprotobuf-dev \
-          protobuf-compiler
 
       - name: Build [${{ matrix.package }}]
         if: matrix.os == 'ubuntu-22.04'
