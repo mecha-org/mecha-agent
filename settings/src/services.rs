@@ -192,7 +192,13 @@ pub async fn sync_settings(
             process_message(message.clone(), messaging_tx.clone(), event_tx.clone()).await;
         // Acknowledges a message delivery
         match message.ack().await {
-            Ok(res) => println!("message Acknowledged {:?}", res),
+            Ok(res) => {
+                trace!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "message Acknowledged",
+                )
+            }
             Err(err) => error!(
                 func = fn_name,
                 package = PACKAGE_NAME,

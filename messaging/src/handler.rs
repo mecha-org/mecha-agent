@@ -171,9 +171,7 @@ impl ServiceHandler for MessagingHandler {
                 .await
             {
                 Ok(_) => {}
-                Err(e) => {
-                    println!("Error connecting to messaging service: {:?}", e);
-                }
+                Err(e) => {}
             };
         }
         Ok(true)

@@ -62,7 +62,6 @@ impl NetworkingHandler {
         .await
         {
             Ok(networking_init_res) => {
-                println!("networking process started: {:?}", networking_init_res);
                 nebula_process = Some(networking_init_res.nebula_process);
             }
             Err(e) => {

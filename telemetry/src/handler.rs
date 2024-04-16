@@ -12,7 +12,7 @@ use tokio::{
     select,
     sync::{broadcast, mpsc, oneshot},
 };
-use tracing::info;
+use tracing::{error, info};
 
 pub struct TelemetryHandler {
     event_tx: broadcast::Sender<Event>,
@@ -83,10 +83,19 @@ impl TelemetryHandler {
                 }
                 match event.unwrap() {
                     Event::Messaging(events::MessagingEvent::Connected) => {
-                        println!("messaging connected");
                         match initialize_metrics().await {
-                            Ok(_) => println!("metrics initialized"),
-                            Err(e) => println!("error initializing metrics: {:?}", e),
+                            Ok(_) => {
+                                info!(
+                                    func = "run",
+                                    package = env!("CARGO_PKG_NAME"),
+                                    "metrics initialized"
+                                );
+                            },
+                            Err(e) => error!(
+                                func = "run",
+                                package = env!("CARGO_PKG_NAME"),
+                                "failed to initialize metrics - {:?}",e
+                            ),
                         }
                     },
                     _ => {}

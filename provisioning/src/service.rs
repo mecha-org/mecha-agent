@@ -581,7 +581,6 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
                 package = PACKAGE_NAME,
                 "certificates deleted successfully"
             );
-            println!("certificates deleted successfully")
         }
         Err(e) => {
             error!(
@@ -652,7 +651,6 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
     let key_value_store = KeyValueStoreClient::new();
     match key_value_store.flush_database() {
         Ok(_) => {
-            println!("db flushed successfully");
             trace!(
                 func = fn_name,
                 package = PACKAGE_NAME,

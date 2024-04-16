@@ -86,7 +86,6 @@ pub fn generate_rsa_private_key(file_path: &str) -> Result<bool> {
             ))
         }
     };
-    println!("parent_directory: {:?}", parent_directory);
     if !parent_directory.exists() {
         let _res = safe_create_dir(&file_path);
     }

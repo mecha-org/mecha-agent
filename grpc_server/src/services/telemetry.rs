@@ -39,13 +39,9 @@ impl LogsService for LogsAgent {
         &self,
         request: Request<ExportLogsServiceRequest>,
     ) -> Result<Response<ExportLogsServiceResponse>, Status> {
-        println!("logs request received");
         let binding = request.metadata().clone();
         let logs_type = match binding.get("user") {
-            Some(v) => {
-                println!("User: {:?}", v.to_str().unwrap());
-                v.to_str().unwrap()
-            }
+            Some(v) => v.to_str().unwrap(),
             None => "User",
         };
         let logs = request.into_inner().clone().resource_logs;
@@ -87,16 +83,11 @@ impl MetricsService for MetricsAgent {
         &self,
         request: Request<ExportMetricsServiceRequest>,
     ) -> Result<Response<ExportMetricsServiceResponse>, Status> {
-        println!("metrics request received");
         let binding = request.metadata().clone();
         let metrics_type = match binding.get("user") {
-            Some(v) => {
-                println!("User: {:?}", v.to_str().unwrap());
-                v.to_str().unwrap()
-            }
+            Some(v) => v.to_str().unwrap(),
             None => "User",
         };
-        println!("metrics type: {}", metrics_type);
         let metrics = request.into_inner().clone().resource_metrics;
         // to print metrics value
         /*for met in metrics.iter() {

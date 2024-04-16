@@ -99,7 +99,6 @@ impl SettingHandler {
                             return Ok(());
                     },
                     result = futures.join_next() => {
-                        println!("result {:?}", result);
                         return Ok(());
                     },
                 }
