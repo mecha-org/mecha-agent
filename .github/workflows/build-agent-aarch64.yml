@@ -72,6 +72,7 @@ jobs:
         run: |
           sudo apt install \
           libssl-dev \
+          libcrypto-dev:arm64
 
       - name: Build [${{ matrix.package }}]
         if: matrix.os == 'ubuntu-22.04'
