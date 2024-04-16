@@ -18,7 +18,7 @@ pub fn get_provision_status() -> Result<bool> {
             error!(
                 func = fn_name,
                 package = PACKAGE_NAME,
-                "failed to read settings.yml: {:?}",
+                "failed to read provisioning paths from settings.yml: {:?}",
                 e
             );
             bail!(e)

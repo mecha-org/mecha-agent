@@ -16,6 +16,7 @@ use futures::StreamExt;
 use identity::handler::IdentityMessage;
 
 use kv_store::KeyValueStoreClient;
+use messaging::async_nats::error;
 use messaging::handler::MessagingMessage;
 use messaging::Bytes;
 use messaging::Subscriber as NatsSubscriber;
@@ -129,6 +130,12 @@ pub async fn subscribe_to_nats(
             sha256::digest(machine_id.clone())
         )),
     ];
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "list of subjects - {:?}",
+        list_of_subjects
+    );
     let mut provisioning_subscribers = ProvisioningSubscriber::default();
     // Iterate over everything.
     for subject in list_of_subjects {
@@ -192,12 +199,13 @@ pub async fn subscribe_to_nats(
 }
 
 pub async fn ping() -> Result<PingResponse> {
-    trace!(func = "ping", package = PACKAGE_NAME, "init",);
+    let fn_name = "ping";
+    trace!(func = fn_name, package = PACKAGE_NAME, "init");
     let settings: AgentSettings = match read_settings_yml() {
         Ok(settings) => settings,
         Err(_) => {
             warn!(
-                func = "ping",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "settings.yml not found, using default settings"
             );
@@ -215,7 +223,7 @@ pub async fn ping() -> Result<PingResponse> {
         .header("ACCEPT", "application/json")
         .send()
         .await;
-    println!("result {:?}", result);
+
     match result {
         Ok(res) => {
             //step-ca returns error payload with 200 status code, error is inside payload
@@ -379,13 +387,6 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
             bail!(e)
         } // throw error from manifest lookup
     };
-
-    info!(
-        func = fn_name,
-        package = PACKAGE_NAME,
-        "manifest response :{:?}",
-        manifest
-    );
     match perform_cryptography_operation(
         manifest.machine_id,
         manifest.cert_sign_url,
@@ -407,7 +408,7 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
     }
 
     match event_tx.send(Event::Provisioning(events::ProvisioningEvent::Provisioned)) {
-        Ok(_) => debug!(
+        Ok(_) => trace!(
             func = fn_name,
             package = PACKAGE_NAME,
             "provisioning event sent successfully"
@@ -446,7 +447,7 @@ async fn perform_cryptography_operation(
     let fn_name = "perform_cryptography_operation";
     // 2. Generate the private key based
     match generate_rsa_private_key(&settings.provisioning.paths.machine.private_key) {
-        Ok(_) => debug!(
+        Ok(_) => trace!(
             func = fn_name,
             package = PACKAGE_NAME,
             "private key generated successfully"
@@ -468,7 +469,7 @@ async fn perform_cryptography_operation(
         &settings.provisioning.paths.machine.private_key,
         machine_id.as_str().clone(),
     ) {
-        Ok(_) => debug!(
+        Ok(_) => trace!(
             func = fn_name,
             package = PACKAGE_NAME,
             "csr generated successfully"
@@ -515,6 +516,12 @@ async fn perform_cryptography_operation(
     let ca_bundle_str = match serde_json::to_string(&signed_certificates.ca_bundle) {
         Ok(res) => res,
         Err(err) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error converting ca_bundle to string - {}",
+                err
+            );
             bail!(err)
         }
     };
@@ -526,11 +533,10 @@ async fn perform_cryptography_operation(
         ca_bundle_str.as_bytes(),
     ) {
         Ok(result) => {
-            debug!(
+            trace!(
                 func = fn_name,
                 package = PACKAGE_NAME,
-                "certificates written successfully, result - {}",
-                result
+                "certificates written successfully",
             );
             result
         }
@@ -548,12 +554,13 @@ async fn perform_cryptography_operation(
 }
 
 pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
-    trace!(func = "de_provision", package = PACKAGE_NAME, "init",);
+    let fn_name = "de_provision";
+    trace!(func = fn_name, package = PACKAGE_NAME, "init",);
     let settings: AgentSettings = match read_settings_yml() {
         Ok(settings) => settings,
         Err(_) => {
             warn!(
-                func = "de_provision",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "settings.yml not found, using default settings"
             );
@@ -569,11 +576,15 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
         &settings.provisioning.paths.root.cert,
     ]) {
         Ok(_) => {
-            println!("certificates deleted successfully")
+            trace!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "certificates deleted successfully"
+            );
         }
         Err(e) => {
             error!(
-                func = "de_provision",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error deleting certs - {}",
                 e
@@ -586,14 +597,14 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
     match event_tx.send(Event::Provisioning(
         events::ProvisioningEvent::Deprovisioned,
     )) {
-        Ok(_) => debug!(
-            func = "de_provision",
+        Ok(_) => trace!(
+            func = fn_name,
             package = PACKAGE_NAME,
             "de provisioning event sent successfully"
         ),
         Err(e) => {
             error!(
-                func = "de_provision",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error sending de provisioning event - {}",
                 e
@@ -611,7 +622,7 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
     let db_path = match construct_dir_path(&settings.settings.storage.path) {
         Ok(path) => {
             debug!(
-                func = "de_provision",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "db path constructed {:?}",
                 path.display()
@@ -620,7 +631,7 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
         }
         Err(e) => {
             error!(
-                func = "de_provision",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error constructing db path - {}",
                 e
@@ -640,16 +651,15 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
     let key_value_store = KeyValueStoreClient::new();
     match key_value_store.flush_database() {
         Ok(_) => {
-            println!("db flushed successfully");
-            debug!(
-                func = "de_provision",
+            trace!(
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "db flushed successfully"
             )
         }
         Err(e) => {
             error!(
-                func = "de_provision",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error flushing db - {}",
                 e
@@ -661,7 +671,7 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
     match fs::remove_dir_all(&db_path) {
         Ok(_) => {
             debug!(
-                func = "de_provision",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "db deleted successfully from path - {:?}",
                 &db_path
@@ -669,7 +679,7 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
         }
         Err(e) => {
             error!(
-                func = "de_provision",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error deleting db, from path {:?}, error - {}",
                 &db_path,
@@ -684,7 +694,7 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
     }
 
     info!(
-        func = "de_provision",
+        func = fn_name,
         package = PACKAGE_NAME,
         result = "success",
         "de provisioned successful",
@@ -693,8 +703,9 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
 }
 
 async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<ProvisioningManifest> {
-    trace!(
-        func = "lookup_manifest",
+    let fn_name = "lookup_manifest";
+    debug!(
+        func = fn_name,
         package = PACKAGE_NAME,
         "init, code - {:?}",
         code
@@ -704,7 +715,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
         settings.provisioning.server_url, code
     );
     debug!(
-        func = "lookup_manifest",
+        func = fn_name,
         package = PACKAGE_NAME,
         "looking for manifest at url - {:?}",
         url
@@ -716,7 +727,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
         Err(e) => match e.status() {
             Some(StatusCode::INTERNAL_SERVER_ERROR) => {
                 error!(
-                    func = "lookup_manifest",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "manifest find endpoint url returned internal server error for url - {}",
                     e
@@ -729,7 +740,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
             }
             Some(StatusCode::BAD_REQUEST) => {
                 error!(
-                    func = "lookup_manifest",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "manifest find endpoint url returned bad request - {}",
                     e
@@ -742,7 +753,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
             }
             Some(StatusCode::NOT_FOUND) => {
                 error!(
-                    func = "lookup_manifest",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "manifest find endpoint url not found - {}",
                     e
@@ -755,7 +766,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
             }
             Some(_) => {
                 error!(
-                    func = "lookup_manifest",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "manifest find endpoint url returned unknown error - {}",
                     e
@@ -768,7 +779,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
             }
             None => {
                 error!(
-                    func = "lookup_manifest",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "manifest find endpoint url returned unknown error - {}",
                     e
@@ -792,7 +803,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
     {
         Ok(parse_manifest) => {
             debug!(
-                func = "lookup_manifest",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "manifest lookup response - {:?}",
                 parse_manifest
@@ -801,7 +812,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
         }
         Err(e) => {
             error!(
-                func = "lookup_manifest",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error parsing manifest lookup response - {}",
                 e
@@ -815,7 +826,7 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
     };
 
     info!(
-        func = "lookup_manifest",
+        func = fn_name,
         package = PACKAGE_NAME,
         result = "success",
         "manifest lookup successful"
@@ -829,8 +840,9 @@ fn write_certificates_to_path(
     cert: &[u8],
     ca_bundle: &[u8],
 ) -> Result<bool> {
-    trace!(
-        func = "write_certificates_to_path",
+    let fn_name = "write_certificates_to_path";
+    debug!(
+        func = fn_name,
         package = PACKAGE_NAME,
         "cert path - {}",
         certificate_paths.machine.cert,
@@ -839,14 +851,14 @@ fn write_certificates_to_path(
     // save the machine certificate
     match safe_write_to_path(&certificate_paths.machine.cert, cert) {
         Ok(_) => debug!(
-            func = "write_file",
+            func = fn_name,
             package = PACKAGE_NAME,
             "machine certificate saved in path - {}",
             &certificate_paths.machine.cert
         ),
         Err(e) => {
             error!(
-                func = "write_file",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error saving machine certificate in path - {} - {}",
                 &certificate_paths.machine.cert,
@@ -866,14 +878,14 @@ fn write_certificates_to_path(
     // save the intermediate certificate
     match safe_write_to_path(&certificate_paths.ca_bundle.cert, ca_bundle) {
         Ok(_) => debug!(
-            func = "write_file",
+            func = fn_name,
             package = PACKAGE_NAME,
             "ca_bundle certificate saved in path - {}",
             &certificate_paths.ca_bundle.cert
         ),
         Err(e) => {
             error!(
-                func = "write_file",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error saving ca_bundle certificate in path - {} - {}",
                 &certificate_paths.ca_bundle.cert,
@@ -893,14 +905,14 @@ fn write_certificates_to_path(
     // save the root certificate
     match safe_write_to_path(&certificate_paths.root.cert, root_cert) {
         Ok(_) => debug!(
-            func = "write_file",
+            func = fn_name,
             package = PACKAGE_NAME,
             "root certificate saved in path - {}",
             &certificate_paths.root.cert
         ),
         Err(e) => {
             error!(
-                func = "write_file",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error saving root certificate in path - {} - {}",
                 &certificate_paths.root.cert,
@@ -918,7 +930,7 @@ fn write_certificates_to_path(
     }
 
     info!(
-        func = "write_certificates_to_path",
+        func = fn_name,
         package = PACKAGE_NAME,
         result = "success",
         "certificates written successfully"
@@ -933,8 +945,9 @@ async fn sign_csr(
     cert_signing_url: &str,
     request_type: CertSignRequestType,
 ) -> Result<SignedCertificates> {
-    trace!(
-        func = "sign_csr",
+    let fn_name = "sign_csr";
+    debug!(
+        func = fn_name,
         package = PACKAGE_NAME,
         "init, request_url {}, csr_sign_url {}",
         request_url,
@@ -944,7 +957,7 @@ async fn sign_csr(
     let constructed_path = match construct_dir_path(csr_path) {
         Ok(path) => {
             debug!(
-                func = "sign_csr",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "csr path constructed {:?}",
                 path.display()
@@ -953,7 +966,7 @@ async fn sign_csr(
         }
         Err(e) => {
             error!(
-                func = "sign_csr",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error constructing csr path - {}",
                 e
@@ -968,7 +981,7 @@ async fn sign_csr(
     let csr_pem = match fs::read_to_string(constructed_path) {
         Ok(csr_str) => {
             debug!(
-                func = "sign_csr",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "read csr as string - {:?}",
                 csr_str
@@ -977,7 +990,7 @@ async fn sign_csr(
         }
         Err(e) => {
             error!(
-                func = "sign_csr",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error reading csr as string - {}",
                 e
@@ -999,10 +1012,8 @@ async fn sign_csr(
 
     // Format url for signing the csr
     let url = format!("{}{}", request_url, cert_signing_url);
-    println!("request url for sign csr: {:?}", url);
-
     debug!(
-        func = "sign_csr",
+        func = fn_name,
         package = PACKAGE_NAME,
         "sign csr url formatted successfully - {:?}",
         url
@@ -1021,7 +1032,7 @@ async fn sign_csr(
         Err(e) => match e.status() {
             Some(StatusCode::INTERNAL_SERVER_ERROR) => {
                 error!(
-                    func = "sign_csr",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "csr sign url returned internal server error - {}",
                     e
@@ -1034,7 +1045,7 @@ async fn sign_csr(
             }
             Some(StatusCode::BAD_REQUEST) => {
                 error!(
-                    func = "sign_csr",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "csr sign url returned bad request - {}",
                     e
@@ -1047,7 +1058,7 @@ async fn sign_csr(
             }
             Some(StatusCode::NOT_FOUND) => {
                 error!(
-                    func = "sign_csr",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "csr sign url not found - {}",
                     e
@@ -1060,7 +1071,7 @@ async fn sign_csr(
             }
             Some(_) => {
                 error!(
-                    func = "sign_csr",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "csr sign url returned unknown error - {}",
                     e
@@ -1083,7 +1094,7 @@ async fn sign_csr(
             Ok(v) => v,
             Err(e) => {
                 error!(
-                    func = "sign_csr",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "error parsing csr sign response - {}",
                     e
@@ -1096,7 +1107,7 @@ async fn sign_csr(
             }
         };
     info!(
-        func = "sign_csr",
+        func = fn_name,
         package = PACKAGE_NAME,
         result = "success",
         "csr signed successfully"
@@ -1280,10 +1291,10 @@ async fn process_re_issue_certificate_request(subject: String, payload: Bytes) -
     let settings = match read_settings_yml() {
         Ok(res) => res,
         Err(err) => {
-            error!(
+            warn!(
                 func = fn_name,
                 package = PACKAGE_NAME,
-                "error while deserializing message payload - {:?}",
+                "failed to read settings yml file - {}",
                 err
             );
             AgentSettings::default()
@@ -1293,6 +1304,12 @@ async fn process_re_issue_certificate_request(subject: String, payload: Bytes) -
     let payload_str = match std::str::from_utf8(&payload) {
         Ok(s) => s,
         Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error converting payload to string - {}",
+                e
+            );
             bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::ExtractMessagePayloadError,
                 format!("error converting payload to string - {}", e),
@@ -1301,7 +1318,15 @@ async fn process_re_issue_certificate_request(subject: String, payload: Bytes) -
         }
     };
     let request_payload: ReIssueCertificateRequest = match serde_json::from_str(&payload_str) {
-        Ok(s) => s,
+        Ok(s) => {
+            debug!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "re issue certificate request payload - {:?}",
+                s
+            );
+            s
+        }
         Err(e) => {
             error!(
                 func = fn_name,
@@ -1347,5 +1372,10 @@ async fn process_re_issue_certificate_request(subject: String, payload: Bytes) -
             bail!(e)
         }
     }
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "re_issue certificate request processed!"
+    );
     Ok(true)
 }

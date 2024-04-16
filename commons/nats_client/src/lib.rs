@@ -289,8 +289,7 @@ impl NatsClient {
         info!(
             func = "subscribe",
             package = PACKAGE_NAME,
-            "nats client subscribed to subject - {}",
-            subject
+            "nats client subscribed to subject ",
         );
         Ok(subscriber)
     }

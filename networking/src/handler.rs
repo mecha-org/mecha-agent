@@ -62,7 +62,6 @@ impl NetworkingHandler {
         .await
         {
             Ok(networking_init_res) => {
-                println!("networking process started: {:?}", networking_init_res);
                 nebula_process = Some(networking_init_res.nebula_process);
             }
             Err(e) => {
@@ -130,7 +129,11 @@ impl NetworkingHandler {
     }
 
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<NetworkingMessage>) -> Result<()> {
-        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
+        info!(
+            func = "run",
+            package = env!("CARGO_PKG_NAME"),
+            "networking service initiated"
+        );
         let fn_name = "run";
         // Start the service
         let mut event_rx = self.event_tx.subscribe();
