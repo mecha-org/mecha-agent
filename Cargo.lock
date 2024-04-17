@@ -543,6 +543,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tokio",
  "tonic 0.10.2",
  "tracing",
  "x509-certificate",
@@ -1559,6 +1560,7 @@ dependencies = [
  "services",
  "tokio",
  "tonic 0.10.2",
+ "tonic-types",
  "tracing",
 ]
 
@@ -1923,6 +1925,7 @@ dependencies = [
  "sha256",
  "tokio",
  "tonic 0.10.2",
+ "tonic-types",
  "tracing",
 ]
 
@@ -2039,6 +2042,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tonic 0.10.2",
+ "tonic-types",
  "tracing",
  "tracing-subscriber",
  "zip",
@@ -2965,6 +2969,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "channel",
+ "chrono",
  "crypto",
  "events",
  "fs",
@@ -2978,12 +2983,15 @@ dependencies = [
  "sentry-tracing",
  "serde",
  "serde_json",
+ "serde_yaml",
  "services",
  "sha256",
  "tokio",
  "tokio-util",
  "tonic 0.10.2",
+ "tonic-types",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

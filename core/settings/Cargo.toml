@@ -10,12 +10,11 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = { version = "1.0.71", features = ["backtrace"]}
-sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
-serde_json = "1.0.33"
-serde_yaml = "0.9.21"
-serde = { version  = "1.0.159", features = ["derive"]}
-tonic = "0.10.2"
-tracing = "0.1"
-
-dotenv = "0.15.0"
+anyhow = { workspace = true }
+tonic = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+sentry-anyhow = { workspace = true }
+dotenv = { workspace = true }

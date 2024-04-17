@@ -12,8 +12,8 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = { version = "1.0.71", features = ["backtrace"]}
+anyhow = { workspace = true }
+tracing = { workspace = true }
+sentry-anyhow = { workspace = true }
 mkdirp = "1.0.0"
 dirs = "5.0.1"
-tracing = "0.1"
-sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}

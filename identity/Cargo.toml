@@ -15,8 +15,8 @@ services = { path = "../core/services" }
 agent_settings = { path = "../core/settings" }
 crypto = { path = "../commons/crypto" }
 fs = { path = "../commons/fs" }
-anyhow = { version = "1.0.71", features = ["backtrace"]}
-tonic = "0.10.2"
-tracing = "0.1"
-
-tokio = { version = "1.27.0", features = ["full"] }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true }
+tonic-types = { workspace = true }
+tracing = { workspace = true }
