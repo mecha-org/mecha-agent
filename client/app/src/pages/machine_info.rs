@@ -4,8 +4,8 @@ use crate::{
     handlers::machine_info::handler::get_status,
     services::{get_machine_info, MachineInformation},
     settings::{Modules, WidgetConfigs},
+    utils,
 };
-use custom_utils::{get_image_bytes, get_image_from_path, get_image_from_url};
 use gtk::prelude::*;
 use relm4::{
     component::{AsyncComponent, AsyncComponentParts},
@@ -20,6 +20,7 @@ use relm4::{
 };
 use tonic::async_trait;
 use tracing::{debug, error, info};
+use utils::{get_image_bytes, get_image_from_path, get_image_from_url};
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
 pub struct Settings {

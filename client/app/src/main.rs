@@ -4,6 +4,8 @@ mod pages;
 mod server;
 mod services;
 mod settings;
+mod utils;
+mod widgets;
 
 use async_trait::async_trait;
 use gtk::prelude::{BoxExt, GtkWindowExt};
