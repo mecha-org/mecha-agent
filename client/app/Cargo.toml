@@ -39,7 +39,7 @@ depends = "$auto"
 assets = [
     # binary
     [
-        "../target/release/mecha-connect",
+        "target/release/mecha-connect",
         "/usr/bin/",
         "755",
     ],

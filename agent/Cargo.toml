@@ -59,7 +59,7 @@ assets = [
     ],
     # settings
     [
-        "settings.yml.example",
+        "../settings.yml.example",
         "/etc/mecha/settings.yml",
         "644",
     ],
