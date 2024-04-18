@@ -48,7 +48,9 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt install \
-          libssl-dev
+          libssl-dev \
+          protobuf-compiler \
+          libprotobuf-dev
 
       - name: Build [${{ matrix.package }}]
         run: |
