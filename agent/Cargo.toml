@@ -45,3 +45,22 @@ opentelemetry-appender-tracing = { workspace = true }
 
 [build-dependencies]
 tonic-build = "0.10.2"
+
+
+[package.metadata.deb]
+name = "mecha-agent"
+depends = "$auto"
+assets = [
+    # binary
+    [
+        "../target/release/mecha-agent",
+        "/usr/bin/",
+        "755",
+    ],
+    # settings
+    [
+        "settings.yml.example",
+        "/etc/mecha/settings.yml",
+        "644",
+    ],
+]
