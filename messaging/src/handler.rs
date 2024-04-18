@@ -64,7 +64,11 @@ impl MessagingHandler {
         }
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<MessagingMessage>) -> Result<()> {
-        info!(func = "run", package = env!("CARGO_PKG_NAME"), "init");
+        info!(
+            func = "run",
+            package = env!("CARGO_PKG_NAME"),
+            "messaging service initiated"
+        );
         let _ = &self.start().await;
         let mut event_rx = self.event_tx.subscribe();
         loop {
@@ -167,9 +171,7 @@ impl ServiceHandler for MessagingHandler {
                 .await
             {
                 Ok(_) => {}
-                Err(e) => {
-                    println!("Error connecting to messaging service: {:?}", e);
-                }
+                Err(e) => {}
             };
         }
         Ok(true)

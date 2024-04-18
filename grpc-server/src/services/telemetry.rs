@@ -11,6 +11,8 @@ use metrics::{
 };
 
 use logs::{logs_service_server::LogsService, ExportLogsServiceRequest, ExportLogsServiceResponse};
+use tracing::error;
+use tracing::info;
 
 use crate::logs;
 use crate::metrics;
@@ -39,13 +41,9 @@ impl LogsService for LogsAgent {
         &self,
         request: Request<ExportLogsServiceRequest>,
     ) -> Result<Response<ExportLogsServiceResponse>, Status> {
-        println!("logs request received");
         let binding = request.metadata().clone();
         let logs_type = match binding.get("user") {
-            Some(v) => {
-                println!("User: {:?}", v.to_str().unwrap());
-                v.to_str().unwrap()
-            }
+            Some(v) => v.to_str().unwrap(),
             None => "User",
         };
         let logs = request.into_inner().clone().resource_logs;
@@ -87,16 +85,11 @@ impl MetricsService for MetricsAgent {
         &self,
         request: Request<ExportMetricsServiceRequest>,
     ) -> Result<Response<ExportMetricsServiceResponse>, Status> {
-        println!("metrics request received");
         let binding = request.metadata().clone();
         let metrics_type = match binding.get("user") {
-            Some(v) => {
-                println!("User: {:?}", v.to_str().unwrap());
-                v.to_str().unwrap()
-            }
+            Some(v) => v.to_str().unwrap(),
             None => "User",
         };
-        println!("metrics type: {}", metrics_type);
         let metrics = request.into_inner().clone().resource_metrics;
         // to print metrics value
         /*for met in metrics.iter() {
@@ -118,7 +111,7 @@ impl MetricsService for MetricsAgent {
         let encoded: Vec<u8> = bincode::serialize(&metrics).unwrap();
 
         let (tx, _rx) = oneshot::channel();
-        let _ = self
+        match self
             .telemetry_service_handler
             .telemetry_tx
             .send(TelemetryMessage::SendMetrics {
@@ -126,8 +119,22 @@ impl MetricsService for MetricsAgent {
                 metrics_type: metrics_type.to_string(),
                 reply_to: tx,
             })
-            .await;
-
+            .await
+        {
+            Ok(_) => info!(
+                func = "export",
+                package = env!("CARGO_PKG_NAME"),
+                "metrics sent successfully"
+            ),
+            Err(e) => {
+                error!(
+                    func = "export",
+                    package = env!("CARGO_PKG_NAME"),
+                    "error sending metrics - {}",
+                    e
+                );
+            }
+        };
         let reply = ExportMetricsServiceResponse {};
         Ok(Response::new(reply))
     }
