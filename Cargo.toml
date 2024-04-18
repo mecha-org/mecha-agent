@@ -1,10 +1,9 @@
 [workspace]
 default-members = ["agent"]
-members = ["agent", "core/services", "core/events", "core/settings", "provisioning", "messaging", "identity", "status", "settings", "grpc_server", "networking","telemetry","commons/crypto", "commons/kv_store", "commons/fs", "client/app"]
-
+members = ["agent", "core/services", "core/events", "core/settings", "provisioning", "messaging", "identity", "status", "settings", "grpc-server", "networking","telemetry","commons/crypto", "commons/kv-store", "commons/fs", "client/app"]
+resolver = "2"
 
 [workspace.package]
-name = "mecha_agent"
 version = "1.0.0"
 authors = ["Minesh Purohit <mineshp@mechasystems.com", "Shoaib Merchant <shoaibm@mechasystems.com>"]
 description = "Mecha Agent on the device for provisioning, messaging and more"

@@ -17,7 +17,7 @@ services = { path = "../core/services" }
 messaging = { path = "../messaging" }
 identity = { path = "../identity" }
 channel = { path = "../commons/channel" }
-agent_settings = { path = "../core/settings" }
+agent-settings = { path = "../core/settings" }
 crypto = { path = "../commons/crypto" }
 anyhow = { workspace = true }
 sentry = { workspace = true }

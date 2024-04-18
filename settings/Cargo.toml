@@ -12,14 +12,14 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-agent_settings = { path = "../core/settings" }
+agent-settings = { path = "../core/settings" }
 events = { path = "../core/events" }
 messaging = { path = "../messaging" }
 identity = { path = "../identity" }
 channel = { path = "../commons/channel" }
-nats_client = { path = "../commons/nats_client" }
+nats-client = { path = "../commons/nats-client" }
 services = { path = "../core/services" }
-kv_store = { path = "../commons/kv_store" }
+kv-store = { path = "../commons/kv-store" }
 crypto = { path = "../commons/crypto" }
 anyhow = { workspace = true }
 sentry-anyhow= { workspace = true }

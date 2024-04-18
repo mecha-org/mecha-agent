@@ -6,7 +6,6 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-package.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,8 +14,8 @@ events = { path = "../core/events" }
 services = { path = "../core/services" }
 crypto = { path = "../commons/crypto" }
 channel = { path = "../commons/channel" }
-agent_settings = { path = "../core/settings" }
-nats_client = { path = "../commons/nats_client" }
+agent-settings = { path = "../core/settings" }
+nats-client = { path = "../commons/nats-client" }
 identity = { path = "../identity" }
 anyhow = { workspace = true }
 tokio = { workspace = true }

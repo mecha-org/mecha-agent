@@ -1,5 +1,5 @@
 [package]
-name = "mecha_agent"
+name = "mecha-agent"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -7,10 +7,14 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+[[bin]]
+name = "mecha-agent"
+path = "src/bin/agent.rs"
+
 [dependencies]
 events = { path = "../core/events" }
-agent_settings = { path = "../core/settings" }
-grpc_server = { path = "../grpc_server" }
+agent-settings = { path = "../core/settings" }
+grpc-server = { path = "../grpc-server" }
 status = { path = "../status" }
 identity = { path = "../identity" }
 messaging = { path = "../messaging" }

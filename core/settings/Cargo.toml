@@ -1,5 +1,5 @@
 [package]
-name = "agent_settings"
+name = "agent-settings"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
