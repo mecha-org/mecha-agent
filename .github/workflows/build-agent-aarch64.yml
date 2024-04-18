@@ -69,13 +69,11 @@ jobs:
       - name: Prepare artifacts [${{ matrix.package }}]
         run: |
           mkdir build
-          tar czvf ./build/${{matrix.artifact}} target/release/${{ matrix.package }}
-          cd -
-          cd target/${{ matrix.target }}/debian/
-          mv target/release/*.deb ./build/
-          cd -
+          cp ${{ matrix.path }}/target/release/${{ matrix.package }} ./build
+          cp ${{ matrix.path }}/target/debian/*.deb ./build
+    
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ./build
+          path: ./build/*
