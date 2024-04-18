@@ -18,7 +18,7 @@ settings = { path = "../settings" }
 channel = { path = "../commons/channel" }
 crypto = { path = "../commons/crypto" }
 fs = { path = "../commons/fs" }
-agent_settings = { path = "../core/settings" }
+agent-settings = { path = "../core/settings" }
 anyhow = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }

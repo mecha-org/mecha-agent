@@ -1,5 +1,5 @@
 [package]
-name = "grpc_server"
+name = "grpc-server"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -10,7 +10,7 @@ homepage.workspace = true
 [dependencies]
 status = { path = "../status" }
 messaging = { path = "../messaging" }
-agent_settings = { path = "../core/settings" }
+agent-settings = { path = "../core/settings" }
 channel = { path = "../commons/channel" }
 identity = { path = "../identity" }
 provisioning = { path = "../provisioning" }

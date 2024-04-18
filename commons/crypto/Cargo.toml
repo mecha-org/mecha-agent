@@ -10,7 +10,7 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-agent_settings = { path = "../../core/settings" }
+agent-settings = { path = "../../core/settings" }
 fs = { path = "../fs" }
 tokio = { workspace = true }
 anyhow = { workspace = true }

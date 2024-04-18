@@ -12,7 +12,7 @@ homepage.workspace = true
 [dependencies]
 events = { path = "../core/events" }
 services = { path = "../core/services" }
-agent_settings = { path = "../core/settings" }
+agent-settings = { path = "../core/settings" }
 messaging = { path = "../messaging" }
 channel = { path = "../commons/channel" }
 identity = { path = "../identity" }
