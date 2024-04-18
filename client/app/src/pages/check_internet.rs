@@ -1,15 +1,15 @@
 use crate::{
     handlers::machine_info::handler::get_status,
     settings::{Modules, WidgetConfigs},
+    utils,
 };
 use async_trait::async_trait;
-use custom_utils::{get_gif_from_path, get_image_from_path};
 use gtk::prelude::*;
 use relm4::{
     component::{AsyncComponent, AsyncComponentParts},
     gtk::{
         self,
-        glib::clone,
+        glib::{self, clone},
         prelude::{ButtonExt, WidgetExt},
         Button,
     },
@@ -17,6 +17,7 @@ use relm4::{
 };
 use std::time::Duration;
 use tracing::{error, info, trace};
+use utils::{get_gif_from_path, get_image_from_path};
 
 pub struct Settings {
     pub modules: Modules,
@@ -24,7 +25,7 @@ pub struct Settings {
 }
 pub struct CheckInternet {
     settings: Settings,
-    task: Option<relm4::prelude::adw::glib::JoinHandle<()>>,
+    task: Option<glib::JoinHandle<()>>,
 }
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
@@ -145,12 +146,11 @@ impl AsyncComponent for CheckInternet {
             InputMessage::ActiveScreen(text) => {
                 info!("active screen: {:?}", text);
                 let sender: relm4::Sender<InputMessage> = sender.input_sender().clone();
-                let relm_task: relm4::prelude::adw::glib::JoinHandle<()> =
-                    relm4::spawn_local(async move {
-                        let time_duration = Duration::from_millis(7000);
-                        let _ = tokio::time::sleep(time_duration).await;
-                        let _ = check_internet_init_services(sender).await;
-                    });
+                let relm_task: glib::JoinHandle<()> = relm4::spawn_local(async move {
+                    let time_duration = Duration::from_millis(7000);
+                    let _ = tokio::time::sleep(time_duration).await;
+                    let _ = check_internet_init_services(sender).await;
+                });
 
                 self.task = Some(relm_task);
             }

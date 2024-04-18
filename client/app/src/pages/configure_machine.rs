@@ -1,10 +1,10 @@
 use crate::{
     services::{self, MachineInformation},
     settings::{Modules, WidgetConfigs},
+    utils,
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use custom_utils::get_gif_from_path;
 use gtk::prelude::*;
 use relm4::{
     component::{AsyncComponent, AsyncComponentParts},
@@ -16,6 +16,7 @@ use relm4::{
 };
 use std::time::Duration;
 use tracing::{debug, info};
+use utils::get_gif_from_path;
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
 pub struct Settings {

@@ -1,8 +1,8 @@
 use crate::{
     handlers::start_screen::handler::machine_provision_status,
     settings::{Modules, WidgetConfigs},
+    utils,
 };
-use custom_utils::get_image_from_path;
 use gtk::prelude::*;
 use relm4::{
     adw,
@@ -18,6 +18,7 @@ use relm4::{
 };
 use tonic::async_trait;
 use tracing::{debug, error, info};
+use utils::get_image_from_path;
 
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
