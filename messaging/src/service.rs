@@ -191,12 +191,16 @@ impl Messaging {
                 ));
             }
         }
-
+        info!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "messaging service connected"
+        );
         Ok(true)
     }
     pub async fn publish(&self, subject: &str, data: Bytes) -> Result<bool> {
         let fn_name = "publish";
-        trace!(
+        debug!(
             func = fn_name,
             package = PACKAGE_NAME,
             "subject - {}",
@@ -232,7 +236,7 @@ impl Messaging {
     }
 
     pub async fn subscribe(&self, subject: &str) -> Result<Subscriber> {
-        trace!(
+        debug!(
             func = "subscribe",
             package = PACKAGE_NAME,
             "subject - {}",
@@ -297,7 +301,7 @@ impl Messaging {
     }
 
     pub async fn request(&self, subject: &str, data: Bytes) -> Result<Bytes> {
-        trace!(
+        debug!(
             func = "request",
             package = PACKAGE_NAME,
             "subject - {}",
@@ -415,6 +419,11 @@ pub async fn authenticate(
             bail!(e)
         }
     };
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "authentication token obtained!"
+    );
     Ok(token)
 }
 
@@ -434,21 +443,22 @@ fn sign_nonce(private_key_path: &String, nonce: &str) -> Result<String> {
     };
 
     let encoded_signed_nonce = b64_encode(signed_nonce);
+    info!(
+        func = "sign_nonce",
+        package = PACKAGE_NAME,
+        "nonce encoded!"
+    );
     Ok(encoded_signed_nonce)
 }
 
 async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
+    let fn_name = "get_auth_nonce";
     let url = format!(
         "{}{}",
         &settings.service_urls.base_url, &settings.service_urls.get_nonce
     );
 
-    debug!(
-        func = "get_auth_nonce",
-        package = PACKAGE_NAME,
-        "url - {}",
-        url
-    );
+    debug!(func = fn_name, package = PACKAGE_NAME, "url - {}", url);
     // Construct request body
     let request_body: AuthNonceRequest = AuthNonceRequest {
         agent_name: "mecha_agent".to_string(),
@@ -467,7 +477,7 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
         Err(e) => match e.status() {
             Some(StatusCode::INTERNAL_SERVER_ERROR) => {
                 error!(
-                    func = "get_auth_nonce",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "get auth nonce returned internal server error - {}",
                     e
@@ -480,7 +490,7 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
             }
             Some(StatusCode::BAD_REQUEST) => {
                 error!(
-                    func = "get_auth_nonce",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "get auth nonce returned bad request - {}",
                     e
@@ -493,7 +503,7 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
             }
             Some(StatusCode::NOT_FOUND) => {
                 error!(
-                    func = "get_auth_nonce",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "get auth nonce returned not found - {}",
                     e
@@ -506,7 +516,7 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
             }
             Some(_) => {
                 error!(
-                    func = "get_auth_nonce",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "get auth nonce returned unknown error - {}",
                     e
@@ -520,7 +530,7 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
 
             None => {
                 error!(
-                    func = "get_auth_nonce",
+                    func = fn_name,
                     package = PACKAGE_NAME,
                     "get auth nonce returned unknown error - {}",
                     e
@@ -542,7 +552,7 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
         Ok(m) => m,
         Err(e) => {
             error!(
-                func = "get_auth_nonce",
+                func = fn_name,
                 package = PACKAGE_NAME,
                 "error parsing nonce response - {}",
                 e
@@ -555,7 +565,7 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
         }
     };
     info!(
-        func = "get_auth_nonce",
+        func = fn_name,
         package = PACKAGE_NAME,
         "auth nonce request completed"
     );
@@ -589,7 +599,7 @@ async fn get_auth_token(
         "{}{}",
         &settings.service_urls.base_url, &settings.service_urls.issue_auth_token
     );
-    info!(
+    debug!(
         func = fn_name,
         package = PACKAGE_NAME,
         "url - {}, request_body {:?}",

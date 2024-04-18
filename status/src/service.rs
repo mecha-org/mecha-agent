@@ -66,7 +66,15 @@ pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
     // Get machine id
     let (publish_result_tx, publish_result_rx) = tokio::sync::oneshot::channel();
     let machine_id = match get_machine_id(status_options.identity_tx.clone()).await {
-        Ok(machine_id) => machine_id,
+        Ok(machine_id) => {
+            debug!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "machine id - {}",
+                machine_id
+            );
+            machine_id
+        }
         Err(err) => {
             error!(
                 func = fn_name,
@@ -85,7 +93,7 @@ pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
     // Construct payload
     let current_utc_time = chrono::Utc::now();
     let formatted_utc_time = current_utc_time.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
-    trace!(
+    debug!(
         func = fn_name,
         package = PACKAGE_NAME,
         "formatted utc time - {}",
@@ -129,7 +137,12 @@ pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
         sys_uptime: system_uptime_duration.num_seconds().to_string(),
         sys_load_avg: load_avg,
     };
-
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "publish payload - {:?}",
+        publish_payload
+    );
     // Publish message
     let send_output = status_options
         .messaging_tx
@@ -140,7 +153,13 @@ pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
         })
         .await;
     match send_output {
-        Ok(_) => (),
+        Ok(_) => {
+            trace!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "status message sent!"
+            )
+        }
         Err(err) => {
             error!(
                 func = fn_name,
@@ -217,6 +236,13 @@ pub async fn machine_platform_info(
             ));
         }
     };
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "hostname - {} and platform release - {}",
+        hostname,
+        platform_release
+    );
     let machine_id = match get_machine_id(identity_tx).await {
         Ok(machine_id) => machine_id,
         Err(err) => {
@@ -244,6 +270,12 @@ pub async fn machine_platform_info(
         agent_name: String::from("mecha-agent"),
         ..Default::default()
     };
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "platform info - {:?}",
+        platform_info
+    );
     let (tx, rx) = tokio::sync::oneshot::channel();
     match messaging_tx
         .send(MessagingMessage::Send {
@@ -253,7 +285,13 @@ pub async fn machine_platform_info(
         })
         .await
     {
-        Ok(_) => {}
+        Ok(_) => {
+            trace!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "machine platform info message sent!"
+            )
+        }
         Err(err) => {
             error!(
                 func = fn_name,
@@ -274,6 +312,11 @@ pub async fn machine_platform_info(
             );
         }
     }
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "machine platform info message published!"
+    );
     Ok(())
 }
 pub async fn device_provision_status(identity_tx: Sender<IdentityMessage>) -> bool {

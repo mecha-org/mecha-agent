@@ -1,16 +1,17 @@
 use std::sync::RwLock;
 
 use anyhow::{bail, Result};
-use log::error;
+use messaging::async_nats::error;
 use opentelemetry::{
     global,
     metrics::{Meter, Unit},
     Key,
 };
 use sysinfo::{CpuRefreshKind, Disks, Networks, RefreshKind, System};
+use tracing::{error, info};
 
 use crate::config::init_otlp_configuration;
-
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 pub async fn initialize_metrics() -> Result<bool> {
     let fn_name = "initialize_custom_metrics";
     let _meter_provider = match init_otlp_configuration() {
@@ -19,43 +20,126 @@ pub async fn initialize_metrics() -> Result<bool> {
             provider
         }
         Err(e) => {
-            println!(
-                "{}: error initializing otlp configuration: {:?}",
-                fn_name, e
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error initializing otlp configuration: {:?}",
+                e
             );
             return Ok(false);
         }
     };
     let meter = global::meter("ex.com/basic");
     match collect_memory_usage(meter.clone()) {
-        Ok(_) => println!("memory utilization collected"),
-        Err(e) => println!("error collecting memory utilization: {:?}", e),
+        Ok(_) => {
+            info!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "memory utilization collected"
+            )
+        }
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error collecting memory utilization: {:?}",
+                e
+            );
+            bail!("error collecting memory utilization: {:?}", e);
+        }
     }
     match collect_cpu_utilization(meter.clone()) {
-        Ok(_) => println!("cpu utilization collected"),
-        Err(e) => println!("error collecting cpu utilization: {:?}", e),
+        Ok(_) => {
+            info!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "cpu utilization collected"
+            );
+        }
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error collecting cpu utilization: {:?}",
+                e
+            );
+            bail!("error collecting cpu utilization: {:?}", e);
+        }
     }
     match collect_cpu_load_average(meter.clone()) {
-        Ok(_) => println!("cpu load average collected"),
-        Err(e) => println!("error collecting cpu load average: {:?}", e),
+        Ok(_) => {
+            info!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "cpu load average collected"
+            );
+        }
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error collecting cpu load average: {:?}",
+                e
+            );
+            bail!("error collecting cpu load average: {:?}", e);
+        }
     }
     match collect_network_io(meter.clone()) {
-        Ok(_) => println!("network io collected"),
-        Err(e) => println!("error collecting network io: {:?}", e),
+        Ok(_) => {
+            info!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "network io collected"
+            );
+        }
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error collecting network io: {:?}",
+                e
+            );
+            bail!("error collecting network io: {:?}", e);
+        }
     }
     match collect_disk_io(meter.clone()) {
-        Ok(_) => println!("disk io collected"),
-        Err(e) => println!("error collecting disk io: {:?}", e),
+        Ok(_) => {
+            info!(func = fn_name, package = PACKAGE_NAME, "disk io collected");
+        }
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error collecting disk io: {:?}",
+                e
+            );
+            bail!("error collecting disk io: {:?}", e);
+        }
     }
     match collect_filesystem_usage(meter.clone()) {
-        Ok(_) => println!("filesystem usage collected"),
-        Err(e) => println!("error collecting filesystem usage: {:?}", e),
+        Ok(_) => {
+            info!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "filesystem usage collected"
+            );
+        }
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error collecting filesystem usage: {:?}",
+                e
+            );
+            bail!("error collecting filesystem usage: {:?}", e);
+        }
     }
     Ok(true)
 }
 
 // SYSTEM_CPU_UTILIZATION("system_cpu_time_seconds_total"),
 fn collect_cpu_utilization(meter: Meter) -> Result<()> {
+    let fn_name = "collect_cpu_utilization";
     let cpu_utilization_obs_counter = meter
     .f64_observable_gauge("system.cpu.utilization")
     .with_description("Difference in system.cpu.time since the last measurement, divided by the elapsed time and number of logical CPUs")
@@ -66,27 +150,39 @@ fn collect_cpu_utilization(meter: Meter) -> Result<()> {
         let mut sys = match rw_guard.write() {
             Ok(guard) => guard,
             Err(e) => {
-                error!("error getting write lock: {:?}", e);
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error getting write lock: {:?}",
+                    e
+                );
                 return;
             }
         };
         sys.refresh_cpu();
         for cpu in sys.cpus() {
-            println!("cpu details: {:?}", cpu);
             let attrs = vec![Key::new("system.cpu.logical_number").string(cpu.name().to_owned())];
 
             // total_cpu_usage += cpu.cpu_usage();
             observer.observe_f64(&cpu_utilization_obs_counter, cpu.cpu_usage() as f64, &attrs);
         }
     }) {
-        Ok(_) => println!("callback registered"),
-        Err(e) => println!("error registering callback: {:?}", e),
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error registering callback: {:?}",
+                e
+            );
+        }
     };
     Ok(())
 }
 
 // SYSTEM_MEMORY_USAGE("system_memory_usage_bytes"),
 fn collect_memory_usage(meter: Meter) -> Result<()> {
+    let fn_name = "collect_memory_usage";
     let memory_utilization_obs_counter = meter
         .f64_observable_up_down_counter("system.memory.usage")
         .with_description("Reports memory in use by state.")
@@ -119,14 +215,22 @@ fn collect_memory_usage(meter: Meter) -> Result<()> {
             );
         },
     ) {
-        Ok(_) => println!("callback registered"),
-        Err(e) => println!("error registering callback: {:?}", e),
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error registering callback: {:?}",
+                e
+            );
+        }
     };
     Ok(())
 }
 
 //SYSTEM_CPU_LOAD_AVERAGE_15M("system_cpu_load_average_15m_ratio"),
 fn collect_cpu_load_average(meter: Meter) -> Result<()> {
+    let fn_name = "collect_cpu_load_average";
     let cpu_utilization_obs_counter = meter
         .f64_observable_gauge("system.cpu.load_average.15m")
         .with_description("")
@@ -134,23 +238,26 @@ fn collect_cpu_load_average(meter: Meter) -> Result<()> {
         .init();
 
     match meter.register_callback(&[cpu_utilization_obs_counter.as_any()], move |observer| {
-        let load_avg = System::load_average();
-        println!("load average: {:?}", load_avg);
+        let load_avg = System::load_average().fifteen;
         let attrs = vec![];
-        observer.observe_f64(
-            &cpu_utilization_obs_counter,
-            load_avg.fifteen as f64,
-            &attrs,
-        );
+        observer.observe_f64(&cpu_utilization_obs_counter, load_avg as f64, &attrs);
     }) {
-        Ok(_) => println!("callback registered"),
-        Err(e) => println!("error registering callback: {:?}", e),
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error registering callback: {:?}",
+                e
+            )
+        }
     };
     Ok(())
 }
 
 // SYSTEM_NETWORK_IO("system_network_io_bytes_total"),
 fn collect_network_io(meter: Meter) -> Result<()> {
+    let fn_name = "collect_network_io";
     let network_io_obs_counter = meter
         .f64_observable_counter("system.network.io")
         .with_description("")
@@ -161,7 +268,12 @@ fn collect_network_io(meter: Meter) -> Result<()> {
         let mut networks = match rw_guard.write() {
             Ok(guard) => guard,
             Err(e) => {
-                error!("error getting write lock: {:?}", e);
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error getting write lock: {:?}",
+                    e
+                );
                 return;
             }
         };
@@ -190,8 +302,13 @@ fn collect_network_io(meter: Meter) -> Result<()> {
             );
         }
     }) {
-        Ok(_) => println!("callback registered"),
-        Err(e) => println!("error registering callback: {:?}", e),
+        Ok(_) => {}
+        Err(e) => error!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "error registering callback: {:?}",
+            e
+        ),
     };
 
     Ok(())
@@ -199,6 +316,7 @@ fn collect_network_io(meter: Meter) -> Result<()> {
 
 // SYSTEM_DISK_IO("system_disk_io_bytes_total"),
 fn collect_disk_io(meter: Meter) -> Result<()> {
+    let fn_name = "collect_disk_io";
     let disk_io_obs_counter = meter
         .f64_observable_counter("system.disk.io")
         .with_description("")
@@ -221,14 +339,20 @@ fn collect_disk_io(meter: Meter) -> Result<()> {
             observer.observe_f64(&disk_io_obs_counter, write_bytes_data as f64, &attrs_write);
         }
     }) {
-        Ok(_) => println!("callback registered"),
-        Err(e) => println!("error registering callback: {:?}", e),
+        Ok(_) => {}
+        Err(e) => error!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "error registering callback: {:?}",
+            e
+        ),
     };
     Ok(())
 }
 
 // SYSTEM_FILESYSTEMS_USAGE("system_filesystem_usage_bytes");
 fn collect_filesystem_usage(meter: Meter) -> Result<()> {
+    let fn_name = "collect_filesystem_usage";
     let filesystem_usage_obs_counter = meter
         .f64_observable_up_down_counter("system.filesystem.usage")
         .with_description("")
@@ -240,7 +364,12 @@ fn collect_filesystem_usage(meter: Meter) -> Result<()> {
         let mut disks = match rw_guard.write() {
             Ok(guard) => guard,
             Err(e) => {
-                error!("error getting write lock in file system usage: {:?}", e);
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error getting write lock: {:?}",
+                    e
+                );
                 return;
             }
         };
@@ -248,7 +377,6 @@ fn collect_filesystem_usage(meter: Meter) -> Result<()> {
         let mut used_space: u64 = 0;
         for disk in disks.list() {
             used_space += disk.total_space() - disk.available_space();
-            println!("used space: {:?}", used_space);
             let mount_point = disk.mount_point().to_owned();
             let mut attrs = vec![];
             attrs.push(Key::new("state").string("used"));
@@ -256,8 +384,13 @@ fn collect_filesystem_usage(meter: Meter) -> Result<()> {
             observer.observe_f64(&filesystem_usage_obs_counter, used_space as f64, &attrs);
         }
     }) {
-        Ok(_) => println!("callback registered"),
-        Err(e) => println!("error registering callback: {:?}", e),
+        Ok(_) => {}
+        Err(e) => error!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "error registering callback: {:?}",
+            e
+        ),
     };
     Ok(())
 }

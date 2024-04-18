@@ -208,8 +208,13 @@ impl NetworkingHandler {
         Ok(true)
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<NetworkingMessage>) -> Result<()> {
-        info!(func = "run", package = PACKAGE_NAME, "init");
-        let (handshake_t, handshake_tx) = self.init_handshake_handler().await;
+        info!(
+            func = "run",
+            package = env!("CARGO_PKG_NAME"),
+            "networking service initiated"
+        );
+        let fn_name = "run";
+        // Start the service
         let mut event_rx = self.event_tx.subscribe();
         loop {
             select! {
