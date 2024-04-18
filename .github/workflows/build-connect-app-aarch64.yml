@@ -49,7 +49,9 @@ jobs:
           libwayland-dev \
           libglib2.0-dev \
           libgtk-4-dev \
-          libadwaita-1-dev
+          libadwaita-1-dev \
+          protobuf-compiler \
+          libprotobuf-dev
 
       - name: Build [${{ matrix.package }}]
         run: |
