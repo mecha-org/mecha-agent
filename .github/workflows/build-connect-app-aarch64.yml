@@ -54,14 +54,14 @@ jobs:
         run: |
           cd ${{ matrix.path }}
           cargo --config net.git-fetch-with-cli=true fetch
-          cargo build --release --package ${{ matrix.package }}
+          cargo build --release
           ls -la
 
       - name: Package deb [${{ matrix.package }}]
         continue-on-error: true
         run: |
           cd ${{ matrix.path }}
-          cargo deb --no-build --package ${{ matrix.package }}
+          cargo deb --no-build
           ls -la
 
       - name: Prepare artifacts [${{ matrix.package }}]
