@@ -4,8 +4,8 @@ use crate::{
     handlers::machine_info::handler::get_status,
     services::{get_machine_info, MachineInformation},
     settings::{Modules, WidgetConfigs},
+    utils::{self, get_texture_from_base64},
 };
-use custom_utils::{get_image_bytes, get_image_from_path, get_image_from_url};
 use gtk::prelude::*;
 use relm4::{
     component::{AsyncComponent, AsyncComponentParts},
@@ -20,6 +20,8 @@ use relm4::{
 };
 use tonic::async_trait;
 use tracing::{debug, error, info};
+use utils::get_image_from_path;
+// use utils::{get_image_bytes, get_image_from_path, get_image_from_url};
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
 pub struct Settings {
@@ -27,21 +29,27 @@ pub struct Settings {
     pub widget_configs: WidgetConfigs,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MachineInfoStatus {
+    FETCH,
+    SUCCESS,
+    FAILED,
+}
+
 pub struct MachineInfo {
     settings: Settings,
     machine_id: String,
     name: String,
-    icon_path: Option<String>,
-    status: bool,
-    icon_bytes: Option<relm4::gtk::glib::Bytes>,
+    icon_str: Option<String>,
+    status: MachineInfoStatus,
     toast_text: String, // machine_info: Option<MachineInformation>,
 }
 
 #[derive(Debug)]
 pub enum InputMessage {
     ActiveScreen(String),
-    ShowStatus(bool, String),
-    UpdateMachineInfo(MachineInformation),
+    ShowStatus(MachineInfoStatus, String),
+    UpdateMachineInfo(MachineInformation, MachineInfoStatus, String),
 }
 
 #[derive(Debug)]
@@ -55,7 +63,9 @@ pub struct AppWidgets {
     profile_icon: gtk::Image,
     active_status_icon: gtk::Image,
     not_active_status_icon: gtk::Image,
+    toast_box: gtk::Box,
     toast_label: gtk::Label,
+    toast_spinner: gtk::Spinner,
 }
 
 #[async_trait(?Send)]
@@ -94,12 +104,23 @@ impl AsyncComponent for MachineInfo {
             .build();
 
         // let user_profile_icon = gtk::Image::new();
+        let icon_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .halign(gtk::Align::Center)
+            .css_classes(["device-info-icon-box"])
+            .build();
+
         let user_profile_icon: gtk::Image = get_image_from_path(
             modules.pages_settings.device_info.user_profile_img.clone(),
             &["device-info-icon"],
         );
+        // user_profile_icon
+        //     .clipboard()
+        //     .bind_property("border-radius", , "border-radius");
 
-        main_content_box.append(&user_profile_icon);
+        icon_box.append(&user_profile_icon);
+        main_content_box.append(&icon_box);
+        // main_content_box.append(&user_profile_icon);
 
         let status_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -180,6 +201,13 @@ impl AsyncComponent for MachineInfo {
         sentence_box.append(&sentence);
         main_content_box.append(&sentence_box);
 
+        let toast_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .halign(gtk::Align::Center)
+            .css_classes(["custom-toast-box"])
+            .hexpand(true)
+            .build();
+
         let toast_text = String::from("Fetching Machine Info...");
 
         let toast_label = gtk::Label::builder()
@@ -189,8 +217,19 @@ impl AsyncComponent for MachineInfo {
             .build();
         toast_label.set_visible(true);
 
+        let spinner = gtk::Spinner::builder()
+            .css_classes(["blue"])
+            .height_request(25)
+            .width_request(25)
+            .spinning(true)
+            .build();
+        spinner.set_visible(true);
+
+        toast_box.append(&spinner);
+        toast_box.append(&toast_label);
+
         let toast_overlay = gtk::Overlay::builder().build();
-        toast_overlay.add_overlay(&toast_label);
+        toast_overlay.add_overlay(&toast_box);
         toast_overlay.set_accessible_role(gtk::AccessibleRole::Generic);
         main_content_box.append(&toast_overlay);
 
@@ -224,9 +263,8 @@ impl AsyncComponent for MachineInfo {
             settings: init,
             machine_id: String::from("-"),
             name: String::from("My Machine"),
-            icon_path: Some(String::from("")),
-            status: false,
-            icon_bytes: None,
+            icon_str: Some(String::from("")), // base64
+            status: MachineInfoStatus::FETCH,
             toast_text: toast_text,
         };
 
@@ -236,7 +274,9 @@ impl AsyncComponent for MachineInfo {
             profile_icon: user_profile_icon,
             active_status_icon: active_status_icon,
             not_active_status_icon: not_active_status_icon,
+            toast_box: toast_box,
             toast_label: toast_label,
+            toast_spinner: spinner,
         };
 
         AsyncComponentParts { model, widgets }
@@ -251,22 +291,29 @@ impl AsyncComponent for MachineInfo {
         match message {
             InputMessage::ActiveScreen(machine_id) => {
                 info!("active screen: {:?}", machine_id);
-                let sender: AsyncComponentSender<MachineInfo> = sender.clone();
 
                 self.machine_id = machine_id.to_owned();
                 self.toast_text = String::from("Fetching Machine Information...");
 
+                let sender: relm4::Sender<InputMessage> = sender.input_sender().clone();
                 let _ = machine_info_init_services(sender).await;
             }
             InputMessage::ShowStatus(status, error_toast) => {
                 self.status = status;
                 self.toast_text = error_toast;
             }
-            InputMessage::UpdateMachineInfo(data) => {
-                self.machine_id = data.machine_id;
-                self.name = data.name;
-                self.icon_path = data.icon;
-                self.icon_bytes = get_image_bytes(self.icon_path.clone()).await;
+            InputMessage::UpdateMachineInfo(data, status, error_toast) => {
+                info!(
+                    "InputMessage::UpdateMachineInfo::data-name >>>>>>>>{:?}",
+                    &data.name
+                );
+
+                self.status = status;
+                self.toast_text = error_toast;
+
+                self.machine_id = data.machine_id.clone();
+                self.name = data.name.clone();
+                self.icon_str = data.icon.clone(); //  BASE64
             }
         }
     }
@@ -277,41 +324,48 @@ impl AsyncComponent for MachineInfo {
         widgets.active_status_icon.set_visible(false);
         widgets.not_active_status_icon.set_visible(true);
 
-        if self.status == true {
-            if let Some(bytes) = self.icon_bytes.clone() {
-                let paintable = get_image_from_url(Some(bytes), &["device-info-status-icon"]);
-                widgets.profile_icon.set_paintable(Some(&paintable));
-                widgets
-                    .profile_icon
-                    .style_context()
-                    .add_class("device-info-icon");
-            }
+        if self.status == MachineInfoStatus::SUCCESS {
+            if let Some(image_base_str) = &self.icon_str {
+                if !image_base_str.is_empty() {
+                    match get_texture_from_base64(image_base_str.to_string()) {
+                        Ok(texture) => {
+                            widgets.profile_icon.set_paintable(Some(&texture));
+                            widgets
+                                .profile_icon
+                                .style_context()
+                                .add_class("device-info-icon");
+                        }
+                        Err(_) => {}
+                    };
+                }
+            };
+
             widgets.active_status_icon.set_visible(true);
             widgets.not_active_status_icon.set_visible(false);
             widgets.toast_label.set_visible(false);
-        } else {
+            widgets.toast_box.set_visible(false);
+        } else if self.status == MachineInfoStatus::FAILED {
             widgets.not_active_status_icon.set_visible(true);
             widgets.active_status_icon.set_visible(false);
 
             widgets.toast_label.set_label(&self.toast_text.clone());
-            // widgets.toast_label.set_label(&String::from(
-            //     "Machine Agent not running or not internet connectivity",
-            // ));
             widgets.toast_label.set_visible(true);
             widgets.toast_label.set_hexpand(true);
+            widgets.toast_spinner.hide();
+            widgets.toast_box.set_visible(true);
         }
     }
 }
 
-async fn machine_info_init_services(sender: AsyncComponentSender<MachineInfo>) {
-    let fn_name = "machine_info_init_services";
+async fn machine_info_init_services(sender: relm4::Sender<InputMessage>) {
+    let fn_name: &str = "machine_info_init_services";
     let error_toast = String::from("Machine Agent not running or not internet connectivity");
     info!(func = fn_name, package = PACKAGE_NAME);
 
+    let sender_1 = sender.clone();
+
     let _ = relm4::spawn(async move {
         loop {
-            let _ = tokio::time::sleep(Duration::from_secs(10)).await;
-
             let (get_status_result, get_machine_info_result) =
                 tokio::join!(get_status(), get_machine_info());
 
@@ -321,17 +375,18 @@ async fn machine_info_init_services(sender: AsyncComponentSender<MachineInfo>) {
                         func = fn_name,
                         package = PACKAGE_NAME,
                         "MACHINE INFO IS {:?}",
-                        machine_info_res.clone()
+                        machine_info_res.name.clone()
                     );
 
-                    let _ = sender.input_sender().send(InputMessage::ShowStatus(
-                        ping_res.code == "success",
+                    let _ = sender_1.send(InputMessage::UpdateMachineInfo(
+                        machine_info_res.to_owned(),
+                        if ping_res.code == "success" {
+                            MachineInfoStatus::SUCCESS
+                        } else {
+                            MachineInfoStatus::FAILED
+                        },
                         String::from(""),
                     ));
-
-                    let _ = sender
-                        .input_sender()
-                        .send(InputMessage::UpdateMachineInfo(machine_info_res.to_owned()));
                 }
                 (Ok(_), Err(ping_error)) => {
                     debug!(
@@ -340,9 +395,10 @@ async fn machine_info_init_services(sender: AsyncComponentSender<MachineInfo>) {
                         "PING STATUS ERROR {:?}",
                         ping_error
                     );
-                    let _ = sender
-                        .input_sender()
-                        .send(InputMessage::ShowStatus(false, error_toast.to_owned()));
+                    let _ = sender.send(InputMessage::ShowStatus(
+                        MachineInfoStatus::FAILED,
+                        error_toast.to_owned(),
+                    ));
                 }
                 (Err(machine_info_error), Ok(_)) => {
                     debug!(
@@ -352,9 +408,10 @@ async fn machine_info_init_services(sender: AsyncComponentSender<MachineInfo>) {
                         machine_info_error
                     );
 
-                    let _ = sender
-                        .input_sender()
-                        .send(InputMessage::ShowStatus(false, error_toast.to_owned()));
+                    let _ = sender.send(InputMessage::ShowStatus(
+                        MachineInfoStatus::FAILED,
+                        error_toast.to_owned(),
+                    ));
                 }
                 (Err(err_1), Err(err_2)) => {
                     debug!(
@@ -373,11 +430,14 @@ async fn machine_info_init_services(sender: AsyncComponentSender<MachineInfo>) {
                         err_2
                     );
 
-                    let _ = sender
-                        .input_sender()
-                        .send(InputMessage::ShowStatus(false, error_toast.to_owned()));
+                    let _ = sender.send(InputMessage::ShowStatus(
+                        MachineInfoStatus::FAILED,
+                        error_toast.to_owned(),
+                    ));
                 }
             }
+
+            let _ = tokio::time::sleep(Duration::from_secs(5)).await;
         }
     });
 }

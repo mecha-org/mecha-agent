@@ -1,5 +1,7 @@
-use crate::settings::{Modules, WidgetConfigs};
-use custom_utils::{get_gif_from_path, get_image_from_path};
+use crate::{
+    settings::{Modules, WidgetConfigs},
+    utils,
+};
 use gtk::prelude::*;
 use relm4::{
     gtk::{
@@ -9,6 +11,7 @@ use relm4::{
     },
     ComponentParts, ComponentSender, SimpleComponent,
 };
+use utils::{get_gif_from_path, get_image_from_path};
 
 pub struct Settings {
     pub modules: Modules,
@@ -63,8 +66,8 @@ impl SimpleComponent for NoInternet {
         let paintable = get_gif_from_path(gif_path);
 
         let image_from = gtk::Image::builder()
-            .width_request(370)
-            .height_request(370)
+            .width_request(350)
+            .height_request(350)
             .paintable(&paintable)
             .css_classes(["gif-img"])
             .build();

@@ -1,25 +1,25 @@
-use std::time::Duration;
-
 use crate::{
     handlers::provision::handler::LinkMachineHandler,
     settings::{Modules, WidgetConfigs},
+    utils,
 };
 use async_trait::async_trait;
-use custom_utils::get_image_from_path;
 use gtk::prelude::*;
 use relm4::{
     component::{AsyncComponent, AsyncComponentParts},
     gtk::{
         self,
         gdk::Display,
-        glib::clone,
+        glib::{self, clone},
         pango,
         prelude::{ButtonExt, WidgetExt},
         CssProvider, STYLE_PROVIDER_PRIORITY_APPLICATION,
     },
     AsyncComponentSender,
 };
+use std::time::Duration;
 use tracing::info;
+use utils::get_image_from_path;
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
 pub struct Settings {
@@ -34,7 +34,7 @@ pub struct LinkMachine {
     timer: i32,
     provision_status: bool,
     current_time: i32,
-    task: Option<relm4::prelude::adw::glib::JoinHandle<()>>,
+    task: Option<glib::JoinHandle<()>>,
     g: Option<tokio::task::JoinHandle<()>>,
     p: Option<tokio::task::JoinHandle<()>>,
     t: Option<tokio::task::JoinHandle<()>>,
@@ -83,7 +83,7 @@ impl AsyncComponent for LinkMachine {
 
     fn init_root() -> Self::Root {
         let provider = CssProvider::new();
-        provider.load_from_data(include_str!("../assets/css/style.css"));
+        //provider.load_from_data(include_str!("../assets/css/style.css"));
         gtk::style_context_add_provider_for_display(
             &Display::default().expect("Could not connect to a display."),
             &provider,
@@ -142,12 +142,11 @@ impl AsyncComponent for LinkMachine {
 
         let header_info_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
-            .css_classes(["start-header-p"])
+            // .css_classes(["start-header-p"])
             .build();
 
         let info_sentence = gtk::Label::builder()
             .label("Use this below code to connect this machine to your Mecha account")
-            // .css_classes(["link-machine-header-label"])
             .halign(gtk::Align::Start)
             .build();
 
@@ -366,10 +365,9 @@ impl AsyncComponent for LinkMachine {
             InputMessage::ActiveScreen(text) => {
                 info!("active screen: {:?}", text);
                 let sender: relm4::Sender<InputMessage> = sender.input_sender().clone();
-                let relm_task: relm4::prelude::adw::glib::JoinHandle<()> =
-                    relm4::spawn_local(async move {
-                        let _ = link_machine_init_services(sender).await;
-                    });
+                let relm_task: glib::JoinHandle<()> = relm4::spawn_local(async move {
+                    let _ = link_machine_init_services(sender).await;
+                });
                 self.task = Some(relm_task)
             }
             InputMessage::ProvisionSuccess => {

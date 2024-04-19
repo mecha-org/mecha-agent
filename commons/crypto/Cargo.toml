@@ -10,19 +10,20 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-agent_settings = { path = "../../core/settings" }
-anyhow = { version = "1.0.71", features = ["backtrace"]}
+agent-settings = { path = "../../core/settings" }
+fs = { path = "../fs" }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
 base64 = "0.21.4"
 mkdirp = "1.0.0"
 rand = "0.8.5"
-sentry = { version = "0.32.0",features = ["backtrace", "anyhow"] }
-sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
-serde_json = "1.0.33"
-serde = { version  = "1.0.159", features = ["derive"]}
-tonic = "0.10.2"
-tracing = "0.1"
-chrono = "0.4.31"
-fs = { path = "../fs" }
+sentry = { workspace = true }
+sentry-anyhow = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
+tonic = { workspace = true }
+chrono = { workspace = true }
 rcgen = "0.12.1"
 rsa = "0.9.6"
 sha2 = {version = "0.10.8",  features = ["oid"]}

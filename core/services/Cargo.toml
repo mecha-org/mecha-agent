@@ -10,5 +10,5 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.75"
-async-trait = "0.1.74"
+anyhow = { workspace = true }
+async-trait = { workspace = true }

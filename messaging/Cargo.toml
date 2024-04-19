@@ -6,7 +6,6 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-package.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,15 +14,16 @@ events = { path = "../core/events" }
 services = { path = "../core/services" }
 crypto = { path = "../commons/crypto" }
 channel = { path = "../commons/channel" }
-agent_settings = { path = "../core/settings" }
-nats_client = { path = "../commons/nats_client" }
+agent-settings = { path = "../core/settings" }
+nats-client = { path = "../commons/nats-client" }
 identity = { path = "../identity" }
-anyhow = { version = "1.0.71", features = ["backtrace"]}
-reqwest = { version = "0.11", features = ["json"] }
-sentry-tracing = {version = "0.32.1"}
-sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
-serde = { version  = "1.0.159", features = ["derive"]}
-tonic = "0.10.2"
-tokio = { version = "1.27.0" }
-tracing = "0.1"
-sha256 = "1.1.2"
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true }
+tonic-types = { workspace = true }
+tracing = { workspace = true }
+reqwest = { workspace = true }
+sentry-tracing = { workspace = true }
+sentry-anyhow = { workspace = true }
+serde = { workspace = true }
+sha256 = { workspace = true }

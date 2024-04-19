@@ -1,5 +1,5 @@
 [package]
-name = "mecha_agent"
+name = "mecha-agent"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -7,10 +7,14 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+[[bin]]
+name = "mecha-agent"
+path = "src/bin/agent.rs"
+
 [dependencies]
 events = { path = "../core/events" }
-agent_settings = { path = "../core/settings" }
-grpc_server = { path = "../grpc_server" }
+agent-settings = { path = "../core/settings" }
+grpc-server = { path = "../grpc-server" }
 status = { path = "../status" }
 identity = { path = "../identity" }
 messaging = { path = "../messaging" }
@@ -18,26 +22,44 @@ channel = { path = "../commons/channel" }
 provisioning = { path = "../provisioning" }
 settings = { path = "../settings" }
 telemetry = { path = "../telemetry" }
-networking = { path = "../networking" }
-tokio = { version = "1.27.0", features = ["full"] }
-serde = { version  = "1.0.159", features = ["derive"]}
-serde_json = "1.0.33"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-sentry-tracing = {version= "0.32.1"}
-sentry = { version = "0.32.1",features = ["backtrace", "anyhow"] }
-init-tracing-opentelemetry = { version = "0.12.0", features = ["otlp", "tracing_subscriber_ext"] }
-sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
-anyhow = { version= "1.0.71", features = ["backtrace"]}
-protobuf = "3.2.0"
-tonic = "0.10.2"
-tonic-types = "0.10.2"
-prost = "0.12.3"
-prost-types = "0.12.3"
-bincode = "1.3.3"
-opentelemetry = "0.21.0"
-tokio-util = "0.7.10"
-opentelemetry-appender-tracing = "0.2.0"
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+sentry-tracing = { workspace = true }
+sentry = { workspace = true }
+init-tracing-opentelemetry = { workspace = true }
+sentry-anyhow = { workspace = true }
+anyhow = { workspace = true }
+opentelemetry = { workspace = true }
+tokio-util = { workspace = true }
+tonic = { workspace = true }
+tonic-types = { workspace = true }
+protobuf = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+bincode = { workspace = true }
+opentelemetry-appender-tracing = { workspace = true }
 
 [build-dependencies]
 tonic-build = "0.10.2"
+
+
+[package.metadata.deb]
+name = "mecha-agent"
+depends = "$auto"
+assets = [
+    # binary
+    [
+        "../target/release/mecha-agent",
+        "/usr/bin/",
+        "755",
+    ],
+    # settings
+    [
+        "../settings.yml.example",
+        "/etc/mecha/settings.yml",
+        "644",
+    ],
+]
