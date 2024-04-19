@@ -2,6 +2,12 @@
 name = "connect"
 version = "0.1.0"
 edition = "2021"
+authors = ["Sweta Rohit <swetar@mechasystems.com"]
+description = "Client application for the Mecha Agent"
+documentation = "https://docs.mecha.so"
+license = "MIT"
+repository = "https://github.com/mecha-org/mecha-agent"
+homepage = "https://mecha.so"
 
 [[bin]]
 name = "mecha-connect"
