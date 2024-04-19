@@ -43,8 +43,8 @@
 }
 
 .info-icon {
-    min-width: 24px;
-    min-height: 24px;
+    min-width: 22px;
+    min-height: 22px;
     margin-right: 10px;
 }
 
@@ -54,8 +54,7 @@
 }
 
 .start-header-p {
-    padding: 0px 10px;
-    font-size: 18px;
+    font-size: 14px;
 }
 
 .start-screen-steps-container {
@@ -68,11 +67,11 @@
 }
 
 .start-screen-steps-box {
-    min-height: 80px;
+    min-height: 70px;
     font-weight: 500;
     font-size: 16px;
-    line-height: 24px;
-    padding: 30px 28px 30px 28px;
+    line-height: 22px;
+    padding: 28px 28px 28px 28px;
     margin: 20px 10px 25px 10px;
     background-color: #15171D;
     border-radius: 10px;
@@ -93,7 +92,7 @@
 }
 
 .link-machine-steps-container {
-    margin: 20px 0px;
+    margin: 10px 0px;
     color:#FAFBFC;
 }
 
@@ -109,8 +108,8 @@
     border-radius: 4px;
     font-weight: 500;
     font-size: 28px;
-    line-height: 35.73px;
-    padding: 18px 16px 18px 16px;
+    line-height: 30px;
+    padding: 10px 16px 10px 16px;
     margin: 5px 0px 0px 0px;
     background-color: #15171D;
 }
@@ -171,23 +170,21 @@
 
 .configure-machine-text {
     font-weight: 500;
-    font-size: 20px;
-    line-height: 30px;
+    font-size: 18px;
+    line-height: 28px;
     color: #FAFBFC;
 }
 
 .timeout-img {
-    /* min-width: 318px; */
-    min-width: 200px;
-    min-height: 318px;
-    margin: 30px 40px 20px 40px;
+    min-width: 240px;
+    min-height: 290px;
+    margin: 30px 40px 30px 40px;
 }
 
 .setup-status-label {
     font-weight: 500;
-    font-size: 20px;
-    line-height: 30px;
-    /* margin: 20px 0px; */
+    font-size: 18px;
+    line-height: 28px;
 }
 
 .setup-fail-border-box {
@@ -240,8 +237,8 @@
 
 .device-info-sentence {
     font-weight: 500;
-    font-size: 18px;
-    line-height: 24px;
+    font-size: 16px;
+    line-height: 22px;
     color: #B7BBC8;
     margin:10px 5px;
 }

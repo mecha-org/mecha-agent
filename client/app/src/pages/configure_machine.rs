@@ -150,10 +150,15 @@ async fn machine_info_sevice_call() -> Result<MachineInformation> {
 async fn get_machine_info(sender: AsyncComponentSender<ConfigureMachine>) {
     let fn_name = "configure_machine_screen -> get_machine_info";
     let result = tokio::time::timeout(Duration::from_secs(15), machine_info_sevice_call()).await;
+    let _ = sender.output(ConfigureOutput::Timeout);
 
     match result {
         Ok(res) => match res {
             Ok(res) => {
+                println!(
+                    "configure machine for machine_id {:?}",
+                    res.machine_id.clone()
+                );
                 let _ = sender.output(ConfigureOutput::SetupSuccess(res.machine_id));
             }
             Err(e) => {

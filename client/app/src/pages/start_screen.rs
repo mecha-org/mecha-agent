@@ -53,6 +53,7 @@ impl AsyncComponent for StartScreen {
     fn init_root() -> Self::Root {
         gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
+            .css_classes(["page-container"])
             .build()
     }
 
@@ -108,7 +109,7 @@ impl AsyncComponent for StartScreen {
 
         let info_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
-            // .css_classes(["start-header-p"])
+            .css_classes(["start-header-p"])
             .build();
 
         let info_icon: gtk::Image = get_image_from_path(
@@ -119,6 +120,10 @@ impl AsyncComponent for StartScreen {
         let info_sentence = gtk::Label::builder()
             .label("Please sign up on mecha.so before getting started.")
             .halign(gtk::Align::Start)
+            .hexpand(true)
+            .justify(gtk::Justification::Fill)
+            .wrap(true)
+            .wrap_mode(pango::WrapMode::Word)
             .build();
 
         info_box.append(&info_icon);
