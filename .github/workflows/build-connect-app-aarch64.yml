@@ -70,8 +70,8 @@ jobs:
       - name: Prepare artifacts [${{ matrix.package }}]
         run: |
           mkdir build
-          cp ${{ matrix.path }}/target/release/${{ matrix.package }} ./build
-          cp ${{ matrix.path }}/target/debian/*.deb ./build
+          cp ./target/release/${{ matrix.package }} ./build
+          cp ./target/debian/*.deb ./build
     
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
