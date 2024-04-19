@@ -25,7 +25,7 @@ pub struct Settings {
 }
 pub struct CheckInternet {
     settings: Settings,
-    task: Option<glib::JoinHandle<()>>,
+    task: Option<relm4::prelude::adw::glib::JoinHandle<()>>,
 }
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
@@ -61,7 +61,9 @@ impl AsyncComponent for CheckInternet {
     type CommandOutput = ();
 
     fn init_root() -> Self::Root {
-        gtk::Box::builder().build()
+        gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .build()
     }
 
     /// Initialize the UI and model.
@@ -95,8 +97,8 @@ impl AsyncComponent for CheckInternet {
         let paintable = get_gif_from_path(gif_path);
 
         let image_from = gtk::Image::builder()
-            .width_request(370)
-            .height_request(370)
+            .width_request(350)
+            .height_request(350)
             .paintable(&paintable)
             .css_classes(["gif-img"])
             .build();
@@ -146,11 +148,11 @@ impl AsyncComponent for CheckInternet {
             InputMessage::ActiveScreen(text) => {
                 info!("active screen: {:?}", text);
                 let sender: relm4::Sender<InputMessage> = sender.input_sender().clone();
-                let relm_task: glib::JoinHandle<()> = relm4::spawn_local(async move {
-                    let time_duration = Duration::from_millis(7000);
-                    let _ = tokio::time::sleep(time_duration).await;
-                    let _ = check_internet_init_services(sender).await;
-                });
+                let relm_task: relm4::prelude::adw::glib::JoinHandle<()> =
+                    relm4::spawn_local(async move {
+                        let _ = tokio::time::sleep(Duration::from_secs(2)).await;
+                        let _ = check_internet_init_services(sender).await;
+                    });
 
                 self.task = Some(relm_task);
             }

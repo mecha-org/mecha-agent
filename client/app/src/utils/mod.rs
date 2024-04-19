@@ -1,8 +1,9 @@
 use gtk::{gdk, gio};
-use relm4::gtk::{self, glib::Bytes, prelude::FileExt};
+use relm4::gtk::{self, gdk::Texture, glib::Bytes, prelude::FileExt};
 use widgets::gif_paintable::GifPaintable;
 
 use crate::widgets;
+use simple_base64::decode;
 
 pub fn get_image_from_path(path: Option<String>, css_classes: &[&str]) -> gtk::Image {
     let image = gtk::Image::builder().css_classes(css_classes).build();
@@ -40,38 +41,25 @@ pub fn get_gif_from_path(gif_path: Option<String>) -> GifPaintable {
     paintable
 }
 
-// pub async fn get_img_from_url(path: Option<String>, css_classes: &[&str]) -> gtk::Image {
-//     let image = gtk::Image::builder().css_classes(css_classes).build();
-
-//     let response = reqwest::get(path.unwrap()).await;
-//     let image_bytes = response.unwrap().bytes().await.expect("Failed to get image bytes");
-//     let bytes = Bytes::from(&image_bytes);
-
-//     match gdk::Texture::from_bytes(&bytes) {
-//         Ok(image_asset_paintable) => {
-//             image.set_paintable(Option::from(&image_asset_paintable));
-//         },
-//         Err(_) => (),
-//     }
-//     image
-// }
-
-pub async fn get_image_bytes(path: Option<String>) -> Option<relm4::gtk::glib::Bytes> {
-    let response = reqwest::get(path.unwrap()).await;
-    let image_bytes = response
-        .unwrap()
-        .bytes()
-        .await
-        .expect("Failed to get image bytes");
-    let bytes = Bytes::from(&image_bytes);
-    Some(bytes)
-}
-
-pub fn get_image_from_url(bytes: Option<Bytes>, css_classes: &[&str]) -> gdk::Texture {
-    match gdk::Texture::from_bytes(&bytes.unwrap()) {
-        Ok(image_asset_paintable) => image_asset_paintable,
-        Err(_) => {
-            todo!()
+pub fn get_texture_from_base64(
+    base64_string: String,
+) -> Result<Texture, Box<dyn std::error::Error>> {
+    let texture_value = match decode(base64_string) {
+        Ok(response) => {
+            let bytes = Bytes::from(&response);
+            let texture = match gdk::Texture::from_bytes(&bytes) {
+                Ok(response) => response,
+                Err(texture_error) => {
+                    eprintln!("ERROR::texture_error {:?} ", texture_error);
+                    return Err(Box::new(texture_error));
+                }
+            };
+            texture
         }
-    }
+        Err(decode_error) => {
+            eprintln!("ERROR::DecodeError {:?} ", decode_error);
+            return Err(Box::new(decode_error));
+        }
+    };
+    Ok(texture_value)
 }

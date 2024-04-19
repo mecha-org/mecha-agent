@@ -294,7 +294,7 @@ impl ProvisionCodeHandler {
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<PCodeHandlerMessage>) {
         let fn_name = "ProvisionCodeHandler-run";
 
-        let mut p_code_interval = time::interval(Duration::from_secs(10));
+        let mut p_code_interval = time::interval(Duration::from_secs(5));
         loop {
             select! {
                     _ = p_code_interval.tick() => {
@@ -407,6 +407,13 @@ pub async fn p_code(code: String) -> anyhow::Result<ProvisioningStatusResponse> 
     let provisioning_response: ProvisioningStatusResponse =
         match provision_manager_client.provision_by_code(code).await {
             Ok(response) => {
+                info!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "PROVISION BY CODE response : {:?}",
+                    response
+                );
+
                 let mut message = String::from("");
                 if response.success == false {
                     message = String::from("Something went wrong! Try after some time!");
@@ -425,5 +432,13 @@ pub async fn p_code(code: String) -> anyhow::Result<ProvisioningStatusResponse> 
                 res
             }
         };
+
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "PROVIISION BY CODE response OUT : {:?}",
+        provisioning_response
+    );
+
     Ok(provisioning_response)
 }

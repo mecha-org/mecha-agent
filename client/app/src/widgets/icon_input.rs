@@ -90,7 +90,7 @@ impl SimpleComponent for IconInput {
     fn init_root() -> Self::Root {
         // The CSS "magic" happens here.
         let provider = CssProvider::new();
-        provider.load_from_data(include_str!("assets/css/style.css"));
+        //provider.load_from_data(include_str!("assets/css/style.css"));
         // We give the CssProvided to the default screen so the CSS rules we added
         // can be applied to our window.
         gtk::style_context_add_provider_for_display(

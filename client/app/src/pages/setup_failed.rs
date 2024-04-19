@@ -52,7 +52,7 @@ impl SimpleComponent for SetupFailed {
 
     fn init_root() -> Self::Root {
         let provider = CssProvider::new();
-        provider.load_from_data(include_str!("../assets/css/style.css"));
+        //provider.load_from_data(include_str!("../assets/css/style.css"));
         gtk::style_context_add_provider_for_display(
             &Display::default().expect("Could not connect to a display."),
             &provider,
@@ -87,8 +87,8 @@ impl SimpleComponent for SetupFailed {
         let paintable = get_gif_from_path(gif_path);
 
         let image_from = gtk::Image::builder()
-            .width_request(290)
-            .height_request(290)
+            .width_request(250)
+            .height_request(250)
             .paintable(&paintable)
             .css_classes(["gif-img"])
             .vexpand(true)
