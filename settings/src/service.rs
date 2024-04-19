@@ -370,6 +370,7 @@ pub async fn set_settings(
             ))
         }
     }
+
     info!(
         func = "set_settings",
         package = PACKAGE_NAME,

@@ -233,7 +233,6 @@ impl SettingHandler {
                                 package = PACKAGE_NAME,
                                 "connected event in settings service"
                             }
-                            let _ = self.sync_settings().await;
                             let _ = self.settings_consumer().await;
                         }
                         Event::Messaging(events::MessagingEvent::Disconnected) => {

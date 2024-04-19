@@ -11,6 +11,7 @@ pub enum ProvisioningEvent {
 pub enum MessagingEvent {
     Connected,
     Disconnected,
+    Reconnected,
 }
 
 #[derive(Debug, Clone)]

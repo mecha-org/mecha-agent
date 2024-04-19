@@ -37,13 +37,17 @@ settings:
   storage:
     type: file
     path: /home/user/.mecha/agent/db/settings.bin
+status:
+  time_interval_sec: 60
 networking:
   enabled: true
+  disco_port: 15150
+  wireguard:
+    tun: wg0
+    port: 51820
+    userspace: linux
 telemetry:
   enabled: true
   collect:
     system: true
     user: true
-  otel_collector:
-    bin: /usr/bin/otelcol-contrib
-    conf: /etc/mecha/otel-contrib.yml

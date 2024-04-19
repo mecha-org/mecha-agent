@@ -57,8 +57,6 @@ pub enum MessagingAuthTokenType {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GetAuthTokenRequest {
     machine_id: String,
-    network_id_hash: Option<String>,
-    network_node_hash: Option<String>,
     #[serde(rename = "type")]
     _type: MessagingAuthTokenType,
     scope: MessagingScope,
@@ -103,6 +101,7 @@ impl Messaging {
         &mut self,
         identity_tx: &mpsc::Sender<IdentityMessage>,
         event_tx: broadcast::Sender<Event>,
+        event_type: events::MessagingEvent,
     ) -> Result<bool> {
         let fn_name = "connect";
         if self.nats_client.is_none() {
@@ -175,7 +174,7 @@ impl Messaging {
             }
         };
         // Send broadcast message as messaging service is connected
-        match event_tx.send(Event::Messaging(events::MessagingEvent::Connected)) {
+        match event_tx.send(Event::Messaging(event_type)) {
             Ok(_) => {}
             Err(e) => {
                 error!(
@@ -383,24 +382,9 @@ pub async fn authenticate(
         }
     };
 
-    let (network_id_hash, network_node_hash) = if settings.networking.enabled {
-        (
-            Some(digest(&settings.networking.peer_settings.network_id)),
-            Some(digest(format!(
-                "{}:{}",
-                &settings.networking.peer_settings.ipv4_address,
-                &settings.networking.peer_settings.ipv6_address
-            ))),
-        )
-    } else {
-        (None, None)
-    };
-
     let token = match get_auth_token(
         MessagingScope::User,
         &machine_id,
-        network_id_hash,
-        network_node_hash,
         &nonce,
         &signed_nonce,
         &nats_client_public_key,
@@ -575,8 +559,6 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
 async fn get_auth_token(
     scope: MessagingScope,
     machine_id: &str,
-    network_id_hash: Option<String>,
-    network_node_hash: Option<String>,
     nonce: &str,
     signed_nonce: &str,
     nats_user_public_key: &str,
@@ -585,8 +567,6 @@ async fn get_auth_token(
     let fn_name = "get_auth_token";
     let request_body = GetAuthTokenRequest {
         machine_id: machine_id.to_string(),
-        network_id_hash: network_id_hash,
-        network_node_hash: network_node_hash,
         _type: MessagingAuthTokenType::Device,
         scope: scope,
         nonce: nonce.to_string(),

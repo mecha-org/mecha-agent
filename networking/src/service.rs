@@ -14,6 +14,7 @@ use messaging::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use settings::handler::SettingMessage;
 use sha256::digest;
 use tokio::sync::{
     mpsc::{self, Sender},
@@ -58,12 +59,25 @@ pub enum NetworkingSubject {
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 pub async fn subscribe_to_nats(
     identity_tx: mpsc::Sender<IdentityMessage>,
+    settings_tx: mpsc::Sender<SettingMessage>,
     messaging_tx: mpsc::Sender<MessagingMessage>,
     channel_id: String,
-    network_id: String,
 ) -> Result<NetworkingSubscriber> {
     let fn_name = "subscribe_to_nats";
-
+    let network_id =
+        match get_settings_by_key(settings_tx.clone(), String::from("networking.network_id")).await
+        {
+            Ok(id) => id,
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    error = e.to_string().as_str(),
+                    "error getting network id"
+                );
+                bail!(e)
+            }
+        };
     let list_of_subjects = vec![NetworkingSubject::HandshakeRequest(format!(
         "network.{}.node.handshake.{channel_id}",
         sha256::digest(network_id.clone())
@@ -129,6 +143,7 @@ pub async fn configure_wireguard(
     messaging_tx: Sender<MessagingMessage>,
     identity_tx: Sender<IdentityMessage>,
     channel: String,
+    settings_tx: Sender<SettingMessage>,
 ) -> Result<Wireguard> {
     let fn_name = "configure_wireguard";
     // read settings from settings.yml
@@ -152,7 +167,7 @@ pub async fn configure_wireguard(
                 func = fn_name,
                 package = PACKAGE_NAME,
                 error = e.to_string().as_str(),
-                "Error generating wireguard key pair"
+                "error generating wireguard key pair"
             );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::GenerateKeyPairError,
@@ -162,23 +177,38 @@ pub async fn configure_wireguard(
         }
     };
 
+    let ip_address = match get_ip_address(settings_tx.clone()).await {
+        Ok(ip) => ip,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                error = e.to_string().as_str(),
+                "error getting ip address"
+            );
+            bail!(e)
+        }
+    };
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "ip address fetched - {}",
+        ip_address
+    );
     // Configure a wireguard interface as per settings.yml and machine settings
     let mut wireguard = Wireguard::new(settings.networking.wireguard.tun);
     let wg_config = wireguard::WgConfig {
-        ip_address: settings.networking.peer_settings.ipv4_address.clone(),
+        ip_address: ip_address,
         port: settings.networking.wireguard.port,
     };
     match wireguard.setup_wireguard(&wg_config, keys.secret_key.clone()) {
-        Ok(_) => {
-            println!("Wireguard interface setup successfully");
-            ()
-        }
+        Ok(_) => (),
         Err(e) => {
             warn!(
                 func = fn_name,
                 package = PACKAGE_NAME,
                 error = e.to_string().as_str(),
-                "Error setting up wireguard interface"
+                "error setting up wireguard interface"
             );
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::SettingUpWireguardError,
@@ -194,22 +224,36 @@ pub async fn configure_wireguard(
                 func = fn_name,
                 package = PACKAGE_NAME,
                 error = e.to_string().as_str(),
-                "Error getting machine id"
+                "error getting machine id"
             );
             bail!(e)
         }
     };
+    let network_id =
+        match get_settings_by_key(settings_tx.clone(), String::from("networking.network_id")).await
+        {
+            Ok(id) => id,
+            Err(e) => {
+                warn!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    error = e.to_string().as_str(),
+                    "error getting machine id"
+                );
+                bail!(e)
+            }
+        };
     // Exchange the channel details
     let (tx, rx) = tokio::sync::oneshot::channel();
     let subject = format!(
         "machine.{}.networking.network.{}.channel",
         digest(machine_id.clone()),
-        digest(settings.networking.peer_settings.network_id.clone()),
+        digest(network_id.clone()),
     );
     println!("subject to publish channel details: {:?}", subject);
     let payload = ChannelDetails {
         machine_id: machine_id.clone(),
-        network_id: settings.networking.peer_settings.network_id.clone(),
+        network_id: network_id.clone(),
         channel: channel,
     };
 
@@ -246,6 +290,7 @@ pub async fn configure_wireguard(
 pub async fn await_consumer_message(
     consumer: Consumer<Config>,
     messaging_tx: Sender<MessagingMessage>,
+    settings_tx: Sender<SettingMessage>,
     wireguard: Wireguard,
     channel: String,
 ) -> Result<bool> {
@@ -278,12 +323,26 @@ pub async fn await_consumer_message(
             ))
         }
     };
-
+    let network_id =
+        match get_settings_by_key(settings_tx.clone(), String::from("networking.network_id")).await
+        {
+            Ok(id) => id,
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    error = e.to_string().as_str(),
+                    "error getting network id"
+                );
+                bail!(e)
+            }
+        };
     while let Some(Ok(message)) = messages.next().await {
         println!("message in consumer stream {:?}", message.payload);
         match process_message(
             settings.networking.clone(),
             message.clone(),
+            network_id.clone(),
             wireguard.clone(),
             channel.clone(),
             messaging_tx.clone(),
@@ -325,6 +384,7 @@ pub async fn await_consumer_message(
 async fn process_message(
     settings: NetworkingSettings,
     message: Message,
+    network_id: String,
     mut wireguard: Wireguard,
     channel: String,
     messaging_tx: Sender<MessagingMessage>,
@@ -356,7 +416,7 @@ async fn process_message(
             true
         )),
     };
-    // Do not process message if it is from same channel
+    //TODO: Do not process message if it is from same channel
     // if channel.contains(&request_payload.channel) {
     //     println!("channel id matched!");
     //     info!(
@@ -386,7 +446,7 @@ async fn process_message(
     // }
     let subject_to_publish_channel_info = format!(
         "network.{}.node.handshake.{}",
-        digest(settings.peer_settings.network_id.clone()),
+        digest(network_id),
         request_payload.channel.clone()
     );
     println!(
@@ -445,6 +505,7 @@ async fn process_message(
 pub async fn create_pull_consumer(
     messaging_tx: Sender<MessagingMessage>,
     identity_tx: Sender<IdentityMessage>,
+    settings_tx: Sender<SettingMessage>,
 ) -> Result<Consumer<Config>> {
     let fn_name = "create_pull_consumer";
     // read settings from settings.yml
@@ -539,13 +600,27 @@ pub async fn create_pull_consumer(
         "consumer name generated - {}",
         &consumer_name
     );
-    let network_id = settings.networking.peer_settings.network_id.clone();
+    let network_id =
+        match get_settings_by_key(settings_tx.clone(), String::from("networking.network_id")).await
+        {
+            Ok(id) => id,
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    error = e.to_string().as_str(),
+                    "Error getting network id"
+                );
+                bail!(e)
+            }
+        };
+
     let filter_subject = format!(
         "networking.networks.{}.channels.{}",
         digest(network_id),
         digest(machine_id)
     );
-    println!("filter subject {:?}", filter_subject);
+
     let consumer = match jet_stream_client
         .create_consumer(stream, filter_subject, consumer_name.clone())
         .await
@@ -609,4 +684,139 @@ async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Result<St
         "get machine id request completed",
     );
     Ok(machine_id)
+}
+
+async fn get_settings_by_key(setting_tx: Sender<SettingMessage>, key: String) -> Result<String> {
+    let fn_name = "get_settings_by_key";
+    let (tx, rx) = oneshot::channel();
+    match setting_tx
+        .send(SettingMessage::GetSettingsByKey {
+            reply_to: tx,
+            key: key,
+        })
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to send message - {}",
+                e
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelSendMessageError,
+                format!("failed to send message - {}", e),
+                true
+            ))
+        }
+    }
+
+    let machine_alias = match recv_with_timeout(rx).await {
+        Ok(machine_alias) => machine_alias,
+        Err(err) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "failed to receive message - {}",
+                err
+            );
+            bail!(err);
+        }
+    };
+    Ok(machine_alias)
+}
+
+async fn get_ip_address(settings_tx: mpsc::Sender<SettingMessage>) -> Result<String> {
+    let (tx, rx) = oneshot::channel();
+    match settings_tx
+        .send(SettingMessage::GetSettingsByKey {
+            reply_to: tx,
+            key: String::from("networking.ipv4.subnet"),
+        })
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                func = "get_ip_address",
+                package = PACKAGE_NAME,
+                "error sending get ip address message - {}",
+                e
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelSendMessageError,
+                format!("error sending get ip address message - {}", e),
+                true
+            ));
+        }
+    }
+    let ip_address = match recv_with_timeout(rx).await {
+        Ok(ip) => ip,
+        Err(e) => {
+            error!(
+                func = "get_ip_address",
+                package = PACKAGE_NAME,
+                "error receiving get ip address message - {}",
+                e
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelReceiveMessageError,
+                format!("error receiving get ip address message - {}", e),
+                true
+            ));
+        }
+    };
+    info!(
+        func = "get_ip_address",
+        package = PACKAGE_NAME,
+        "get ip address request completed",
+    );
+    Ok(ip_address)
+}
+
+pub async fn reconnect_messaging_service(messaging_tx: Sender<MessagingMessage>) -> Result<bool> {
+    let fn_name = "reconnect_messaging_service";
+    let (tx, rx) = oneshot::channel();
+    match messaging_tx
+        .send(MessagingMessage::Reconnect { reply_to: tx })
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error sending reconnect message - {}",
+                e
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelSendMessageError,
+                format!("error sending reconnect message - {}", e),
+                true
+            ));
+        }
+    }
+    let result = match recv_with_timeout(rx).await {
+        Ok(res) => res,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error receiving reconnect message - {}",
+                e
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelReceiveMessageError,
+                format!("error receiving reconnect message - {}", e),
+                true
+            ));
+        }
+    };
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "reconnect request completed",
+    );
+    Ok(result)
 }

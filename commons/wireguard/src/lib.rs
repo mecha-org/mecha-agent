@@ -1,12 +1,12 @@
 use std::str::FromStr;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use defguard_wireguard_rs::{
-    host::Peer, key::Key, net::IpAddrMask, InterfaceConfiguration, WireguardApiUserspace,
+    error, host::Peer, key::Key, net::IpAddrMask, InterfaceConfiguration, WireguardApiUserspace,
     WireguardInterfaceApi,
 };
 use serde::{Deserialize, Serialize};
-use tracing::{error, warn};
+use tracing::{debug, error, info, warn};
 use x25519_dalek::PublicKey;
 
 use rand::rngs::OsRng;
@@ -50,7 +50,7 @@ impl Wireguard {
 
         // Remove existing
         match self.api.remove_interface() {
-            Ok(_) => println!("Interface {ifname} removed."),
+            Ok(_) => (),
             Err(e) => {
                 warn!(
                     func = fn_name,
@@ -63,7 +63,7 @@ impl Wireguard {
 
         // create interface
         match self.api.create_interface() {
-            Ok(_) => (println!("Interface {ifname} created.")),
+            Ok(_) => (),
             Err(e) => {
                 error!(
                     func = fn_name,
@@ -71,7 +71,7 @@ impl Wireguard {
                     "failed to create interface - {}",
                     e
                 );
-                return Err(e.into());
+                bail!(e)
             }
         };
 
@@ -79,7 +79,7 @@ impl Wireguard {
         let interface_config = InterfaceConfiguration {
             name: ifname.clone(),
             prvkey: private_key,
-            address: format!("{}/24", wg_config.ip_address.clone()),
+            address: wg_config.ip_address.clone(),
             port: wg_config.port,
             peers: vec![],
         };
@@ -87,13 +87,21 @@ impl Wireguard {
         match self.api.configure_interface(&interface_config) {
             Ok(_) => (),
             Err(e) => {
-                println!("Error configuring interface: {}", e);
-                return Err(e.into());
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "failed to configure interface - {}",
+                    e
+                );
+                bail!(e)
             }
         };
-        println!("Interface {ifname} configured.");
-        // pause();
-
+        info!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "wireguard interface {} setup successfully",
+            ifname
+        );
         Ok(true)
     }
 
