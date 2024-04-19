@@ -8,6 +8,7 @@ use relm4::{
         self,
         gdk::Display,
         glib::clone,
+        pango,
         prelude::{ButtonExt, WidgetExt},
         Button, CssProvider, STYLE_PROVIDER_PRIORITY_APPLICATION,
     },
@@ -189,5 +190,9 @@ impl SimpleComponent for SetupFailed {
 
     fn update_view(&self, widgets: &mut Self::Widgets, sender: ComponentSender<Self>) {
         widgets.error_message.set_label(&self.error_message);
+        widgets.error_message.set_wrap(true);
+        widgets.error_message.set_wrap_mode(pango::WrapMode::Word);
+        widgets.error_message.set_hexpand(true);
+        widgets.error_message.set_justify(gtk::Justification::Fill);
     }
 }

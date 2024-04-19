@@ -142,12 +142,15 @@ impl AsyncComponent for LinkMachine {
 
         let header_info_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
-            // .css_classes(["start-header-p"])
+            .css_classes(["start-header-p"])
             .build();
 
         let info_sentence = gtk::Label::builder()
             .label("Use this below code to connect this machine to your Mecha account")
-            .halign(gtk::Align::Start)
+            .hexpand(true)
+            .justify(gtk::Justification::Fill)
+            .wrap(true)
+            .wrap_mode(pango::WrapMode::Word)
             .build();
 
         header_info_box.append(&info_sentence);
@@ -188,7 +191,6 @@ impl AsyncComponent for LinkMachine {
         let progress_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .hexpand(true)
-            // .css_classes(["link-machine-progress-box"])
             .build();
 
         // progressbar

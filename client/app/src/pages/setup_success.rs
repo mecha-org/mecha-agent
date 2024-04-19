@@ -8,6 +8,7 @@ use relm4::{
     gtk::{
         self,
         glib::clone,
+        pango,
         prelude::{ButtonExt, WidgetExt},
         Button,
     },
@@ -91,6 +92,11 @@ impl SimpleComponent for SetupSuccess {
         let label1: gtk::Label = gtk::Label::builder()
             .label("Machine is now connected to your Mecha account")
             .halign(gtk::Align::Center)
+            .valign(gtk::Align::Center)
+            .hexpand(true)
+            .justify(gtk::Justification::Center)
+            .wrap(true)
+            .wrap_mode(pango::WrapMode::Word)
             .build();
 
         main_content_box.append(&image_from);

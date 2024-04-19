@@ -113,6 +113,7 @@ fn init_window(settings: ScreenSettings) -> gtk::Window {
         .css_classes(["window"])
         .build();
     window.set_resizable(false);
+    window.set_default_size(window_settings.size.0, window_settings.size.1);
     println!("CHECK WINDOW SIZE {:?} ", window.default_size());
     window
 }
@@ -230,34 +231,34 @@ impl AsyncComponent for MechaConnectApp {
             Option::from(Pages::NoInternet.to_string().as_str()),
         );
 
-        // screen_stack.add_named(
-        //     link_machine.widget(),
-        //     Option::from(Pages::LinkMachine.to_string().as_str()),
-        // );
+        screen_stack.add_named(
+            link_machine.widget(),
+            Option::from(Pages::LinkMachine.to_string().as_str()),
+        );
 
-        // screen_stack.add_named(
-        //     configure_machine.widget(),
-        //     Option::from(Pages::ConfigureMachine.to_string().as_str()),
-        // );
+        screen_stack.add_named(
+            configure_machine.widget(),
+            Option::from(Pages::ConfigureMachine.to_string().as_str()),
+        );
 
-        // screen_stack.add_named(
-        //     timeout_screen.widget(),
-        //     Option::from(Pages::TimeoutScreen.to_string().as_str()),
-        // );
+        screen_stack.add_named(
+            timeout_screen.widget(),
+            Option::from(Pages::TimeoutScreen.to_string().as_str()),
+        );
 
-        // screen_stack.add_named(
-        //     setup_success.widget(),
-        //     Option::from(Pages::SetupSuccess(String::from("")).to_string().as_str()),
-        // );
+        screen_stack.add_named(
+            setup_success.widget(),
+            Option::from(Pages::SetupSuccess(String::from("")).to_string().as_str()),
+        );
 
-        // screen_stack.add_named(
-        //     setup_failed.widget(),
-        //     Option::from(
-        //         Pages::SetupFailed(String::from(""), String::from(""))
-        //             .to_string()
-        //             .as_str(),
-        //     ),
-        // );
+        screen_stack.add_named(
+            setup_failed.widget(),
+            Option::from(
+                Pages::SetupFailed(String::from(""), String::from(""))
+                    .to_string()
+                    .as_str(),
+            ),
+        );
 
         screen_stack.add_named(
             machine_info.widget(),
@@ -460,6 +461,8 @@ impl AsyncComponent for MechaConnectApp {
                         self.timeout_screen = timeout_screen;
                     }
                     Pages::SetupSuccess(machine_id) => {
+                        println!("RENDER::SetupSuccess machine_id {:?}", machine_id.clone());
+
                         self.setup_success.detach_runtime();
 
                         self.machine_id = machine_id.clone();
@@ -599,7 +602,8 @@ fn create_start_screen(
                 StartScreenOutput::BackPressed => Message::ChangeScreen(Pages::StartScreen),
                 StartScreenOutput::ShowMachineInfo(machine_id) => Message::ChangeScreen(Pages::MachineInfo(machine_id)),
                 StartScreenOutput::ShowCheckInternet => Message::ChangeScreen(Pages::CheckInternet),        // OG
-                // StartScreenOutput::NextPressed => Message::ChangeScreen(Pages::ConfigureMachine)        // TEMP - TO TEST
+                
+                // StartScreenOutput::ShowMachineInfo(machine_id) => Message::ChangeScreen(Pages::ConfigureMachine), // TEMP - TO TEST
             }),
         );
 
