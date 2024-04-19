@@ -4,11 +4,10 @@ mod pages;
 mod server;
 mod services;
 mod settings;
-mod utils;
-mod widgets;
 
 use async_trait::async_trait;
 use gtk::prelude::{BoxExt, GtkWindowExt};
+use handlers::machine_info;
 use init_tracing_opentelemetry::tracing_subscriber_ext::{
     build_logger_text, build_loglevel_filter_layer, build_otel_layer,
 };
@@ -36,7 +35,8 @@ use settings::{Modules, ScreenSettings, WidgetConfigs};
 use std::{env, fmt};
 use tracing::{info, level_filters::LevelFilter};
 use tracing_subscriber::{fmt::format, layer::SubscriberExt, EnvFilter};
-
+mod utils;
+mod widgets;
 #[derive(Debug)]
 
 struct ErrorMessage {
@@ -73,7 +73,7 @@ enum Pages {
     TimeoutScreen,
     SetupSuccess(String),
     SetupFailed(String, String),
-    MachineInfo,
+    MachineInfo(String),
 }
 
 impl fmt::Display for Pages {
@@ -87,7 +87,7 @@ impl fmt::Display for Pages {
             Pages::TimeoutScreen => write!(f, "timeout_screen"),
             Pages::SetupSuccess(machine_id) => write!(f, "setup_success"),
             Pages::SetupFailed(error, from_screen) => write!(f, "setup_failed"),
-            Pages::MachineInfo => write!(f, "machine_info"),
+            Pages::MachineInfo(machine_id) => write!(f, "machine_info"),
         }
     }
 }
@@ -112,6 +112,8 @@ fn init_window(settings: ScreenSettings) -> gtk::Window {
         .default_height(window_settings.size.1)
         .css_classes(["window"])
         .build();
+    window.set_resizable(false);
+    println!("CHECK WINDOW SIZE {:?} ", window.default_size());
     window
 }
 
@@ -126,7 +128,10 @@ impl AsyncComponent for MechaConnectApp {
 
     fn init_root() -> Self::Root {
         let settings = match settings::read_settings_yml() {
-            Ok(settings) => settings,
+            Ok(settings) => {
+                println!("main::init_root--- {:?} ", settings);
+                settings
+            }
             Err(_) => ScreenSettings::default(),
         };
 
@@ -147,7 +152,10 @@ impl AsyncComponent for MechaConnectApp {
         sender: AsyncComponentSender<Self>,
     ) -> AsyncComponentParts<Self> {
         let settings = match settings::read_settings_yml() {
-            Ok(settings) => settings,
+            Ok(settings) => {
+                println!("main::init--- {:?} ", settings);
+                settings
+            }
             Err(_) => ScreenSettings::default(),
         };
 
@@ -222,38 +230,38 @@ impl AsyncComponent for MechaConnectApp {
             Option::from(Pages::NoInternet.to_string().as_str()),
         );
 
-        screen_stack.add_named(
-            link_machine.widget(),
-            Option::from(Pages::LinkMachine.to_string().as_str()),
-        );
+        // screen_stack.add_named(
+        //     link_machine.widget(),
+        //     Option::from(Pages::LinkMachine.to_string().as_str()),
+        // );
 
-        screen_stack.add_named(
-            configure_machine.widget(),
-            Option::from(Pages::ConfigureMachine.to_string().as_str()),
-        );
+        // screen_stack.add_named(
+        //     configure_machine.widget(),
+        //     Option::from(Pages::ConfigureMachine.to_string().as_str()),
+        // );
 
-        screen_stack.add_named(
-            timeout_screen.widget(),
-            Option::from(Pages::TimeoutScreen.to_string().as_str()),
-        );
+        // screen_stack.add_named(
+        //     timeout_screen.widget(),
+        //     Option::from(Pages::TimeoutScreen.to_string().as_str()),
+        // );
 
-        screen_stack.add_named(
-            setup_success.widget(),
-            Option::from(Pages::SetupSuccess("".to_owned()).to_string().as_str()),
-        );
+        // screen_stack.add_named(
+        //     setup_success.widget(),
+        //     Option::from(Pages::SetupSuccess(String::from("")).to_string().as_str()),
+        // );
 
-        screen_stack.add_named(
-            setup_failed.widget(),
-            Option::from(
-                Pages::SetupFailed("".to_owned(), "".to_owned())
-                    .to_string()
-                    .as_str(),
-            ),
-        );
+        // screen_stack.add_named(
+        //     setup_failed.widget(),
+        //     Option::from(
+        //         Pages::SetupFailed(String::from(""), String::from(""))
+        //             .to_string()
+        //             .as_str(),
+        //     ),
+        // );
 
         screen_stack.add_named(
             machine_info.widget(),
-            Option::from(Pages::MachineInfo.to_string().as_str()),
+            Option::from(Pages::MachineInfo(String::from("")).to_string().as_str()),
         );
 
         //Setting current active screen in stack
@@ -290,7 +298,10 @@ impl AsyncComponent for MechaConnectApp {
         _root: &Self::Root,
     ) {
         let settings = match settings::read_settings_yml() {
-            Ok(settings) => settings,
+            Ok(settings) => {
+                println!("main::update--- {:?} ", settings);
+                settings
+            }
             Err(_) => ScreenSettings::default(),
         };
 
@@ -463,14 +474,16 @@ impl AsyncComponent for MechaConnectApp {
                             &self
                                 .screen_stack
                                 .child_by_name(
-                                    Pages::SetupSuccess("".to_owned()).to_string().as_str(),
+                                    Pages::SetupSuccess(String::from("")).to_string().as_str(),
                                 )
                                 .unwrap(),
                         );
 
                         self.screen_stack.add_named(
                             setup_success.widget(),
-                            Option::from(Pages::SetupSuccess("".to_owned()).to_string().as_str()),
+                            Option::from(
+                                Pages::SetupSuccess(String::from("")).to_string().as_str(),
+                            ),
                         );
 
                         self.setup_success = setup_success;
@@ -493,7 +506,7 @@ impl AsyncComponent for MechaConnectApp {
                             &self
                                 .screen_stack
                                 .child_by_name(
-                                    Pages::SetupFailed("".to_owned(), "".to_owned())
+                                    Pages::SetupFailed(String::from(""), String::from(""))
                                         .to_string()
                                         .as_str(),
                                 )
@@ -503,7 +516,7 @@ impl AsyncComponent for MechaConnectApp {
                         self.screen_stack.add_named(
                             setup_failed.widget(),
                             Option::from(
-                                Pages::SetupFailed("".to_owned(), "".to_owned())
+                                Pages::SetupFailed(String::from(""), String::from(""))
                                     .to_string()
                                     .as_str(),
                             ),
@@ -518,7 +531,11 @@ impl AsyncComponent for MechaConnectApp {
                             ),
                         );
                     }
-                    Pages::MachineInfo => {
+                    Pages::MachineInfo(machine_id_value) => {
+                        println!(
+                            "RENDER:: MachineInfo :: machine_id_value {:?}",
+                            machine_id_value
+                        );
                         let machine_info_screen = create_machine_info_screen(
                             settings.modules.clone(),
                             settings.widget_configs.clone(),
@@ -527,17 +544,26 @@ impl AsyncComponent for MechaConnectApp {
                         self.screen_stack.remove(
                             &self
                                 .screen_stack
-                                .child_by_name(Pages::MachineInfo.to_string().as_str())
+                                .child_by_name(
+                                    Pages::MachineInfo(String::from("")).to_string().as_str(),
+                                )
                                 .unwrap(),
                         );
                         self.screen_stack.add_named(
                             machine_info_screen.widget(),
-                            Option::from(Pages::MachineInfo.to_string().as_str()),
+                            Option::from(
+                                Pages::MachineInfo(machine_id_value.to_owned())
+                                    .to_string()
+                                    .as_str(),
+                            ),
                         );
 
                         self.machine_info = machine_info_screen;
 
-                        let machine_id = self.machine_id.clone();
+                        let mut machine_id = self.machine_id.clone();
+                        if machine_id == "-" || machine_id == "-" {
+                            machine_id = machine_id_value.to_owned();
+                        }
 
                         let _ = __self
                             .machine_info
@@ -571,7 +597,7 @@ fn create_start_screen(
             &sender,
             clone!(@strong modules => move|msg| match msg {
                 StartScreenOutput::BackPressed => Message::ChangeScreen(Pages::StartScreen),
-                StartScreenOutput::ShowMachineInfo => Message::ChangeScreen(Pages::MachineInfo),
+                StartScreenOutput::ShowMachineInfo(machine_id) => Message::ChangeScreen(Pages::MachineInfo(machine_id)),
                 StartScreenOutput::ShowCheckInternet => Message::ChangeScreen(Pages::CheckInternet),        // OG
                 // StartScreenOutput::NextPressed => Message::ChangeScreen(Pages::ConfigureMachine)        // TEMP - TO TEST
             }),
@@ -701,7 +727,7 @@ fn create_setup_success_screen(
             clone!(@strong modules => move|msg| match msg {
                 SetupSuccessOutput::BackPressed => Message::ChangeScreen(Pages::ConfigureMachine),  // remove
                 SetupSuccessOutput::NextPressed =>
-                Message::ChangeScreen(Pages::MachineInfo)
+                Message::ChangeScreen(Pages::MachineInfo(String::from("")))
             }),
         );
     setup_success
@@ -763,29 +789,31 @@ async fn main() {
     let app = RelmApp::new("mecha.connect.app");
 
     let settings = match settings::read_settings_yml() {
-        Ok(settings) => settings,
+        Ok(settings) => {
+            println!("main::main--- {:?} ", settings);
+            settings
+        }
         Err(_) => ScreenSettings::default(),
     };
 
     let css = settings.css.clone();
     let _ = app.set_global_css_from_file(css.default);
 
-    env::set_var("RUST_LOG", "connect=trace,debug,info, error,warn");
+    env::set_var("RUST_LOG", "connect=trace,debug,info,error,warn");
 
     let subscriber = tracing_subscriber::registry()
         .with(sentry_tracing::layer().event_filter(|_| EventFilter::Ignore))
         .with(build_loglevel_filter_layer())
         .with(build_logger_text())
-        .with(
-            EnvFilter::try_new("connect")
-                .unwrap_or_else(|_| EnvFilter::new::<String>(LevelFilter::current().to_string())),
-        )
+        // .with(
+        //     EnvFilter::try_new("connect")
+        //         .unwrap_or_else(|_| EnvFilter::new::<String>(LevelFilter::current().to_string())),
+        // )
         .with(build_otel_layer().unwrap());
 
     match tracing::subscriber::set_global_default(subscriber) {
         Ok(_) => (),
         Err(e) => {
-            // bail!("Error setting global default subscriber: {}", e)
             eprintln!("Error setting global default subscriber: {}", e)
         }
     };

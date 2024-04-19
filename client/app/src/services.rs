@@ -5,6 +5,9 @@ use crate::server::{
     settings_client::{GetSettingsResponse, SettingsClient},
 };
 use anyhow::{bail, Result};
+use tracing::warn;
+
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
 #[derive(Debug, Clone)]
 pub struct MachineInformation {
@@ -109,6 +112,8 @@ pub async fn get_machine_cert_details() -> Result<GetMachineCertResponse> {
 }
 
 pub async fn get_machine_info() -> Result<MachineInformation> {
+    let fn_name: &str = "get_machine_info";
+
     let machine_id_response = get_machine_id().await;
 
     let _ = tokio::time::sleep(Duration::from_secs(2)).await;
@@ -116,7 +121,7 @@ pub async fn get_machine_info() -> Result<MachineInformation> {
         get_machine_name_or_icon(String::from("identity.machine.name")).await;
 
     let machine_icon_response =
-        get_machine_name_or_icon(String::from("identity.machine.icon")).await;
+        get_machine_name_or_icon(String::from("identity.machine.icon_base64")).await;
 
     // let machine_cert_details = get_machine_cert_details().await;
 
@@ -148,8 +153,23 @@ pub async fn get_machine_info() -> Result<MachineInformation> {
         icon: match machine_icon_response {
             Ok(resp) => {
                 let mut machine_icon = Some(String::from(""));
-                if resp.value != "" {
-                    machine_icon = Some(resp.value)
+                if !resp.value.is_empty() {
+                    let value = match resp.value.split(",").last() {
+                        Some(result) => result,
+                        None => "",
+                    };
+                    machine_icon = Some(value.to_string())
+                } else {
+                    println!(
+                        "get_machine_info::EMPTY machine_icon_response========> {:?} ",
+                        resp.value
+                    );
+                    warn!(
+                        func = fn_name,
+                        package = PACKAGE_NAME,
+                        "EMPTY machine_icon_response========> {:?} ",
+                        resp.value
+                    );
                 }
                 machine_icon
             }

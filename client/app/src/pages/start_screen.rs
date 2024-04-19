@@ -1,9 +1,10 @@
 use crate::{
     handlers::start_screen::handler::machine_provision_status,
+    services::get_machine_id,
     settings::{Modules, WidgetConfigs},
-    utils,
+    utils::{self, get_image_from_path},
 };
-use gtk::prelude::*;
+
 use relm4::{
     adw,
     component::{AsyncComponent, AsyncComponentParts},
@@ -16,9 +17,10 @@ use relm4::{
     },
     AsyncComponentSender,
 };
+
+use gtk::prelude::*;
 use tonic::async_trait;
 use tracing::{debug, error, info};
-use utils::get_image_from_path;
 
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
@@ -33,7 +35,7 @@ pub struct StartScreen {
 #[derive(Debug)]
 pub enum StartScreenOutput {
     ShowCheckInternet,
-    ShowMachineInfo,
+    ShowMachineInfo(String),
     BackPressed,
 }
 
@@ -49,7 +51,9 @@ impl AsyncComponent for StartScreen {
     type CommandOutput = ();
 
     fn init_root() -> Self::Root {
-        gtk::Box::builder().build()
+        gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .build()
     }
 
     /// Initialize the UI and model.
@@ -104,7 +108,7 @@ impl AsyncComponent for StartScreen {
 
         let info_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
-            .css_classes(["start-header-p"])
+            // .css_classes(["start-header-p"])
             .build();
 
         let info_icon: gtk::Image = get_image_from_path(
@@ -206,8 +210,8 @@ impl AsyncComponent for StartScreen {
         let carousel = adw::Carousel::builder()
             .hexpand(true)
             .spacing(15)
-            .width_request(340)
-            .height_request(300)
+            .width_request(150)
+            .height_request(70)
             .css_classes(["carousel"])
             .build();
 
@@ -220,6 +224,14 @@ impl AsyncComponent for StartScreen {
 
         main_content_box.append(&carousel);
         main_content_box.append(&carousel_dots);
+
+        // let advance_carousel = clone!(@weak carousel => move || {
+        //     let mut carousel_ref = carousel.borrow_mut();
+        //     carousel_ref.next_sibling();
+        //     return glib::ControlFlow::Continue;
+        // });
+
+        // glib::timeout_add_seconds_local(2, advance_carousel);
 
         let footer_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -288,9 +300,33 @@ fn check_machine_provision(sender: AsyncComponentSender<StartScreen>) {
                         package = PACKAGE_NAME,
                         "provision completed ==> check machine info"
                     );
+
+                    let machine_id_response = get_machine_id().await;
+
+                    let mut machine_id = String::from("-");
+                    machine_id = match machine_id_response {
+                        Ok(resp) => {
+                            let mut machine_id = String::from("-");
+                            if !resp.machine_id.is_empty() {
+                                machine_id = resp.machine_id
+                            }
+                            println!("start_screen::machine_id {:?}", machine_id);
+                            machine_id
+                        }
+                        Err(e) => {
+                            error!(
+                                func = fn_name,
+                                package = PACKAGE_NAME,
+                                "start_screen::get_machine_id::error {:?}",
+                                e
+                            );
+                            String::from("-")
+                        }
+                    };
+                    println!("after::start_screen::machine_id {:?}", machine_id);
                     let _ = sender
                         .output_sender()
-                        .send(StartScreenOutput::ShowMachineInfo);
+                        .send(StartScreenOutput::ShowMachineInfo(machine_id));
                 } else {
                     debug!(
                         fn_name,

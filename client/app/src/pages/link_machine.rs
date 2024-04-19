@@ -83,7 +83,7 @@ impl AsyncComponent for LinkMachine {
 
     fn init_root() -> Self::Root {
         let provider = CssProvider::new();
-        provider.load_from_data(include_str!("../assets/css/style.css"));
+        //provider.load_from_data(include_str!("../assets/css/style.css"));
         gtk::style_context_add_provider_for_display(
             &Display::default().expect("Could not connect to a display."),
             &provider,
@@ -142,12 +142,11 @@ impl AsyncComponent for LinkMachine {
 
         let header_info_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
-            .css_classes(["start-header-p"])
+            // .css_classes(["start-header-p"])
             .build();
 
         let info_sentence = gtk::Label::builder()
             .label("Use this below code to connect this machine to your Mecha account")
-            // .css_classes(["link-machine-header-label"])
             .halign(gtk::Align::Start)
             .build();
 

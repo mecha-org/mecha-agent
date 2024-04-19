@@ -266,6 +266,7 @@ impl Default for CssConfigs {
 pub fn read_settings_path_from_args() -> Option<String> {
     let args: Vec<String> = env::args().collect();
     if args.len() > 2 && (args[1] == "-s" || args[1] == "--settings") {
+        println!("Using settings path from argument - {}", args[2]);
         debug!("Using settings path from argument - {}", args[2]);
         return Some(String::from(args[2].clone()));
     }
@@ -281,13 +282,24 @@ pub fn read_settings_yml() -> Result<ScreenSettings> {
     let mut file_path = PathBuf::from(
         std::env::var("MECHA_CONNECT_APP_SETTINGS_PATH").unwrap_or(String::from("settings.yml")),
     ); // Get path of the library
+    println!(
+        "settings::mod::read_settings_yml-file_path : {:?}",
+        file_path
+    );
 
     // read from args
     let file_path_in_args = read_settings_path_from_args();
     if file_path_in_args.is_some() {
         file_path = PathBuf::from(file_path_in_args.unwrap());
+        println!(
+            "IF read_settings_yml::settings file location - {:?}",
+            file_path
+        );
     }
-
+    println!(
+        "read_settings_yml::settings file location - {:?}",
+        file_path
+    );
     tracing::info!(
         func = "read_settings",
         package = env!("CARGO_PKG_NAME"),
@@ -295,10 +307,20 @@ pub fn read_settings_yml() -> Result<ScreenSettings> {
         file_path,
     );
 
+    tracing::info!("CHECKING LOGS");
+
     // open file
     let settings_file_handle = match File::open(file_path) {
-        Ok(file) => file,
+        Ok(file) => {
+            tracing::info!(
+                func = "read_settings",
+                package = env!("CARGO_PKG_NAME"),
+                "settings_file_handle::open file"
+            );
+            file
+        }
         Err(e) => {
+            eprintln!("cannot read the settings.yml in the path - {}", e);
             bail!(ScreenError::new(
                 ScreenErrorCodes::SettingsReadError,
                 format!("cannot read the settings.yml in the path - {}", e),

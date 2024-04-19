@@ -57,7 +57,10 @@ impl ProvisionManagerClient {
             });
 
         let response = match self.client.provision_by_code(request).await {
-            Ok(response) => response.into_inner(),
+            Ok(response) => {
+                println!("provisioning_response : {:?}", response);
+                response.into_inner()
+            }
             Err(e) => {
                 bail!(e);
             }

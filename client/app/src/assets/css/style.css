@@ -1,13 +1,13 @@
 .window {
-    background-color: #070809;
-    /* background-color: #000000; */
-    font-family: 'Space Grotesk';
-    /* color:#ffffff; */
+    background-color: #070809; 
+    font-family: 'Space Grotesk'; 
     color:#d47a7a;
+    min-width: 100%;
+    min-height: 100%;
 }
 
 .footer-container {
-    margin: 10px 10px;
+    margin: 0px 10px;
 }
 
 .footer-container-button {
@@ -15,7 +15,8 @@
     min-height: 40px;
 }
 
-.app-container {
+
+.app-container { 
     padding: 5px 20px 20px 20px;
     color: #FAFBFC;
 }
@@ -49,9 +50,7 @@
 
 /* .link-machine-header-box */
 .start-screen-header-box {
-    min-width: 167px;
-    min-height: 28px;
-    padding: 15px 20px 12px 20px;
+    padding: 10px;
 }
 
 .start-header-p {
@@ -65,20 +64,16 @@
 }
 
 .start-screen-steps-label {
-    margin: 10px 30px 10px 30px; 
+    margin: 10px 20px 10px 20px; 
 }
 
 .start-screen-steps-box {
-    min-width: 440px;
-    min-height: 76px;
-
+    min-height: 80px;
     font-weight: 500;
-    font-size: 18px;
-    line-height: 26px;
-    /* padding: 10px 0px 10px 0px; */
-    padding: 30px 20px 30px 20px;
+    font-size: 16px;
+    line-height: 24px;
+    padding: 30px 28px 30px 28px;
     margin: 20px 10px 25px 10px;
-
     background-color: #15171D;
     border-radius: 10px;
 }
@@ -182,7 +177,8 @@
 }
 
 .timeout-img {
-    min-width: 318px;
+    /* min-width: 318px; */
+    min-width: 200px;
     min-height: 318px;
     margin: 30px 40px 20px 40px;
 }
@@ -256,13 +252,22 @@
 }
 
 .device-info-icon {
+    min-width: 127px;
+    min-height: 127px;
+    border-radius: 10px;
+    /* margin-top: 40px; */
+}
+
+.device-info-icon-box {
     min-width: 128px;
-    min-height: 128px;
-    margin-top: 40px;
+	min-height: 128px;
+	margin-top: 40px;
+	border-radius: 10px;
+    background-color: #202431;
 }
 
 .blue {
-    color: #2c2fec;
+    color: #3283E8; 
 }
 
 .gray {
@@ -314,11 +319,15 @@
 	background-color: #3b3f49;
 } */
 
-.custom-toast {
+.custom-toast-box {
 	background-color: rgba(255, 255, 255, 0.2);
-	border-radius: 25px;
-	padding: 5px 10px; 
-    margin: 6px;
+	border-radius: 10px;
+	padding: 4px 10px; 
+    margin: 40px 10px 5px 10px;
+}
+
+.custom-toast {
+    padding: 5px;
 }
 
 .capitalize {
