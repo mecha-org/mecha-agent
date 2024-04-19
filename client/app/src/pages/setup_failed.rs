@@ -1,5 +1,7 @@
-use crate::settings::{Modules, WidgetConfigs};
-use custom_utils::{get_gif_from_path, get_image_from_path};
+use crate::{
+    settings::{Modules, WidgetConfigs},
+    utils,
+};
 use gtk::prelude::*;
 use relm4::{
     gtk::{
@@ -11,6 +13,7 @@ use relm4::{
     },
     ComponentParts, ComponentSender, SimpleComponent,
 };
+use utils::{get_gif_from_path, get_image_from_path};
 
 pub struct Settings {
     pub modules: Modules,

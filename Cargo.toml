@@ -1,10 +1,9 @@
 [workspace]
 default-members = ["agent"]
-members = ["agent", "core/services", "core/events", "core/settings", "provisioning", "messaging", "identity", "status", "settings", "grpc_server", "networking","telemetry","commons/crypto", "commons/kv_store", "commons/fs", "client/app"]
-
+members = ["agent", "core/services", "core/events", "core/settings", "provisioning", "messaging", "identity", "status", "settings", "grpc-server", "networking","telemetry","commons/crypto", "commons/kv-store", "commons/fs", "client/app"]
+resolver = "2"
 
 [workspace.package]
-name = "mecha_agent"
 version = "1.0.0"
 authors = ["Minesh Purohit <mineshp@mechasystems.com", "Shoaib Merchant <shoaibm@mechasystems.com>"]
 description = "Mecha Agent on the device for provisioning, messaging and more"
@@ -13,3 +12,35 @@ edition = "2021"
 license = "MIT"
 repository = "https://github.com/mecha-org/mecha-agent"
 homepage = "https://mecha.so"
+
+[workspace.dependencies]
+async-trait = "0.1.74"
+async-nats = "0.33.0"
+tokio = { version = "1.27.0", features = ["full"] }
+serde = { version  = "1.0.159", features = ["derive"]}
+serde_json = "1.0.33"
+serde_yaml = "0.9.21"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+sentry-tracing = {version= "0.32.1"}
+sentry = { version = "0.32.1",features = ["backtrace", "anyhow"] }
+init-tracing-opentelemetry = { version = "0.12.0", features = ["otlp", "tracing_subscriber_ext"] }
+sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
+anyhow = { version= "1.0.71", features = ["backtrace"]}
+opentelemetry = "0.21.0"
+tokio-util = "0.7.10"
+opentelemetry-appender-tracing = "0.2.0"
+reqwest = { version = "0.11", features = ["json"] }
+tonic = "0.10.2"
+tonic-types = "0.10.2"
+protobuf = "3.2.0"
+chrono = { version = "0.4.31", features = ["serde"] }
+nkeys = "0.4.0"
+bytes = "1.5.0"
+dotenv = "0.15.0"
+prost = "0.12.3"
+prost-types = "0.12.3"
+bincode = "1.3.3"
+sha256 = "1.1.2"
+futures = "0.3.28"
+log = "0.4.20"

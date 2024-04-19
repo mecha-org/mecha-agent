@@ -12,23 +12,22 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-agent_settings = { path = "../core/settings" }
+agent-settings = { path = "../core/settings" }
 events = { path = "../core/events" }
 messaging = { path = "../messaging" }
 identity = { path = "../identity" }
 channel = { path = "../commons/channel" }
-nats_client = { path = "../commons/nats_client" }
+nats-client = { path = "../commons/nats-client" }
 services = { path = "../core/services" }
-kv_store = { path = "../commons/kv_store" }
+kv-store = { path = "../commons/kv-store" }
 crypto = { path = "../commons/crypto" }
-anyhow = { version = "1.0.71", features = ["backtrace"]}
-sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
-serde_json = "1.0.33"
-serde = { version  = "1.0.159", features = ["derive"]}
-tonic = "0.10.2"
-tracing = "0.1"
-
-tokio = { version = "1.27.0", features = ["full"] }
-futures = "0.3.28"
-sha256 = "1.1.2"
-tokio-util = "0.7.10"
+anyhow = { workspace = true }
+sentry-anyhow= { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tonic = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }
+sha256 = { workspace = true }
+tokio-util = { workspace = true }
