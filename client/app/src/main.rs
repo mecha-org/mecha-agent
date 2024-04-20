@@ -23,14 +23,11 @@ use pages::{
     timeout_screen::{Settings as TimeoutScreenSettings, TimeoutOutput, TimeoutScreen},
 };
 use relm4::{
-    component::{AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController},
-    gtk::{glib::clone, prelude::ApplicationExt},
-    AsyncComponentSender, SimpleComponent,
+    component::{AsyncComponent, AsyncComponentController, AsyncComponentParts, AsyncController}, gtk::{glib::clone, prelude::{ApplicationExt, WidgetExt}}, AsyncComponentSender, RelmContainerExt, RelmSetChildExt, SimpleComponent
 };
 use relm4::{gtk, ComponentController};
 use relm4::{Component, Controller, RelmApp};
 use sentry_tracing::EventFilter;
-use services::MachineInformation;
 use settings::{Modules, ScreenSettings, WidgetConfigs};
 use std::{env, fmt};
 use tracing::{info, level_filters::LevelFilter};
@@ -270,7 +267,9 @@ impl AsyncComponent for MechaConnectApp {
         screen_stack.set_visible_child_name(&current_screen.to_string());
         screen_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
         screen_stack.set_transition_duration(300);
-        window.set_child(Some(&screen_stack));
+        
+        // window.set_child(Some(&screen_stack));
+        window.container_add(&screen_stack);
 
         let model = MechaConnectApp {
             current_screen,
