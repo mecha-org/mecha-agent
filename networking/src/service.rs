@@ -783,8 +783,8 @@ pub async fn reconnect_messaging_service(
 ) -> Result<bool> {
     let fn_name = "reconnect_messaging_service";
     match existing_settings.get("networking.enabled") {
-        Some(messaging) => {
-            if messaging == &new_setting {
+        Some(setting) => {
+            if setting == &new_setting {
                 info!(
                     func = fn_name,
                     package = PACKAGE_NAME,
