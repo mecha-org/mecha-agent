@@ -44,6 +44,12 @@ tonic-build = "0.9.2"
 name = "mecha-connect"
 depends = "$auto"
 assets = [
+    # assets
+    [
+        "src/assets",
+        "/usr/mecha/connect",
+        "755",
+    ],
     # binary
     [
         "../../target/release/mecha-connect",
