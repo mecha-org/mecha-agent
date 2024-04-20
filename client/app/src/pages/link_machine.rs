@@ -271,6 +271,11 @@ impl AsyncComponent for LinkMachine {
         let step2_text = gtk::Label::builder()
             .label("Navigate to Machines > Add Machine")
             .css_classes(["link-machine-steps-text"])
+            .halign(gtk::Align::Start)
+            .hexpand(true)
+            .justify(gtk::Justification::Fill)
+            .wrap(true)
+            .wrap_mode(pango::WrapMode::Word)
             .build();
 
         linking_step2_box.append(&step2_label_box);
@@ -300,6 +305,11 @@ impl AsyncComponent for LinkMachine {
         let step3_text = gtk::Label::builder()
             .label("Enter the code shown above when asked")
             .css_classes(["link-machine-steps-text"])
+            .halign(gtk::Align::Start)
+            .hexpand(true)
+            .justify(gtk::Justification::Fill)
+            .wrap(true)
+            .wrap_mode(pango::WrapMode::Word)
             .build();
 
         linking_step3_box.append(&step3_label_box);

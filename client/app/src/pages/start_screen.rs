@@ -53,7 +53,6 @@ impl AsyncComponent for StartScreen {
     fn init_root() -> Self::Root {
         gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
-            .css_classes(["page-container"])
             .build()
     }
 

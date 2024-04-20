@@ -2,8 +2,6 @@
     background-color: #070809; 
     font-family: 'Space Grotesk'; 
     color:#d47a7a;
-    min-width: 100%;
-    min-height: 100%;
 }
 
 .footer-container {
@@ -17,8 +15,8 @@
 
 
 .app-container { 
-    padding: 5px 20px 20px 20px;
-    color: #FAFBFC;
+    padding: 0px 20px 30px 20px;
+    color: #FAFBFC; 
 }
 
 .start-screen-header {
@@ -67,10 +65,9 @@
 }
 
 .start-screen-steps-box {
-    min-height: 70px;
     font-weight: 500;
     font-size: 16px;
-    line-height: 22px;
+    line-height: 20px;
     padding: 28px 28px 28px 28px;
     margin: 20px 10px 25px 10px;
     background-color: #15171D;
@@ -80,7 +77,6 @@
 .start-screen-steps-icon {
     min-width: 76px;
     min-height: 76px;
-
     margin: 15px 0px;
 }
 
@@ -133,8 +129,8 @@
 
 .link-machine-steps-text {
     font-weight: 500;
-    font-size: 18px;
-    line-height: 24px;
+    font-size: 16px;
+    line-height: 20px;
     color: #E4E7EE;
     margin: 0px 3px;
 }
@@ -275,21 +271,21 @@
     min-width: 35px; 
     min-height: 35px; 
     border: 1px solid rgb(59, 61, 201); 
-    border-radius: 50%; 
+    border-radius: 50px; 
     margin: auto; 
     background: conic-gradient(rgb(44, 47, 236) 40%, #eee 0);
 }
 
 .time-progressbar trough{
     background-color:  #8da3ba;
-    border-radius: 50%;
+    border-radius: 50px;
     min-width: 40px;
     min-height: 40px; 
     border: 4px solid #8da3ba; 
 }
 
 .time-progressbar trough progress{
-    border-radius: 50%;
+    border-radius: 50px;
     min-width: 40px;
     min-height: 40px; 
 }
