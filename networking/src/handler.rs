@@ -271,18 +271,17 @@ impl NetworkingHandler {
                                 "deprovisioned event in networking"
                             );
                         },
-                        Event::Settings(events::SettingEvent::Updated{ settings })  => {
+                        Event::Settings(events::SettingEvent::Updated{ existing_settings, new_settings })  => {
                             trace!(
                                 func = "run",
                                 package = PACKAGE_NAME,
                                 "settings updated event in networking"
                             );
-                            match settings.get("networking.enabled") {
+                            match new_settings.get("networking.enabled") {
                                 Some(v) => {
                                     match v.as_str() {
                                         "true" => {
-                                            let _ = reconnect_messaging_service(self.messaging_tx.clone()).await;
-
+                                            let _ = reconnect_messaging_service(self.messaging_tx.clone(),v.to_string(), existing_settings).await;
                                             match configure_wireguard(self.messaging_tx.clone(), self.identity_tx.clone(), self.handshake_handler.as_ref().unwrap().id.clone(), self.settings_tx.clone()).await {
                                                 Ok(wireguard) => {
                                                     info!(
@@ -305,7 +304,7 @@ impl NetworkingHandler {
                                             let _ = self.networking_consumer().await;
                                         },
                                         "false" => {
-                                            let _ = reconnect_messaging_service(self.messaging_tx.clone()).await;
+                                            let _ = reconnect_messaging_service(self.messaging_tx.clone(),v.to_string(), existing_settings).await;
                                             let _ = self.clear_nats_subscription();
                                         },
                                         _ => {}

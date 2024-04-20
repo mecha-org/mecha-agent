@@ -1,8 +1,9 @@
+use std::collections::HashMap;
 use std::net::SocketAddr;
 
 use agent_settings::{networking::NetworkingSettings, read_settings_yml, AgentSettings};
 use anyhow::{bail, Result};
-use channel::recv_with_timeout;
+use channel::{recv_with_custom_timeout, recv_with_timeout};
 use crypto::random::generate_random_alphanumeric;
 use futures::StreamExt;
 use identity::handler::IdentityMessage;
@@ -111,7 +112,7 @@ pub async fn subscribe_to_nats(
                 ));
             }
         }
-        match recv_with_timeout(rx).await {
+        match recv_with_custom_timeout(5000, rx).await {
             Ok(subscriber) => match &subject {
                 NetworkingSubject::HandshakeRequest(_) => {
                     networking_subscriber.handshake_request = Some(subscriber)
@@ -775,8 +776,31 @@ async fn get_ip_address(settings_tx: mpsc::Sender<SettingMessage>) -> Result<Str
     Ok(ip_address)
 }
 
-pub async fn reconnect_messaging_service(messaging_tx: Sender<MessagingMessage>) -> Result<bool> {
+pub async fn reconnect_messaging_service(
+    messaging_tx: Sender<MessagingMessage>,
+    new_setting: String,
+    existing_settings: HashMap<String, String>,
+) -> Result<bool> {
     let fn_name = "reconnect_messaging_service";
+    match existing_settings.get("networking.enabled") {
+        Some(messaging) => {
+            if messaging == &new_setting {
+                info!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "networking settings are same, no need to reconnect"
+                );
+                return Ok(true);
+            }
+        }
+        None => {
+            info!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "existing networking settings not found, reconnecting"
+            );
+        }
+    }
     let (tx, rx) = oneshot::channel();
     match messaging_tx
         .send(MessagingMessage::Reconnect { reply_to: tx })
