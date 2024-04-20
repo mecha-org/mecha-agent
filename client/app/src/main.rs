@@ -105,12 +105,12 @@ fn init_window(settings: ScreenSettings) -> gtk::Window {
     let window_settings = settings.window;
     let window = gtk::Window::builder()
         .title("Mecha Connect")
-        .default_width(window_settings.size.0)
-        .default_height(window_settings.size.1)
+        // .default_width(window_settings.size.0)
+        // .default_height(window_settings.size.1)
         .css_classes(["window"])
         .build();
-    window.set_resizable(false);
-    window.set_default_size(window_settings.size.0, window_settings.size.1);
+    window.set_resizable(true);
+    // window.set_default_size(window_settings.size.0, window_settings.size.1);
     println!("CHECK WINDOW SIZE {:?} ", window.default_size());
     window
 }
