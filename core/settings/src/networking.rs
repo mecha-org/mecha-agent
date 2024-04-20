@@ -17,7 +17,7 @@ pub struct PeerSettings {
 }
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct NetworkingSettings {
-    pub disco_port: u32,
+    pub disco_addr: String,
     pub enabled: bool,
     pub wireguard: WireguardSettings,
 }
@@ -25,7 +25,7 @@ pub struct NetworkingSettings {
 impl Default for NetworkingSettings {
     fn default() -> Self {
         Self {
-            disco_port: 15150,
+            disco_addr: "0.0.0.0".to_string(),
             enabled: false,
             wireguard: WireguardSettings {
                 tun: "wg0".to_string(),

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 
 use agent_settings::{read_settings_yml, AgentSettings};
@@ -9,13 +9,12 @@ use futures::StreamExt;
 use local_ip_address::list_afinet_netifas;
 use messaging::async_nats::Message;
 use messaging::handler::MessagingMessage;
-use messaging::{Bytes, Subscriber as NatsSubscriber};
+use messaging::Subscriber as NatsSubscriber;
 use serde::{Deserialize, Serialize};
-use std::io;
+use serde_json::json;
 use tokio::net::UdpSocket;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
-use tokio::{select, sync::oneshot};
+use tokio::select;
+use tokio::sync::{mpsc, oneshot};
 use tracing::{error, info, warn};
 
 use crate::errors::{NetworkingError, NetworkingErrorCodes};
@@ -36,7 +35,7 @@ pub enum HandshakeMessage {
 #[derive(Serialize, Deserialize, Debug)]
 struct Candidate {
     ip: Ipv4Addr,
-    port: u32,
+    port: u16,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -57,42 +56,54 @@ pub enum TransactionStatus {
 
 #[derive(Clone)]
 pub struct HandshakeChannelHandler {
-    pub id: String,
-    pub messaging_tx: mpsc::Sender<MessagingMessage>,
+    pub channel_id: String,
+    messaging_tx: mpsc::Sender<MessagingMessage>,
     pub handshake_tx: mpsc::Sender<HandshakeMessage>,
-    pub txns: HashMap<String, TransactionStatus>,
+    txns: HashMap<String, TransactionStatus>,
 }
 impl HandshakeChannelHandler {
     pub fn new(
-        disco_url: String,
         messaging_tx: mpsc::Sender<MessagingMessage>,
         handshake_tx: mpsc::Sender<HandshakeMessage>,
     ) -> Self {
-        let id = generate_random_alphanumeric(32);
+        let channel_id: String = generate_random_alphanumeric(32);
         Self {
-            id: id.clone(),
-            messaging_tx: messaging_tx,
-            handshake_tx: handshake_tx,
+            channel_id,
+            messaging_tx,
+            handshake_tx,
             txns: HashMap::new(),
         }
     }
-    pub async fn run(&mut self, mut message_rx: mpsc::Receiver<HandshakeMessage>) -> Result<()> {
-        info!(func = "run", package = PACKAGE_NAME, "init");
-        //Todo: Start Disco
-        match start_disco().await {
-            Ok(_) => {}
+
+    pub async fn start_disco(&self, disco_addr: String) -> Result<UdpSocket> {
+        let sock = match create_disco_socket(disco_addr).await {
+            Ok(s) => s,
             Err(e) => {
                 error!(
-                    func = "run",
+                    func = "new",
                     package = PACKAGE_NAME,
-                    "Error starting disco: {}",
+                    "Error starting disco server: {}",
                     e
                 );
-                bail!(e)
+                bail!("Error starting disco: {}", e); // TODO
             }
-        }
+        };
+        Ok(sock)
+    }
+
+    pub async fn run(
+        &mut self,
+        sock: &mut UdpSocket,
+        message_rx: &mut mpsc::Receiver<HandshakeMessage>,
+    ) -> Result<()> {
+        info!(func = "run", package = PACKAGE_NAME, "init");
+        let mut buf = [0; 1024];
         loop {
             select! {
+                packet = sock.recv_from(&mut buf) => {
+                    let (len, addr) = packet.unwrap();
+                    println!("{:?} bytes received from {:?}", len, addr);
+                },
                 msg = message_rx.recv() => {
                     if msg.is_none() {
                         continue;
@@ -147,13 +158,25 @@ impl HandshakeChannelHandler {
                 bail!(e)
             }
         };
+        let addr: SocketAddr = match settings.networking.disco_addr.parse() {
+            Ok(addr) => addr,
+            Err(e) => {
+                warn!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "failed to parse disco address: {}",
+                    e
+                );
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8080)
+            }
+        };
         //1. Ge stun candidates
         //2. Create Manifest
         let local_candidates: Vec<Candidate> = endpoints
             .iter()
             .map(|endpoint| Candidate {
                 ip: *endpoint,
-                port: settings.networking.disco_port,
+                port: addr.port(),
             })
             .collect();
         let candidates = Candidates {
@@ -166,8 +189,15 @@ impl HandshakeChannelHandler {
         };
         println!("manifest: {:?}", manifest);
         // send reply to NATS
-        // self.messaging_tx
-        //     .send(MessagingMessage::Send { reply_to: (), message: (), subject: () } { manifest });
+        let (tx, _rx) = oneshot::channel();
+        let _ = self
+            .messaging_tx
+            .send(MessagingMessage::Send {
+                subject: reply_subject,
+                message: json!(manifest).to_string(),
+                reply_to: tx,
+            })
+            .await;
         Ok(true)
     }
 }
@@ -283,12 +313,12 @@ async fn process_handshake_request(
         .await;
     Ok(true)
 }
-pub async fn start_disco() -> Result<()> {
-    info!(func = "start_disco", package = PACKAGE_NAME, "init");
-    let sock = match UdpSocket::bind("0.0.0.0:8080").await {
+pub async fn create_disco_socket(addr: String) -> Result<UdpSocket> {
+    info!(func = "create_disco_socket", package = PACKAGE_NAME, "init");
+    let sock = match UdpSocket::bind(addr).await {
         Ok(s) => {
             info!(
-                func = "start_disco",
+                func = "create_disco_socket",
                 package = PACKAGE_NAME,
                 "bound to socket: {:?}",
                 s.local_addr().unwrap()
@@ -297,7 +327,7 @@ pub async fn start_disco() -> Result<()> {
         }
         Err(e) => {
             error!(
-                func = "start_disco",
+                func = "create_disco_socket",
                 package = PACKAGE_NAME,
                 "Error binding to socket: {}",
                 e
@@ -305,12 +335,5 @@ pub async fn start_disco() -> Result<()> {
             bail!(e)
         }
     };
-    let mut buf = [0; 1024];
-    let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {
-        loop {
-            let (len, addr) = sock.recv_from(&mut buf).await?;
-            println!("{:?} bytes received from {:?}", len, addr);
-        }
-    });
-    Ok(())
+    Ok(sock)
 }

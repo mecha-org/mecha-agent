@@ -58,13 +58,12 @@ pub enum NetworkingSubject {
     HandshakeRequest(String),
 }
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
-pub async fn subscribe_to_nats(
-    identity_tx: mpsc::Sender<IdentityMessage>,
+pub async fn get_networking_subscriber(
     settings_tx: mpsc::Sender<SettingMessage>,
     messaging_tx: mpsc::Sender<MessagingMessage>,
     channel_id: String,
 ) -> Result<NetworkingSubscriber> {
-    let fn_name = "subscribe_to_nats";
+    let fn_name = "get_networking_subscriber";
     let network_id =
         match get_settings_by_key(settings_tx.clone(), String::from("networking.network_id")).await
         {
@@ -102,7 +101,7 @@ pub async fn subscribe_to_nats(
                 error!(
                     func = fn_name,
                     package = PACKAGE_NAME,
-                    "error sending get que subscriber for issue token- {}",
+                    "error sending get subscriber networking- {}",
                     e
                 );
                 bail!(NetworkingError::new(
@@ -140,12 +139,7 @@ pub async fn subscribe_to_nats(
 
     Ok(networking_subscriber)
 }
-pub async fn configure_wireguard(
-    messaging_tx: Sender<MessagingMessage>,
-    identity_tx: Sender<IdentityMessage>,
-    channel: String,
-    settings_tx: Sender<SettingMessage>,
-) -> Result<Wireguard> {
+pub async fn configure_wireguard(settings_tx: Sender<SettingMessage>) -> Result<Wireguard> {
     let fn_name = "configure_wireguard";
     // read settings from settings.yml
     let settings: AgentSettings = match read_settings_yml() {
@@ -218,6 +212,16 @@ pub async fn configure_wireguard(
             ))
         }
     }
+    Ok(wireguard)
+}
+
+pub async fn publish_networking_channel(
+    channel_id: String,
+    messaging_tx: Sender<MessagingMessage>,
+    identity_tx: Sender<IdentityMessage>,
+    settings_tx: Sender<SettingMessage>,
+) -> Result<bool> {
+    let fn_name = "publish_networking_channel";
     let machine_id = match get_machine_id(identity_tx.clone()).await {
         Ok(id) => id,
         Err(e) => {
@@ -252,10 +256,10 @@ pub async fn configure_wireguard(
         digest(network_id.clone()),
     );
     println!("subject to publish channel details: {:?}", subject);
-    let payload = ChannelDetails {
+    let payload: ChannelDetails = ChannelDetails {
         machine_id: machine_id.clone(),
         network_id: network_id.clone(),
-        channel: channel,
+        channel: channel_id, //TODO: Change to channel id
     };
 
     // Publish channel information
@@ -285,29 +289,16 @@ pub async fn configure_wireguard(
             ))
         }
     };
-    Ok(wireguard)
+    Ok(true)
 }
-
 pub async fn await_consumer_message(
     consumer: Consumer<Config>,
     messaging_tx: Sender<MessagingMessage>,
     settings_tx: Sender<SettingMessage>,
-    wireguard: Wireguard,
-    channel: String,
+    channel_id: String,
 ) -> Result<bool> {
     println!("awaiting consumer message");
     let fn_name = "await_consumer_message";
-    let settings = match read_settings_yml() {
-        Ok(settings) => settings,
-        Err(_) => {
-            warn!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "settings.yml not found, using default settings"
-            );
-            AgentSettings::default()
-        }
-    };
     let mut messages = match consumer.messages().await {
         Ok(s) => s,
         Err(e) => {
@@ -341,11 +332,9 @@ pub async fn await_consumer_message(
     while let Some(Ok(message)) = messages.next().await {
         println!("message in consumer stream {:?}", message.payload);
         match process_message(
-            settings.networking.clone(),
             message.clone(),
             network_id.clone(),
-            wireguard.clone(),
-            channel.clone(),
+            channel_id.clone(),
             messaging_tx.clone(),
         )
         .await
@@ -383,11 +372,9 @@ pub async fn await_consumer_message(
 }
 
 async fn process_message(
-    settings: NetworkingSettings,
     message: Message,
     network_id: String,
-    mut wireguard: Wireguard,
-    channel: String,
+    channel_id: String,
     messaging_tx: Sender<MessagingMessage>,
 ) -> Result<bool> {
     let fn_name = "process_message";
@@ -417,48 +404,53 @@ async fn process_message(
             true
         )),
     };
-    //TODO: Do not process message if it is from same channel
-    // if channel.contains(&request_payload.channel) {
-    //     println!("channel id matched!");
-    //     info!(
-    //         func = fn_name,
-    //         package = PACKAGE_NAME,
-    //         "message from same node, ignoring"
-    //     );
-    //     match message.ack().await {
-    //         Ok(_) => {
-    //             println!("networking node message acknowledged")
-    //         }
-    //         Err(e) => {
-    //             error!(
-    //                 func = fn_name,
-    //                 package = PACKAGE_NAME,
-    //                 "error acknowledging message - {:?}",
-    //                 e
-    //             );
-    //             bail!(NetworkingError::new(
-    //                 NetworkingErrorCodes::MessageAcknowledgeError,
-    //                 format!("error acknowledging message - {:?}", e),
-    //                 true
-    //             ))
-    //         }
-    //     };
-    //     return Ok(true);
-    // }
+    //Do not process message if it is from same channel
+    if channel_id.contains(&request_payload.channel) {
+        println!("channel id matched!");
+        info!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "message from same node, ignoring"
+        );
+        match message.ack().await {
+            Ok(_) => {
+                println!("networking node message acknowledged")
+            }
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error acknowledging message - {:?}",
+                    e
+                );
+                bail!(NetworkingError::new(
+                    NetworkingErrorCodes::MessageAcknowledgeError,
+                    format!("error acknowledging message - {:?}", e),
+                    true
+                ))
+            }
+        };
+        return Ok(true);
+    }
     let subject_to_publish_channel_info = format!(
         "network.{}.node.handshake.{}",
-        digest(network_id),
+        digest(network_id.clone()),
         request_payload.channel.clone()
     );
     println!(
         "subject to publish handshake request {}",
         subject_to_publish_channel_info
     );
-    let (tx, _) = oneshot::channel();
+    let channel_details_payload = ChannelDetails {
+        machine_id: request_payload.machine_id.clone(),
+        network_id: network_id.clone(),
+        channel: channel_id.clone(),
+    };
+    let (tx, rx) = oneshot::channel();
     match messaging_tx
-        .send(MessagingMessage::Send {
+        .send(MessagingMessage::Request {
             reply_to: tx,
-            message: json!(request_payload).to_string(),
+            message: json!(channel_details_payload).to_string(),
             subject: subject_to_publish_channel_info,
         })
         .await
@@ -478,6 +470,34 @@ async fn process_message(
             ));
         }
     }
+    //wait for a replay
+    let result = match recv_with_custom_timeout(10000, rx).await {
+        Ok(res) => res,
+        Err(e) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error receiving get que subscriber for issue token- {}",
+                e
+            );
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ChannelReceiveMessageError,
+                format!("error receiving subscriber message - {}", e),
+                true
+            ));
+        }
+    };
+    let payload_str = match std::str::from_utf8(&result) {
+        Ok(s) => s,
+        Err(e) => {
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ExtractMessagePayloadError,
+                format!("error converting payload to string - {}", e),
+                true
+            ))
+        }
+    };
+    println!("payload_str {:?}", payload_str);
     match message.ack().await {
         Ok(_) => {
             println!("networking node message acknowledged")
@@ -503,24 +523,13 @@ async fn process_message(
     );
     Ok(true)
 }
-pub async fn create_pull_consumer(
+pub async fn create_channel_sync_consumer(
     messaging_tx: Sender<MessagingMessage>,
     identity_tx: Sender<IdentityMessage>,
     settings_tx: Sender<SettingMessage>,
 ) -> Result<Consumer<Config>> {
-    let fn_name = "create_pull_consumer";
-    // read settings from settings.yml
-    let settings: AgentSettings = match read_settings_yml() {
-        Ok(settings) => settings,
-        Err(_) => {
-            warn!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "settings.yml not found, using default settings"
-            );
-            AgentSettings::default()
-        }
-    };
+    let fn_name = "create_channel_sync_consumer";
+
     let machine_id = match get_machine_id(identity_tx.clone()).await {
         Ok(id) => id,
         Err(e) => {
@@ -638,7 +647,11 @@ pub async fn create_pull_consumer(
             bail!(e)
         }
     };
-    println!("pull consumer created!");
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "consumer created successfully"
+    );
     Ok(consumer)
 }
 async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Result<String> {
