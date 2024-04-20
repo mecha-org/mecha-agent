@@ -603,7 +603,7 @@ fn create_start_screen(
         .forward(
             &sender,
             clone!(@strong modules => move|msg| match msg {
-                StartScreenOutput::BackPressed => Message::ChangeScreen(Pages::StartScreen),
+                StartScreenOutput::BackPressed => Message::Exit,
                 StartScreenOutput::ShowMachineInfo(machine_id) => Message::ChangeScreen(Pages::MachineInfo(machine_id)),
                 StartScreenOutput::ShowCheckInternet => Message::ChangeScreen(Pages::CheckInternet),        // OG
                 
