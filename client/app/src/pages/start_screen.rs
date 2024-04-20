@@ -73,6 +73,7 @@ impl AsyncComponent for StartScreen {
 
         let main_content_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
+            .vexpand(true)
             .css_classes(["app-container"])
             .build();
 
@@ -132,7 +133,8 @@ impl AsyncComponent for StartScreen {
         let hbox_line2 = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .hexpand(true)
-            .vexpand(true)
+            .halign(gtk::Align::Center)
+            .valign(gtk::Align::Center)
             .css_classes(["start-screen-steps-box"])
             .build();
 
@@ -150,7 +152,7 @@ impl AsyncComponent for StartScreen {
             .css_classes(["start-screen-steps-label"])
             .wrap(true)
             .wrap_mode(pango::WrapMode::Word)
-            .vexpand(true)
+            // .vexpand(true)
             .halign(gtk::Align::Center)
             .valign(gtk::Align::End)
             .justify(gtk::Justification::Center)
@@ -162,7 +164,6 @@ impl AsyncComponent for StartScreen {
         let hbox_line3 = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .hexpand(true)
-            .vexpand(true)
             .css_classes(["start-screen-steps-box"])
             .build();
 
@@ -176,7 +177,6 @@ impl AsyncComponent for StartScreen {
             .css_classes(["start-screen-steps-label"])
             .wrap(true)
             .wrap_mode(pango::WrapMode::Word)
-            .vexpand(true)
             .halign(gtk::Align::Center)
             .valign(gtk::Align::End)
             .justify(gtk::Justification::Center)
@@ -188,7 +188,6 @@ impl AsyncComponent for StartScreen {
         let hbox_line4 = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .hexpand(true)
-            .vexpand(true)
             .css_classes(["start-screen-steps-box"])
             .build();
 
@@ -202,7 +201,7 @@ impl AsyncComponent for StartScreen {
             .css_classes(["start-screen-steps-label"])
             .wrap(true)
             .wrap_mode(pango::WrapMode::Word)
-            .vexpand(true)
+            // .vexpand(true)
             .halign(gtk::Align::Center)
             .valign(gtk::Align::End)
             .justify(gtk::Justification::Center)
@@ -216,7 +215,7 @@ impl AsyncComponent for StartScreen {
             .spacing(15)
             .width_request(150)
             .height_request(70)
-            .css_classes(["carousel"])
+            // .css_classes(["carousel"])
             .build();
 
         carousel.append(&hbox_line2);
@@ -228,14 +227,6 @@ impl AsyncComponent for StartScreen {
 
         main_content_box.append(&carousel);
         main_content_box.append(&carousel_dots);
-
-        // let advance_carousel = clone!(@weak carousel => move || {
-        //     let mut carousel_ref = carousel.borrow_mut();
-        //     carousel_ref.next_sibling();
-        //     return glib::ControlFlow::Continue;
-        // });
-
-        // glib::timeout_add_seconds_local(2, advance_carousel);
 
         let footer_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)

@@ -66,8 +66,6 @@ impl SimpleComponent for NoInternet {
         let paintable = get_gif_from_path(gif_path);
 
         let image_from = gtk::Image::builder()
-            .width_request(350)
-            .height_request(350)
             .paintable(&paintable)
             .css_classes(["gif-img"])
             .build();

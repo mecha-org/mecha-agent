@@ -80,12 +80,8 @@ impl SimpleComponent for SetupSuccess {
         let paintable = get_gif_from_path(gif_path);
 
         let image_from = gtk::Image::builder()
-            .width_request(290)
-            .height_request(290)
             .paintable(&paintable)
             .css_classes(["gif-img"])
-            .vexpand(true)
-            .valign(gtk::Align::Center)
             .build();
 
         // bold

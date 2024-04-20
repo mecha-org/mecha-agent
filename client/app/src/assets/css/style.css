@@ -1,11 +1,11 @@
 .window {
-    background-color: #070809; 
-    font-family: 'Space Grotesk'; 
-    color:#d47a7a;
+    background-color: #070809;
+    font-family: 'Space Grotesk';
+    color: #d47a7a;
 }
 
 .footer-container {
-    margin: 0px 10px;
+    margin: 0px 10px 12px 10px;
 }
 
 .footer-container-button {
@@ -14,9 +14,9 @@
 }
 
 
-.app-container { 
-    padding: 0px 20px 30px 20px;
-    color: #FAFBFC; 
+.app-container {
+    padding: 0px 20px;
+    color: #FAFBFC;
 }
 
 .start-screen-header {
@@ -61,23 +61,23 @@
 }
 
 .start-screen-steps-label {
-    margin: 10px 20px 10px 20px; 
+    margin: 20px;
 }
 
 .start-screen-steps-box {
     font-weight: 500;
     font-size: 16px;
     line-height: 20px;
-    padding: 28px 28px 28px 28px;
-    margin: 20px 10px 25px 10px;
     background-color: #15171D;
     border-radius: 10px;
+    padding: 15px;
+    margin-top: 8px;
 }
 
 .start-screen-steps-icon {
     min-width: 76px;
     min-height: 76px;
-    margin: 15px 0px;
+    margin-bottom: 10px;
 }
 
 .check-internet-text {
@@ -89,7 +89,7 @@
 
 .link-machine-steps-container {
     margin: 10px 0px;
-    color:#FAFBFC;
+    color: #FAFBFC;
 }
 
 .link-machine-header-label {
@@ -123,14 +123,14 @@
 
 .link-machine-steps-box {
     /* padding:15px 0px 15px 0px; */
-    margin: 15px 2px;
+    margin: 8px 2px;
     color: #FAFBFC;
 }
 
 .link-machine-steps-text {
     font-weight: 500;
-    font-size: 16px;
-    line-height: 20px;
+    font-size: 14px;
+    line-height: 18px;
     color: #E4E7EE;
     margin: 0px 3px;
 }
@@ -157,7 +157,9 @@
 }
 
 .gif-img {
-    margin: 32px 40px 20px 40px;
+    min-width: 200px;
+    min-height: 200px;
+    margin: 24px 40px 26px 40px;
 }
 
 .configure-text {
@@ -172,9 +174,9 @@
 }
 
 .timeout-img {
-    min-width: 240px;
-    min-height: 290px;
-    margin: 30px 40px 30px 40px;
+    min-width: 210px;
+    min-height: 240px;
+    margin: 24px 40px 26px 40px;
 }
 
 .setup-status-label {
@@ -194,7 +196,7 @@
     font-size: 16px;
     line-height: 22px;
     color: red;
-    margin:6px 0px;
+    margin: 6px 0px;
     padding: 4px 10px;
     background-color: #202124;
     border-radius: 10px;
@@ -207,7 +209,7 @@
     border-radius: 4px;
     font-weight: 440;
     padding: 20px 14px 20px 14px;
-    margin:10px 5px 10px 5px;
+    margin: 10px 5px 10px 5px;
 }
 
 .about-device-name {
@@ -215,7 +217,7 @@
     margin: 10px 0px 10px 5px;
 }
 
-.device-id-text{
+.device-id-text {
     color: #848DA6;
 }
 
@@ -233,10 +235,10 @@
 
 .device-info-sentence {
     font-weight: 500;
-    font-size: 16px;
-    line-height: 22px;
+    font-size: 14px;
+    line-height: 20px;
     color: #B7BBC8;
-    margin:10px 5px;
+    margin: 10px 5px;
 }
 
 .device-info-status-icon {
@@ -245,22 +247,20 @@
 }
 
 .device-info-icon {
-    min-width: 127px;
-    min-height: 127px;
+    min-width: 80px;
+    min-height: 80px;
     border-radius: 10px;
     /* margin-top: 40px; */
 }
 
 .device-info-icon-box {
-    min-width: 128px;
-	min-height: 128px;
-	margin-top: 40px;
-	border-radius: 10px;
+    margin-top: 40px;
+    border-radius: 10px;
     background-color: #202431;
 }
 
 .blue {
-    color: #3283E8; 
+    color: #3283E8;
 }
 
 .gray {
@@ -268,26 +268,26 @@
 }
 
 .custom-circle {
-    min-width: 35px; 
-    min-height: 35px; 
-    border: 1px solid rgb(59, 61, 201); 
-    border-radius: 50px; 
-    margin: auto; 
+    min-width: 35px;
+    min-height: 35px;
+    border: 1px solid rgb(59, 61, 201);
+    border-radius: 50px;
+    margin: auto;
     background: conic-gradient(rgb(44, 47, 236) 40%, #eee 0);
 }
 
-.time-progressbar trough{
-    background-color:  #8da3ba;
+.time-progressbar trough {
+    background-color: #8da3ba;
     border-radius: 50px;
     min-width: 40px;
-    min-height: 40px; 
-    border: 4px solid #8da3ba; 
+    min-height: 40px;
+    border: 4px solid #8da3ba;
 }
 
-.time-progressbar trough progress{
+.time-progressbar trough progress {
     border-radius: 50px;
     min-width: 40px;
-    min-height: 40px; 
+    min-height: 40px;
 }
 
 /* .window stack box progressbar trough progress{  
@@ -304,8 +304,8 @@
     min-height: 3px;
 }
 
-.carousel { 
-	margin-bottom: -15px;
+.carousel {
+    margin-bottom: -15px;
 }
 
 /* .custom-toast toastoverlay toast {
@@ -313,9 +313,9 @@
 } */
 
 .custom-toast-box {
-	background-color: rgba(255, 255, 255, 0.2);
-	border-radius: 10px;
-	padding: 4px 10px; 
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    padding: 4px 10px;
     margin: 40px 10px 5px 10px;
 }
 

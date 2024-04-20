@@ -88,12 +88,8 @@ impl SimpleComponent for SetupFailed {
         let paintable = get_gif_from_path(gif_path);
 
         let image_from = gtk::Image::builder()
-            .width_request(250)
-            .height_request(250)
             .paintable(&paintable)
             .css_classes(["gif-img"])
-            .vexpand(true)
-            .valign(gtk::Align::Center)
             .build();
 
         main_content_box.append(&image_from);

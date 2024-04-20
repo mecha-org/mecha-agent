@@ -80,12 +80,8 @@ impl AsyncComponent for ConfigureMachine {
         let paintable = get_gif_from_path(gif_path);
 
         let image_from = gtk::Image::builder()
-            .width_request(290)
-            .height_request(290)
             .paintable(&paintable)
             .css_classes(["gif-img"])
-            .vexpand(true)
-            .valign(gtk::Align::Center)
             .build();
 
         let label1 = gtk::Label::builder()
@@ -150,7 +146,6 @@ async fn machine_info_sevice_call() -> Result<MachineInformation> {
 async fn get_machine_info(sender: AsyncComponentSender<ConfigureMachine>) {
     let fn_name = "configure_machine_screen -> get_machine_info";
     let result = tokio::time::timeout(Duration::from_secs(15), machine_info_sevice_call()).await;
-    let _ = sender.output(ConfigureOutput::Timeout);
 
     match result {
         Ok(res) => match res {
