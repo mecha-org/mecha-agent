@@ -194,7 +194,6 @@ impl AsyncComponent for MachineInfo {
         let info_sentence = gtk::Label::builder()
             .label("You can unlink your machine from your Mecha account")
             .hexpand(true)
-            .justify(gtk::Justification::Fill)
             .wrap(true)
             .wrap_mode(pango::WrapMode::Word)
             .build();
