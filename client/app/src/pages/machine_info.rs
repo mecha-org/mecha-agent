@@ -18,6 +18,7 @@ use relm4::{
     },
     AsyncComponentSender,
 };
+
 use tonic::async_trait;
 use tracing::{debug, error, info};
 use utils::get_image_from_path;
@@ -48,8 +49,9 @@ pub struct MachineInfo {
 #[derive(Debug)]
 pub enum InputMessage {
     ActiveScreen(String),
+    GetInformation,
     ShowStatus(MachineInfoStatus, String),
-    UpdateMachineInfo(MachineInformation, MachineInfoStatus, String),
+    UpdateMachineInfo(MachineInformation),
 }
 
 #[derive(Debug)]
@@ -296,21 +298,30 @@ impl AsyncComponent for MachineInfo {
                 self.toast_text = String::from("Fetching Machine Information...");
 
                 let sender: relm4::Sender<InputMessage> = sender.input_sender().clone();
-                let _ = machine_info_init_services(sender).await;
+                let _ = get_status_of_machine(sender).await;
+            }
+            InputMessage::GetInformation => {
+                let sender: relm4::Sender<InputMessage> = sender.input_sender().clone();
+                let _ = get_machine_info_init(sender).await;
             }
             InputMessage::ShowStatus(status, error_toast) => {
                 self.status = status;
                 self.toast_text = error_toast;
             }
-            InputMessage::UpdateMachineInfo(data, status, error_toast) => {
-                info!(
-                    "InputMessage::UpdateMachineInfo::data-name >>>>>>>>{:?}",
+            InputMessage::UpdateMachineInfo(data) => {
+                // info!(
+                //     "InputMessage::UpdateMachineInfo::data-name >>>>>>>>{:?}",
+                //     &data.name
+                // );
+
+                println!(
+                    "InputMessage::UpdateMachine::data-machine_id >>>>>>>> {:?}",
+                    &data.machine_id
+                );
+                println!(
+                    "InputMessage::UpdateMachine::data-name >>>>>>>> {:?}",
                     &data.name
                 );
-
-                self.status = status;
-                self.toast_text = error_toast;
-
                 self.machine_id = data.machine_id.clone();
                 self.name = data.name.clone();
                 self.icon_str = data.icon.clone(); //  BASE64
@@ -357,78 +368,20 @@ impl AsyncComponent for MachineInfo {
     }
 }
 
-async fn machine_info_init_services(sender: relm4::Sender<InputMessage>) {
+async fn get_machine_info_init(sender: relm4::Sender<InputMessage>) {
     let fn_name: &str = "machine_info_init_services";
     let error_toast = String::from("Machine Agent not running or not internet connectivity");
     info!(func = fn_name, package = PACKAGE_NAME);
 
-    let sender_1 = sender.clone();
-
     let _ = relm4::spawn(async move {
         loop {
-            let (get_status_result, get_machine_info_result) =
-                tokio::join!(get_status(), get_machine_info());
-
-            match (get_status_result, get_machine_info_result) {
-                (Ok(ping_res), Ok(machine_info_res)) => {
-                    info!(
-                        func = fn_name,
-                        package = PACKAGE_NAME,
-                        "MACHINE INFO IS {:?}",
-                        machine_info_res.name.clone()
-                    );
-
-                    let _ = sender_1.send(InputMessage::UpdateMachineInfo(
-                        machine_info_res.to_owned(),
-                        if ping_res.code == "success" {
-                            MachineInfoStatus::SUCCESS
-                        } else {
-                            MachineInfoStatus::FAILED
-                        },
-                        String::from(""),
-                    ));
+            match get_machine_info().await {
+                Ok(machine_info_res) => {
+                    let _ =
+                        sender.send(InputMessage::UpdateMachineInfo(machine_info_res.to_owned()));
                 }
-                (Ok(_), Err(ping_error)) => {
-                    debug!(
-                        func = fn_name,
-                        package = PACKAGE_NAME,
-                        "PING STATUS ERROR {:?}",
-                        ping_error
-                    );
-                    let _ = sender.send(InputMessage::ShowStatus(
-                        MachineInfoStatus::FAILED,
-                        error_toast.to_owned(),
-                    ));
-                }
-                (Err(machine_info_error), Ok(_)) => {
-                    debug!(
-                        func = fn_name,
-                        package = PACKAGE_NAME,
-                        "MACHINE INFO ERROR {:?}",
-                        machine_info_error
-                    );
-
-                    let _ = sender.send(InputMessage::ShowStatus(
-                        MachineInfoStatus::FAILED,
-                        error_toast.to_owned(),
-                    ));
-                }
-                (Err(err_1), Err(err_2)) => {
-                    debug!(
-                        func = fn_name,
-                        package = PACKAGE_NAME,
-                        "DEBUG ERR_1 {:?} & ERR_2 {:?}",
-                        err_1,
-                        err_2
-                    );
-
-                    error!(
-                        func = fn_name,
-                        package = PACKAGE_NAME,
-                        "error ===> ERR_1 {:?} & ERR_2 {:?}",
-                        err_1,
-                        err_2
-                    );
+                Err(machine_info_error) => {
+                    eprintln!("MACHINE INFO ERROR {:?}", &machine_info_error);
 
                     let _ = sender.send(InputMessage::ShowStatus(
                         MachineInfoStatus::FAILED,
@@ -438,6 +391,38 @@ async fn machine_info_init_services(sender: relm4::Sender<InputMessage>) {
             }
 
             let _ = tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+    });
+}
+
+async fn get_status_of_machine(sender: relm4::Sender<InputMessage>) {
+    let fn_name: &str = "machine_info_init_services";
+    let error_toast = String::from("Machine Agent not running or not internet connectivity");
+    info!(func = fn_name, package = PACKAGE_NAME);
+    let _ = relm4::spawn(async move {
+        loop {
+            match get_status().await {
+                Ok(ping_res) => {
+                    let _ = sender.send(InputMessage::ShowStatus(
+                        if ping_res.code == "success" {
+                            MachineInfoStatus::SUCCESS
+                        } else {
+                            MachineInfoStatus::FAILED
+                        },
+                        String::from(""),
+                    ));
+                }
+                Err(ping_error) => {
+                    eprintln!("PING STATUS ERROR {:?}", &ping_error);
+
+                    let _ = sender.send(InputMessage::ShowStatus(
+                        MachineInfoStatus::FAILED,
+                        error_toast.to_owned(),
+                    ));
+                }
+            }
+
+            let _ = tokio::time::sleep(Duration::from_secs(60)).await;
         }
     });
 }

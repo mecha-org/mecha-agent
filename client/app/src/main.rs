@@ -571,6 +571,11 @@ impl AsyncComponent for MechaConnectApp {
                             .machine_info
                             .sender()
                             .send(pages::machine_info::InputMessage::ActiveScreen(machine_id));
+
+                        let _ = __self
+                        .machine_info
+                        .sender()
+                        .send(pages::machine_info::InputMessage::GetInformation);
                     }
                 }
             }
