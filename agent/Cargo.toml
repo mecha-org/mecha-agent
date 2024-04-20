@@ -21,8 +21,8 @@ messaging = { path = "../messaging" }
 channel = { path = "../commons/channel" }
 provisioning = { path = "../provisioning" }
 settings = { path = "../settings" }
-networking = { path = "../networking" }
 telemetry = { path = "../telemetry" }
+networking = { path = "../networking" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

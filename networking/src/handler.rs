@@ -1,133 +1,207 @@
+use agent_settings::{read_settings_yml, AgentSettings};
 use anyhow::{bail, Result};
-use channel::recv_with_timeout;
 use events::Event;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
+use serde_json::json;
 use settings::handler::SettingMessage;
-use tokio::{
-    select,
-    sync::{broadcast, mpsc, oneshot},
-    task::JoinHandle,
-};
+use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::task::{JoinHandle, JoinSet};
+use tokio::{select, task};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{error, info, trace, warn};
+use wireguard::Wireguard;
 
-use crate::service::networking_init;
+use crate::errors::{NetworkingError, NetworkingErrorCodes};
+use crate::handshake_handler::{
+    await_networking_handshake_request, HandshakeChannelHandler, HandshakeMessage, Manifest,
+};
+use crate::service::{
+    await_consumer_message, configure_wireguard, create_channel_sync_consumer,
+    get_networking_subscriber, publish_networking_channel, reconnect_messaging_service,
+};
+
+const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 pub struct NetworkingHandler {
-    event_tx: broadcast::Sender<Event>,
-    messaging_tx: mpsc::Sender<MessagingMessage>,
     identity_tx: mpsc::Sender<IdentityMessage>,
-    setting_tx: mpsc::Sender<SettingMessage>,
-    networking_task_token: Option<CancellationToken>,
+    settings_tx: mpsc::Sender<SettingMessage>,
+    messaging_tx: mpsc::Sender<MessagingMessage>,
+    event_tx: broadcast::Sender<Event>,
+    subscriber_token: Option<CancellationToken>,
+    networking_consumer_token: Option<CancellationToken>,
+    wireguard: Option<Wireguard>,
+    handshake_handler: Option<HandshakeChannelHandler>,
 }
+
+pub enum NetworkingMessage {}
+
 pub struct NetworkingOptions {
-    pub event_tx: broadcast::Sender<Event>,
     pub messaging_tx: mpsc::Sender<MessagingMessage>,
     pub identity_tx: mpsc::Sender<IdentityMessage>,
+    pub event_tx: broadcast::Sender<Event>,
     pub setting_tx: mpsc::Sender<SettingMessage>,
-}
-
-pub enum NetworkingMessage {
-    Start {
-        reply_to: oneshot::Sender<Result<bool>>,
-    },
 }
 
 impl NetworkingHandler {
     pub fn new(options: NetworkingOptions) -> Self {
         Self {
-            event_tx: options.event_tx,
-            messaging_tx: options.messaging_tx,
             identity_tx: options.identity_tx,
-            setting_tx: options.setting_tx,
-            networking_task_token: None,
+            messaging_tx: options.messaging_tx,
+            event_tx: options.event_tx,
+            settings_tx: options.setting_tx,
+            subscriber_token: None,
+            networking_consumer_token: None,
+            wireguard: None,
+            handshake_handler: None,
         }
     }
-    async fn initialize_networking(&mut self) -> Result<bool> {
-        let fn_name = "initialize_networking";
+    pub async fn subscribe_to_nats(&mut self) -> Result<()> {
+        info!(
+            func = "subscribe_to_nats",
+            package = env!("CARGO_PKG_NAME"),
+            "init"
+        );
+
         // safety: check for existing cancel token, and cancel it
-        let networking_task_token = &self.networking_task_token;
-        if networking_task_token.is_some() {
-            let _ = networking_task_token.as_ref().unwrap().cancel();
+        let exist_subscriber_token = &self.subscriber_token;
+        if exist_subscriber_token.is_some() {
+            let _ = exist_subscriber_token.as_ref().unwrap().cancel();
         }
-        // create new token
-        let networking_task_token = CancellationToken::new();
-        let networking_task_token_cloned = Some(networking_task_token.clone());
-        let mut nebula_process = None;
-        match networking_init(
-            self.setting_tx.clone(),
-            self.identity_tx.clone(),
-            self.messaging_tx.clone(),
+        //Todo: handler this unwrap
+        let handshake_handler = self.handshake_handler.as_ref().unwrap();
+        // create a new token
+        let subscriber_token = CancellationToken::new();
+        let subscriber_token_cloned = subscriber_token.clone();
+        let messaging_tx = self.messaging_tx.clone();
+        let subscribers = match get_networking_subscriber(
+            self.settings_tx.clone(),
+            messaging_tx.clone(),
+            handshake_handler.channel_id.clone(),
         )
         .await
         {
-            Ok(networking_init_res) => {
-                nebula_process = Some(networking_init_res.nebula_process);
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    func = "subscribe_to_nats",
+                    package = PACKAGE_NAME,
+                    "subscribe to nats error - {:?}",
+                    e
+                );
+                bail!(e)
             }
+        };
+        let mut futures = JoinSet::new();
+        futures.spawn(await_networking_handshake_request(
+            subscribers.handshake_request.unwrap(),
+            handshake_handler.handshake_tx.clone(),
+        ));
+        // create spawn for timer
+        let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {
+            loop {
+                select! {
+                        _ = subscriber_token.cancelled() => {
+                            info!(
+                                func = "subscribe_to_nats",
+                                package = PACKAGE_NAME,
+                                result = "success",
+                                "subscribe to nats cancelled"
+                            );
+                            return Ok(());
+                    },
+                    result = futures.join_next() => {
+                        if result.unwrap().is_ok() {}
+                    },
+                }
+            }
+            // return Ok(());
+        });
+        // Save to state
+        self.subscriber_token = Some(subscriber_token_cloned);
+        Ok(())
+    }
+    async fn networking_consumer(&mut self) -> Result<bool> {
+        let fn_name = "networking_consumer";
+        // safety: check for existing cancel token, and cancel it
+        let exist_consumer_token = &self.networking_consumer_token;
+        if exist_consumer_token.is_some() {
+            let _ = exist_consumer_token.as_ref().unwrap().cancel();
+        }
+        //TODO: handle this error unwrap
+        let handshake_handler = self.handshake_handler.as_ref().unwrap();
+        // create a new token
+        let consumer_token = CancellationToken::new();
+        let consumer_token_cloned = consumer_token.clone();
+        let messaging_tx = self.messaging_tx.clone();
+        let consumer = match create_channel_sync_consumer(
+            self.messaging_tx.clone(),
+            self.identity_tx.clone(),
+            self.settings_tx.clone(),
+        )
+        .await
+        {
+            Ok(s) => s,
             Err(e) => {
                 error!(
                     func = fn_name,
                     package = env!("CARGO_PKG_NAME"),
-                    "failed to start networking, error - {}",
+                    "error creating pull consumer, error -  {:?}",
                     e
                 );
+                bail!(NetworkingError::new(
+                    NetworkingErrorCodes::CreateConsumerError,
+                    format!("create consumer error - {:?} ", e.to_string()),
+                    true
+                ))
             }
         };
-        let mut timer = tokio::time::interval(std::time::Duration::from_secs(10));
+        let mut futures = JoinSet::new();
+        futures.spawn(await_consumer_message(
+            consumer.clone(),
+            messaging_tx.clone(),
+            self.settings_tx.clone(),
+            handshake_handler.channel_id.clone(),
+        ));
+        // create spawn for timer
         let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {
             loop {
                 select! {
-                    _ = networking_task_token.cancelled() => {
-                        info!(
-                            func = fn_name,
-                            package = env!("CARGO_PKG_NAME"),
-                            "networking task cancelled"
-                        );
-                        if nebula_process.is_some() {
-                            match nebula_process.unwrap().kill().await {
-                                Ok(_) => {
-                                    info!(
-                                        func = fn_name,
-                                        package = env!("CARGO_PKG_NAME"),
-                                        "networking process killed"
-                                    );
-                                }
-                                Err(e) => {
-                                    error!(
-                                        func = fn_name,
-                                        package = env!("CARGO_PKG_NAME"),
-                                        "failed to kill networking process, error - {}",
-                                        e
-                                    );
-                                }
-                            }
-                        }
-                        return Ok(());
-                    }
-                    _ = timer.tick() => {
-                        if nebula_process.is_some(){
-                            println!("networking process is running");
-                        } else {
-                            println!("networking process is not running");
-                        }
-                    }
+                        _ = consumer_token.cancelled() => {
+                            info!(
+                                func = fn_name,
+                                package = PACKAGE_NAME,
+                                result = "success",
+                                "consumer subscriber cancelled"
+                            );
+                            return Ok(());
+                    },
+                    result = futures.join_next() => {
+                        if result.unwrap().is_ok() {}
+                    },
                 }
             }
         });
-        self.networking_task_token = networking_task_token_cloned;
+
+        // Save to state
+        self.networking_consumer_token = Some(consumer_token_cloned);
         Ok(true)
     }
-
-    pub fn kill_networking_process(&self) -> Result<bool> {
-        let exist_networking_task_token = &self.networking_task_token;
-        if exist_networking_task_token.is_some() {
-            let _ = exist_networking_task_token.as_ref().unwrap().cancel();
-        } else {
-            return Ok(false);
+    pub fn clear_nats_subscription(&self) -> Result<bool> {
+        let exist_subscriber_token = &self.subscriber_token;
+        let consumer_subscriber_token = &self.networking_consumer_token;
+        if exist_subscriber_token.is_some() {
+            let _ = exist_subscriber_token.as_ref().unwrap().cancel();
         }
+        if consumer_subscriber_token.is_some() {
+            let _ = consumer_subscriber_token.as_ref().unwrap().cancel();
+        }
+        info!(
+            func = "clear_nats_subscription",
+            package = PACKAGE_NAME,
+            "clear nats subscription done!"
+        );
         Ok(true)
     }
-
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<NetworkingMessage>) -> Result<()> {
         info!(
             func = "run",
@@ -135,9 +209,47 @@ impl NetworkingHandler {
             "networking service initiated"
         );
         let fn_name = "run";
+        // read settings from settings.yml
+        let settings: AgentSettings = match read_settings_yml() {
+            Ok(settings) => settings,
+            Err(_) => {
+                warn!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "settings.yml not found, using default settings"
+                );
+                AgentSettings::default()
+            }
+        };
+
+        let (handshake_tx, mut handshake_rx) = mpsc::channel(32);
+        let _ = self.init_handshake_handler(handshake_tx).await;
+
+        // start the disco server
+        let handshake_handler = self.handshake_handler.as_ref().unwrap();
+        let handshake_channel_id = handshake_handler.channel_id.clone();
+        let mut handshake_disco_socket = match handshake_handler
+            .start_disco(settings.networking.disco_addr)
+            .await
+        {
+            Ok(s) => s,
+            Err(e) => {
+                error!(
+                    func = "run",
+                    package = PACKAGE_NAME,
+                    "error starting disco server - {:?}",
+                    e
+                );
+                bail!(NetworkingError::new(
+                    NetworkingErrorCodes::NetworkingInitError,
+                    format!("error starting disco server - {:?}", e),
+                    true
+                ));
+            }
+        };
+
         // Start the service
         let mut event_rx = self.event_tx.subscribe();
-
         loop {
             select! {
                 msg = message_rx.recv() => {
@@ -146,94 +258,95 @@ impl NetworkingHandler {
                     }
 
                     match msg.unwrap() {
-                        NetworkingMessage::Start { reply_to } => {
-                            let res = self.initialize_networking().await;
-                            let _ = reply_to.send(res);
-                        }
+
                     };
-                }
+                },
+                handshake_run = self.handshake_handler.as_mut().unwrap().run(&mut handshake_disco_socket, &mut handshake_rx) => {
+                    match handshake_run {
+                        Ok(_) => (),
+                        Err(e) => {
+                            error!(
+                                func = "run",
+                                package = PACKAGE_NAME,
+                                "error init/run handshake service: {:?}",
+                                e
+                            );
+                            bail!(NetworkingError::new(
+                                NetworkingErrorCodes::NetworkingInitError, //todo: handshakeRunError
+                                format!("error init/run handshake service: {:?}", e),
+                                true
+                            ));
+                        }
+                    }
+                },
                 // Receive events from other services
                 event = event_rx.recv() => {
                     if event.is_err() {
                         continue;
                     }
-
                     match event.unwrap() {
-                        Event::Provisioning(events::ProvisioningEvent::Provisioned) => {}
                         Event::Provisioning(events::ProvisioningEvent::Deprovisioned) => {
-                            let _ = &self.kill_networking_process();
-                        }
-                        Event::Messaging(_) => {}
-                        Event::Settings(events::SettingEvent::Synced) => {
-                            info!(
+                            trace!(
                                 func = "run",
-                                package = env!("CARGO_PKG_NAME"),
-                                "settings sync event received"
+                                package = PACKAGE_NAME,
+                                "deprovisioned event in networking"
                             );
-                            let (tx, rx) = oneshot::channel();
-                            match self
-                                .setting_tx
-                                .clone()
-                                .send(SettingMessage::GetSettingsByKey {
-                                    reply_to: tx,
-                                    key: String::from("networking.enabled"),
-                                })
-                                .await
-                            {
-                                Ok(_) => (),
-                                Err(e) => {
-                                    error!(
-                                        func = fn_name,
-                                        package = env!("CARGO_PKG_NAME"),
-                                        "failed to send get networking enabled message, error - {}",
-                                        e
-                                    );
-                                }
-                            }
-                            let networking_enabled = match recv_with_timeout(rx).await {
-                                Ok(r) => r,
-                                Err(e) => {
-                                    error!(
-                                        func = fn_name,
-                                        package = env!("CARGO_PKG_NAME"),
-                                        "failed to receive get networking enabled message, error - {}",
-                                        e
-                                    );
-                                "".to_string()}
-                            };
-                            info!("after settings sync networking enabled is {}", networking_enabled);
-                            if networking_enabled == "true" {
-                                let _ = &self.initialize_networking().await;
-                            } else if networking_enabled == "false" {
-                                let _ = &self.kill_networking_process();
-                            } else {
-                                // Can be add other function to perform
-                            }
-                        }
-                        Event::Settings(events::SettingEvent::Updated { settings }) => {
-                            info!(
+                            let _ = self.clear_nats_subscription();
+                        },
+                        Event::Settings(events::SettingEvent::Updated{ existing_settings, new_settings })  => {
+                            trace!(
                                 func = "run",
-                                package = env!("CARGO_PKG_NAME"),
-                                "settings updated event received"
+                                package = PACKAGE_NAME,
+                                "settings updated event in networking"
                             );
-                            match settings.get("networking.enabled") {
-                                Some(value) => {
-                                    info!("after settings update networking enabled is {}", value);
-                                    if value == "true" {
-                                        let _ = &self.initialize_networking().await;
-                                    } else if value == "false" {
-                                        let _ = &self.kill_networking_process();
-                                    } else {
-                                        // Can be add other function to perform
+                            //TODO: create function to handle settings update
+                            match new_settings.get("networking.enabled") {
+                                Some(v) => {
+                                    match v.as_str() {
+                                        "true" => {
+                                            let _ = reconnect_messaging_service(self.messaging_tx.clone(),v.to_string(), existing_settings).await;
+                                            match configure_wireguard(self.settings_tx.clone()).await {
+                                                Ok(wireguard) => {
+                                                    info!(
+                                                        func = "run",
+                                                        package = PACKAGE_NAME,
+                                                        "configure wireguard success"
+                                                    );
+                                                    self.wireguard = Some(wireguard);
+                                                }
+                                                Err(e) => {
+                                                    error!(
+                                                        func = "run",
+                                                        package = PACKAGE_NAME,
+                                                        "configure wireguard error - {:?}",
+                                                        e
+                                                    );
+                                                }
+                                            }
+                                            //TODO: error handling ( do not exit the service if error occurs)
+                                            let _ = publish_networking_channel(handshake_channel_id.clone(), self.messaging_tx.clone(), self.identity_tx.clone(), self.settings_tx.clone()).await;
+                                            let _ = self.subscribe_to_nats().await;
+                                            let _ = self.networking_consumer().await;
+                                        },
+                                        "false" => {
+                                            let _ = reconnect_messaging_service(self.messaging_tx.clone(),v.to_string(), existing_settings).await;
+                                            let _ = self.clear_nats_subscription();
+                                        },
+                                        _ => {}
                                     }
-                                }
-                                None => (),
+                                },
+                                None => {}
                             }
-                        }
-                        Event::Nats(_) => {}
+                        },
+                        _ => {},
                     }
                 }
+
             }
         }
+    }
+    async fn init_handshake_handler(&mut self, handshake_tx: mpsc::Sender<HandshakeMessage>) -> () {
+        let handler = HandshakeChannelHandler::new(self.messaging_tx.clone(), handshake_tx.clone());
+        self.handshake_handler = Some(handler);
     }
 }

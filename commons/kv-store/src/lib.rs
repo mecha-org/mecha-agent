@@ -87,13 +87,14 @@ impl KeyValueStoreClient {
         Ok(true)
     }
     pub fn get(&self, key: &str) -> Result<Option<String>> {
-        trace!(func = "get", package = PACKAGE_NAME, " key: {}", key);
+        let fn_name = "get";
+        trace!(func = fn_name, package = PACKAGE_NAME, " key: {}", key);
         if let Some(database) = DATABASE.as_ref() {
             let db = match database.lock() {
                 Ok(d) => d,
                 Err(e) => {
                     error!(
-                        func = "set",
+                        func = fn_name,
                         package = PACKAGE_NAME,
                         "failed to acquire lock on db - {}",
                         e
@@ -109,7 +110,7 @@ impl KeyValueStoreClient {
             match last_inserted {
                 Ok(s) => {
                     debug!(
-                        func = "get",
+                        func = fn_name,
                         package = PACKAGE_NAME,
                         "retrieved value from db key - {}",
                         key

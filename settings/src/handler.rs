@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::errors::{DeviceSettingError, DeviceSettingErrorCodes};
-use crate::services::{
+use crate::service::{
     await_settings_message, create_pull_consumer, get_settings_by_key, set_settings, sync_settings,
 };
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
@@ -233,7 +233,6 @@ impl SettingHandler {
                                 package = PACKAGE_NAME,
                                 "connected event in settings service"
                             }
-                            let _ = self.sync_settings().await;
                             let _ = self.settings_consumer().await;
                         }
                         Event::Messaging(events::MessagingEvent::Disconnected) => {

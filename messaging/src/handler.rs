@@ -87,11 +87,11 @@ impl MessagingHandler {
                             let _ = reply_to.send(res);
                         },
                         MessagingMessage::Connect { reply_to } => {
-                            let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
+                            let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone(), events::MessagingEvent::Connected).await;
                             let _ = reply_to.send(res);
                         },
                         MessagingMessage::Reconnect { reply_to } => {
-                            let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
+                            let res = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone(), events::MessagingEvent::Reconnected).await;
                             let _ = reply_to.send(res);
                         },
                         MessagingMessage::Subscriber { reply_to, subject } => {
@@ -144,7 +144,7 @@ impl MessagingHandler {
                                     ));
                                 }
                             };
-                            let _ = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone()).await;
+                            let _ = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone(), events::MessagingEvent::Connected).await;
                         },
                       _ => {}
                     }
@@ -167,7 +167,11 @@ impl ServiceHandler for MessagingHandler {
             self.status = ServiceStatus::STARTED;
             match self
                 .messaging_client
-                .connect(&self.identity_tx, self.event_tx.clone())
+                .connect(
+                    &self.identity_tx,
+                    self.event_tx.clone(),
+                    events::MessagingEvent::Connected,
+                )
                 .await
             {
                 Ok(_) => {}

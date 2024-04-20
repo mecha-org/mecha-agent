@@ -101,6 +101,7 @@ impl Messaging {
         &mut self,
         identity_tx: &mpsc::Sender<IdentityMessage>,
         event_tx: broadcast::Sender<Event>,
+        event_type: events::MessagingEvent,
     ) -> Result<bool> {
         let fn_name = "connect";
         if self.nats_client.is_none() {
@@ -173,7 +174,7 @@ impl Messaging {
             }
         };
         // Send broadcast message as messaging service is connected
-        match event_tx.send(Event::Messaging(events::MessagingEvent::Connected)) {
+        match event_tx.send(Event::Messaging(event_type)) {
             Ok(_) => {}
             Err(e) => {
                 error!(

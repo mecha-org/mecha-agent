@@ -1,3 +1,3 @@
 pub mod errors;
 pub mod handler;
-pub mod services;
+pub mod service;

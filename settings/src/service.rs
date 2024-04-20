@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{de, json};
 use sha256::digest;
 use tokio::sync::{broadcast, mpsc::Sender, oneshot};
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::errors::{DeviceSettingError, DeviceSettingErrorCodes};
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -329,16 +329,40 @@ pub async fn get_settings_by_key(key: String) -> Result<String> {
 
 pub async fn set_settings(
     event_tx: broadcast::Sender<Event>,
-    settings: HashMap<String, String>,
+    new_settings: HashMap<String, String>,
 ) -> Result<bool> {
     debug!(
         func = "set_settings",
         package = PACKAGE_NAME,
         "set settings - {:?}",
-        settings
+        new_settings
     );
     let mut key_value_store = KeyValueStoreClient::new();
-    let result = match key_value_store.set(settings.clone()) {
+    // Get existing settings
+    let mut existing_settings: HashMap<String, String> = HashMap::new();
+    new_settings
+        .iter()
+        .for_each(|(key, _value)| match key_value_store.get(key) {
+            Ok(s) => {
+                existing_settings.insert(
+                    key.clone(),
+                    match s {
+                        Some(s) => s,
+                        None => String::from(""),
+                    },
+                );
+            }
+            Err(err) => {
+                warn!(
+                    func = "set_settings",
+                    package = PACKAGE_NAME,
+                    "error getting old settings - {:?}",
+                    err
+                );
+                existing_settings.insert(key.clone(), String::from(""));
+            }
+        });
+    let result = match key_value_store.set(new_settings.clone()) {
         Ok(s) => s,
         Err(err) => {
             error!(
@@ -351,7 +375,10 @@ pub async fn set_settings(
         }
     };
     // Publish event
-    match event_tx.send(Event::Settings(events::SettingEvent::Updated { settings })) {
+    match event_tx.send(Event::Settings(events::SettingEvent::Updated {
+        existing_settings,
+        new_settings,
+    })) {
         Ok(_) => {}
         Err(err) => {
             error!(
@@ -370,6 +397,7 @@ pub async fn set_settings(
             ))
         }
     }
+
     info!(
         func = "set_settings",
         package = PACKAGE_NAME,

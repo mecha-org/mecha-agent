@@ -11,12 +11,16 @@ pub enum ProvisioningEvent {
 pub enum MessagingEvent {
     Connected,
     Disconnected,
+    Reconnected,
 }
 
 #[derive(Debug, Clone)]
 pub enum SettingEvent {
     Synced,
-    Updated { settings: HashMap<String, String> },
+    Updated {
+        existing_settings: HashMap<String, String>,
+        new_settings: HashMap<String, String>,
+    },
 }
 
 #[derive(Debug, Clone)]
