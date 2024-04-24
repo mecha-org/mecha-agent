@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-use agent_settings::{networking::NetworkingSettings, read_settings_yml, AgentSettings};
+use agent_settings::{read_settings_yml, AgentSettings};
 use anyhow::{bail, Result};
 use channel::{recv_with_custom_timeout, recv_with_timeout};
 use crypto::random::generate_random_alphanumeric;
@@ -268,6 +268,7 @@ pub async fn publish_networking_channel(
             reply_to: tx,
             message: json!(payload).to_string(),
             subject: subject,
+            headers: None,
         })
         .await
     {
@@ -296,6 +297,7 @@ pub async fn await_consumer_message(
     messaging_tx: Sender<MessagingMessage>,
     settings_tx: Sender<SettingMessage>,
     channel_id: String,
+    machine_id: String,
 ) -> Result<bool> {
     println!("awaiting consumer message");
     let fn_name = "await_consumer_message";
@@ -331,10 +333,11 @@ pub async fn await_consumer_message(
         };
     while let Some(Ok(message)) = messages.next().await {
         println!("message in consumer stream {:?}", message.payload);
-        match process_message(
+        match process_consumer_message(
             message.clone(),
             network_id.clone(),
             channel_id.clone(),
+            machine_id.clone(),
             messaging_tx.clone(),
         )
         .await
@@ -371,10 +374,11 @@ pub async fn await_consumer_message(
     Ok(true)
 }
 
-async fn process_message(
+async fn process_consumer_message(
     message: Message,
     network_id: String,
     channel_id: String,
+    machine_id: String,
     messaging_tx: Sender<MessagingMessage>,
 ) -> Result<bool> {
     let fn_name = "process_message";
@@ -442,16 +446,19 @@ async fn process_message(
         subject_to_publish_channel_info
     );
     let channel_details_payload = ChannelDetails {
-        machine_id: request_payload.machine_id.clone(),
+        machine_id: machine_id.clone(),
         network_id: network_id.clone(),
         channel: channel_id.clone(),
     };
+    let mut headers = HashMap::new();
+    headers.insert(String::from("Message-Type"), String::from("REQUEST"));
     let (tx, rx) = oneshot::channel();
     match messaging_tx
-        .send(MessagingMessage::Request {
+        .send(MessagingMessage::Send {
             reply_to: tx,
             message: json!(channel_details_payload).to_string(),
             subject: subject_to_publish_channel_info,
+            headers: Some(headers),
         })
         .await
     {
@@ -470,34 +477,6 @@ async fn process_message(
             ));
         }
     }
-    //wait for a replay
-    let result = match recv_with_custom_timeout(10000, rx).await {
-        Ok(res) => res,
-        Err(e) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "error receiving get que subscriber for issue token- {}",
-                e
-            );
-            bail!(NetworkingError::new(
-                NetworkingErrorCodes::ChannelReceiveMessageError,
-                format!("error receiving subscriber message - {}", e),
-                true
-            ));
-        }
-    };
-    let payload_str = match std::str::from_utf8(&result) {
-        Ok(s) => s,
-        Err(e) => {
-            bail!(NetworkingError::new(
-                NetworkingErrorCodes::ExtractMessagePayloadError,
-                format!("error converting payload to string - {}", e),
-                true
-            ))
-        }
-    };
-    println!("payload_str {:?}", payload_str);
     match message.ack().await {
         Ok(_) => {
             println!("networking node message acknowledged")
@@ -654,7 +633,7 @@ pub async fn create_channel_sync_consumer(
     );
     Ok(consumer)
 }
-async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Result<String> {
+pub async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Result<String> {
     let (tx, rx) = oneshot::channel();
     match identity_tx
         .clone()

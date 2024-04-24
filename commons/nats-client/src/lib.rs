@@ -4,6 +4,7 @@ pub use async_nats::Subscriber;
 pub use bytes::Bytes;
 use events::Event;
 use nkeys::KeyPair;
+use std::collections::HashMap;
 use std::{str::FromStr, sync::Arc};
 use tokio::sync::broadcast::Sender;
 use tracing::{debug, error, info, trace};
@@ -147,7 +148,12 @@ impl NatsClient {
         Ok(client)
     }
 
-    pub async fn publish(&self, subject: &str, data: Bytes) -> Result<bool> {
+    pub async fn publish(
+        &self,
+        subject: &str,
+        req_headers: Option<HashMap<String, String>>,
+        data: Bytes,
+    ) -> Result<bool> {
         trace!(
             func = "publish",
             package = PACKAGE_NAME,
@@ -174,6 +180,14 @@ impl NatsClient {
             "X-Agent",
             async_nats::HeaderValue::from_str(version_detail.as_str()).unwrap(),
         );
+        if req_headers.is_some() {
+            for (k, v) in req_headers.unwrap() {
+                headers.insert(
+                    k.as_str(),
+                    async_nats::HeaderValue::from_str(v.as_str()).unwrap(),
+                );
+            }
+        }
         debug!(
             func = "publish",
             package = PACKAGE_NAME,

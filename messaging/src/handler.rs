@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::errors::{MessagingError, MessagingErrorCodes};
 use crate::service::{get_machine_id, Messaging};
 use anyhow::{bail, Result};
@@ -32,6 +34,7 @@ pub enum MessagingMessage {
         reply_to: oneshot::Sender<Result<bool>>,
         message: String,
         subject: String,
+        headers: Option<HashMap<String, String>>,
     },
     Request {
         reply_to: oneshot::Sender<Result<Bytes>>,
@@ -78,8 +81,8 @@ impl MessagingHandler {
                         continue;
                     }
                     match msg.unwrap() {
-                        MessagingMessage::Send{reply_to, message, subject} => {
-                            let res = self.messaging_client.publish(&subject.as_str(), Bytes::from(message)).await;
+                        MessagingMessage::Send{reply_to, message, subject, headers} => {
+                            let res = self.messaging_client.publish(&subject.as_str(), headers, Bytes::from(message)).await;
                             let _ = reply_to.send(res);
                         }
                         MessagingMessage::Request{reply_to, message, subject} => {

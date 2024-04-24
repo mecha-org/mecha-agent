@@ -17,6 +17,7 @@ pub enum NetworkingErrorCodes {
     MessageAcknowledgeError,
     NetworkingInitError,
     NetworkingDiscoSocketBindError,
+    ExtractMessageHeadersError,
 }
 
 impl fmt::Display for NetworkingErrorCodes {
@@ -57,6 +58,9 @@ impl fmt::Display for NetworkingErrorCodes {
             }
             NetworkingErrorCodes::NetworkingDiscoSocketBindError => {
                 write!(f, "NetworkingErrorCodes: NetworkingDiscoSocketBindError")
+            }
+            NetworkingErrorCodes::ExtractMessageHeadersError => {
+                write!(f, "NetworkingErrorCodes: ExtractMessageHeadersError")
             }
         }
     }
