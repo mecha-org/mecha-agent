@@ -35,6 +35,7 @@ impl MessagingService for MessagingServiceHandler {
                 reply_to: tx,
                 message: message_request.message,
                 subject: message_request.subject,
+                headers: None,
             })
             .await;
 

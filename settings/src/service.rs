@@ -490,6 +490,7 @@ async fn process_message(
                 reply_to: tx,
                 message: json!(ack_payload).to_string(),
                 subject: header_value.to_string(),
+                headers: None,
             })
             .await
         {

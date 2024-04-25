@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use agent_settings::read_settings_yml;
 use agent_settings::{messaging::MessagingSettings, AgentSettings};
 use anyhow::{bail, Result};
@@ -197,7 +199,12 @@ impl Messaging {
         );
         Ok(true)
     }
-    pub async fn publish(&self, subject: &str, data: Bytes) -> Result<bool> {
+    pub async fn publish(
+        &self,
+        subject: &str,
+        headers: Option<HashMap<String, String>>,
+        data: Bytes,
+    ) -> Result<bool> {
         let fn_name = "publish";
         debug!(
             func = fn_name,
@@ -219,7 +226,7 @@ impl Messaging {
         }
 
         let nats_client = self.nats_client.as_ref().unwrap();
-        let is_published = match nats_client.publish(subject, data).await {
+        let is_published = match nats_client.publish(subject, headers, data).await {
             Ok(s) => s,
             Err(e) => {
                 error!(
@@ -408,6 +415,7 @@ pub async fn authenticate(
         package = PACKAGE_NAME,
         "authentication token obtained!"
     );
+    println!("Auth token: -{:?}", token);
     Ok(token)
 }
 

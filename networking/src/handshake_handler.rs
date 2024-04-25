@@ -4,10 +4,11 @@ use std::str::FromStr;
 
 use agent_settings::{read_settings_yml, AgentSettings};
 use anyhow::{bail, Result};
+use chrono::format;
 use crypto::random::generate_random_alphanumeric;
 use futures::StreamExt;
 use local_ip_address::list_afinet_netifas;
-use messaging::async_nats::Message;
+use messaging::async_nats::{HeaderMap, Message};
 use messaging::handler::MessagingMessage;
 use messaging::Subscriber as NatsSubscriber;
 use serde::{Deserialize, Serialize};
@@ -187,6 +188,8 @@ impl HandshakeChannelHandler {
             txn_id: txn_id,
             candidates: Some(candidates),
         };
+        let mut header_map: HashMap<String, String> = HashMap::new();
+        header_map.insert(String::from("Message-Type"), String::from("REPLY"));
         println!("manifest: {:?}", manifest);
         // send reply to NATS
         let (tx, _rx) = oneshot::channel();
@@ -196,6 +199,7 @@ impl HandshakeChannelHandler {
                 subject: reply_subject,
                 message: json!(manifest).to_string(),
                 reply_to: tx,
+                headers: Some(header_map),
             })
             .await;
         Ok(true)
@@ -241,7 +245,7 @@ pub fn discover_endpoints() -> Result<Vec<Ipv4Addr>> {
     Ok(ipv4_addr)
 }
 
-pub async fn await_networking_handshake_request(
+pub async fn await_networking_handshake_message(
     mut subscriber: NatsSubscriber,
     handshake_tx: mpsc::Sender<HandshakeMessage>,
 ) -> Result<()> {
@@ -281,37 +285,100 @@ async fn process_handshake_request(
             ))
         }
     };
-    let request_payload: ChannelDetails = match serde_json::from_str(&payload_str) {
-        Ok(s) => s,
-        Err(e) => bail!(NetworkingError::new(
-            NetworkingErrorCodes::PayloadDeserializationError,
-            format!("error while deserializing message payload {}", e),
-            true
-        )),
-    };
-    info!(
-        func = fn_name,
-        package = PACKAGE_NAME,
-        "received handshake request: {:?}",
-        request_payload
-    );
-    let reply_to_subject = match message.reply {
-        Some(subject) => subject.to_string(),
+    let message_type =
+        match get_header_by_key(message.headers.clone(), String::from("Message-Type")) {
+            Ok(s) => s,
+            Err(e) => {
+                error! {
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error getting message type from headers - {}",
+                    e
+                };
+                bail!(e)
+            }
+        };
+    match message_type.as_str() {
+        "REQUEST" => {
+            let request_payload: ChannelDetails = match serde_json::from_str(&payload_str) {
+                Ok(s) => s,
+                Err(e) => bail!(NetworkingError::new(
+                    NetworkingErrorCodes::PayloadDeserializationError,
+                    format!("error while deserializing message payload {}", e),
+                    true
+                )),
+            };
+            info!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "received handshake request: {:?}",
+                request_payload
+            );
+            let reply_subject = format!(
+                "network.{}.node.handshake.{}",
+                sha256::digest(request_payload.network_id.clone()),
+                request_payload.channel.clone()
+            );
+            let _ = handshake_tx
+                .send(HandshakeMessage::Request {
+                    machine_id: request_payload.machine_id.clone(),
+                    reply_subject: reply_subject,
+                })
+                .await;
+        }
+        "REPLY" => {
+            let reply_payload: Manifest = match serde_json::from_str(&payload_str) {
+                Ok(s) => s,
+                Err(e) => bail!(NetworkingError::new(
+                    NetworkingErrorCodes::PayloadDeserializationError,
+                    format!("error while deserializing message payload {}", e),
+                    true
+                )),
+            };
+            println!("manifest received: {:?}", reply_payload);
+        }
+        _ => {
+            warn!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "Unknown message type: {}",
+                message_type
+            );
+        }
+    }
+    Ok(true)
+}
+
+fn get_header_by_key(headers: Option<HeaderMap>, header_key: String) -> Result<String> {
+    let fn_name = "get_header_by_key";
+    let message_headers = match headers {
+        Some(h) => h,
         None => {
             warn!(
+                func = fn_name,
                 package = PACKAGE_NAME,
-                "No reply subject found in message: {:?}", message
+                "No headers found in message",
             );
-            String::from("") //TODO: need to discuss
+            bail!(NetworkingError::new(
+                NetworkingErrorCodes::ExtractMessageHeadersError,
+                String::from("no headers found in message"),
+                false
+            ))
         }
     };
-    let _ = handshake_tx
-        .send(HandshakeMessage::Request {
-            machine_id: request_payload.machine_id.clone(),
-            reply_subject: reply_to_subject,
-        })
-        .await;
-    Ok(true)
+    let message_type = match message_headers.get(header_key.as_str()) {
+        Some(v) => v.to_string(),
+        None => {
+            warn!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "No message type found in message headers: {:?}",
+                message_headers
+            );
+            String::from("")
+        }
+    };
+    Ok(message_type)
 }
 pub async fn create_disco_socket(addr: String) -> Result<UdpSocket> {
     info!(func = "create_disco_socket", package = PACKAGE_NAME, "init");

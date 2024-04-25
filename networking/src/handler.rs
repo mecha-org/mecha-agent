@@ -14,10 +14,10 @@ use wireguard::Wireguard;
 
 use crate::errors::{NetworkingError, NetworkingErrorCodes};
 use crate::handshake_handler::{
-    await_networking_handshake_request, HandshakeChannelHandler, HandshakeMessage, Manifest,
+    await_networking_handshake_message, HandshakeChannelHandler, HandshakeMessage, Manifest,
 };
 use crate::service::{
-    await_consumer_message, configure_wireguard, create_channel_sync_consumer,
+    await_consumer_message, configure_wireguard, create_channel_sync_consumer, get_machine_id,
     get_networking_subscriber, publish_networking_channel, reconnect_messaging_service,
 };
 
@@ -92,7 +92,7 @@ impl NetworkingHandler {
             }
         };
         let mut futures = JoinSet::new();
-        futures.spawn(await_networking_handshake_request(
+        futures.spawn(await_networking_handshake_message(
             subscribers.handshake_request.unwrap(),
             handshake_handler.handshake_tx.clone(),
         ));
@@ -127,6 +127,18 @@ impl NetworkingHandler {
         if exist_consumer_token.is_some() {
             let _ = exist_consumer_token.as_ref().unwrap().cancel();
         }
+        let machine_id = match get_machine_id(self.identity_tx.clone()).await {
+            Ok(id) => id,
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    error = e.to_string().as_str(),
+                    "Error getting machine id"
+                );
+                bail!(e)
+            }
+        };
         //TODO: handle this error unwrap
         let handshake_handler = self.handshake_handler.as_ref().unwrap();
         // create a new token
@@ -161,6 +173,7 @@ impl NetworkingHandler {
             messaging_tx.clone(),
             self.settings_tx.clone(),
             handshake_handler.channel_id.clone(),
+            machine_id,
         ));
         // create spawn for timer
         let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {

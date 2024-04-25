@@ -150,6 +150,7 @@ pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
             reply_to: publish_result_tx,
             message: json!(publish_payload).to_string(),
             subject: format!("machine.{}.status.heartbeat", digest(machine_id.clone())),
+            headers: None,
         })
         .await;
     match send_output {
@@ -282,6 +283,7 @@ pub async fn machine_platform_info(
             reply_to: tx,
             message: json!(platform_info).to_string(),
             subject: format!("machine.{}.status.info", digest(machine_id.clone())),
+            headers: None,
         })
         .await
     {

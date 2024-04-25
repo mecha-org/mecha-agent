@@ -133,6 +133,7 @@ pub async fn process_metrics(
                     reply_to: tx,
                     message: payload.into(),
                     subject: subject.clone(),
+                    headers: None,
                 })
                 .await
             {
@@ -266,6 +267,7 @@ pub async fn process_logs(
                     reply_to: tx,
                     message: payload.into(),
                     subject: subject.clone(),
+                    headers: None,
                 })
                 .await
             {
