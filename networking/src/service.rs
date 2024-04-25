@@ -352,19 +352,6 @@ pub async fn await_consumer_message(
                 );
             }
         }
-
-        // Acknowledges a message delivery
-        match message.ack().await {
-            Ok(res) => println!("message Acknowledged {:?}", res),
-            Err(err) => {
-                error!(
-                    func = fn_name,
-                    package = PACKAGE_NAME,
-                    "message acknowledge failed {}",
-                    err
-                );
-            }
-        };
     }
     info!(
         func = fn_name,
@@ -416,24 +403,6 @@ async fn process_consumer_message(
             package = PACKAGE_NAME,
             "message from same node, ignoring"
         );
-        match message.ack().await {
-            Ok(_) => {
-                println!("networking node message acknowledged")
-            }
-            Err(e) => {
-                error!(
-                    func = fn_name,
-                    package = PACKAGE_NAME,
-                    "error acknowledging message - {:?}",
-                    e
-                );
-                bail!(NetworkingError::new(
-                    NetworkingErrorCodes::MessageAcknowledgeError,
-                    format!("error acknowledging message - {:?}", e),
-                    true
-                ))
-            }
-        };
         return Ok(true);
     }
     let subject_to_publish_channel_info = format!(
@@ -604,11 +573,7 @@ pub async fn create_channel_sync_consumer(
             }
         };
 
-    let filter_subject = format!(
-        "networking.networks.{}.channels.{}",
-        digest(network_id),
-        digest(machine_id)
-    );
+    let filter_subject = format!("networking.networks.{}.channels.*", digest(network_id));
 
     let consumer = match jet_stream_client
         .create_consumer(stream, filter_subject, consumer_name.clone())

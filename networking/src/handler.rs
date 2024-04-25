@@ -337,9 +337,9 @@ impl NetworkingHandler {
                                                 }
                                             }
                                             //TODO: error handling ( do not exit the service if error occurs)
-                                            let _ = self.networking_consumer().await;
                                             let _ = publish_networking_channel(handshake_channel_id.clone(), self.messaging_tx.clone(), self.identity_tx.clone(), self.settings_tx.clone()).await;
                                             let _ = self.subscribe_to_nats().await;
+                                            let _ = self.networking_consumer().await;
                                         },
                                         "false" => {
                                             let _ = reconnect_messaging_service(self.messaging_tx.clone(),v.to_string(), existing_settings).await;

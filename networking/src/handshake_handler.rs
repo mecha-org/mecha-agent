@@ -188,6 +188,8 @@ impl HandshakeChannelHandler {
             txn_id: txn_id,
             candidates: Some(candidates),
         };
+        let mut header_map: HashMap<String, String> = HashMap::new();
+        header_map.insert(String::from("Message-Type"), String::from("REPLY"));
         println!("manifest: {:?}", manifest);
         // send reply to NATS
         let (tx, _rx) = oneshot::channel();
@@ -197,7 +199,7 @@ impl HandshakeChannelHandler {
                 subject: reply_subject,
                 message: json!(manifest).to_string(),
                 reply_to: tx,
-                headers: None,
+                headers: Some(header_map),
             })
             .await;
         Ok(true)
@@ -364,7 +366,7 @@ fn get_header_by_key(headers: Option<HeaderMap>, header_key: String) -> Result<S
             ))
         }
     };
-    let message_type = match message_headers.get("Message-Type") {
+    let message_type = match message_headers.get(header_key.as_str()) {
         Some(v) => v.to_string(),
         None => {
             warn!(
