@@ -1,8 +1,5 @@
 <script lang="ts">
 	import * as Carousel from '$lib/components/ui/carousel';
-	import Timer from '$lib/images/svgs/Timer.svg';
-	import Globe from '$lib/images/svgs/Globe.svg';
-	import Encrypt from '$lib/images/svgs/Encrypt.svg';
 	import Header from '$lib/custom-components/Header.svelte';
 	import { goto } from '$app/navigation';
 	import { invoke } from '@tauri-apps/api';
@@ -64,8 +61,7 @@
 				<Carousel.Content>
 					<Carousel.Item>
 						<div class="flex h-full w-full flex-col items-center rounded-md bg-[#15171D] p-10">
-							<img src={Globe} alt="globe" />
-							<!-- <Icons name="virtual_network_icon" class="" /> -->
+							<Icons name="virtual_network_icon" class="w-80 h-20" />
 							<p class="mt-8 text-center text-base font-medium">
 								Virtual networking to enable connecting to your machine remotely
 							</p>
@@ -73,7 +69,7 @@
 					</Carousel.Item>
 					<Carousel.Item>
 						<div class="flex h-full w-full flex-col items-center rounded-md bg-[#15171D] p-10">
-							<img src={Timer} alt="timer" />
+							<Icons name="real_time_icon" class="w-80 h-20" />
 							<p class="mt-8 text-center text-base font-medium">
 								Integrated Telemetry that collects logs and metrics in real-time
 							</p>
@@ -81,7 +77,7 @@
 					</Carousel.Item>
 					<Carousel.Item>
 						<div class="flex h-full w-full flex-col items-center rounded-md bg-[#15171D] p-10">
-							<img src={Encrypt} alt="encrypt" />
+							<Icons name="encypt_icon" class="w-80 h-20" />
 							<p class="mt-8 text-center text-base font-medium">
 								Secure and encrypted messaging from-to your machine
 							</p>
@@ -94,13 +90,13 @@
 	<footer slot="footer" class="h-full w-full bg-[#05070A73] backdrop-blur-3xl backdrop-filter">
 		<div class="flex h-full w-full flex-row items-center justify-between px-4 py-3">
 			<button
-				class="flex h-[48px] w-[48px] items-center justify-center rounded-md bg-[#15171D] p-2 text-[#FAFBFC]"
+				class="flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-[#15171D] p-2 text-[#FAFBFC]"
 				on:click={goBack}
 			>
 				<Icons name="back_icon" width="32" height="32" />
 			</button>
 			<button
-				class="flex h-[48px] w-[48px] items-center justify-center rounded-md bg-[#15171D] p-2 text-[#FAFBFC]"
+				class="flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-[#15171D] p-2 text-[#FAFBFC]"
 				on:click={goNext}
 			>
 				<Icons name="next_icon" width="32" height="32" />

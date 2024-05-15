@@ -106,7 +106,7 @@
 	<footer slot="footer" class="h-full w-full bg-[#05070A73] backdrop-blur-3xl backdrop-filter">
 		<div class="flex h-full w-full flex-row items-center justify-end px-4 py-3">
 			<button
-				class="flex h-[48px] w-[48px] items-center justify-center rounded-md bg-[#15171D] p-2 text-[#FAFBFC]"
+				class="flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-[#15171D] p-2 text-[#FAFBFC]"
 				on:click={exitApp}
 			>
 				<Icons name="exit_icon" width="32" height="32" />

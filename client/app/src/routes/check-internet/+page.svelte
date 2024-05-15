@@ -52,7 +52,7 @@
 	<footer slot="footer" class="w-full h-full bg-[#05070A73] backdrop-filter backdrop-blur-3xl">
 		<div class="flex w-full h-full flex-row items-center justify-between px-4 py-3">
 			<button
-				class="bg-[#15171D] text-[#FAFBFC] p-2 rounded-md w-[48px] h-[48px] flex items-center justify-center"
+				class="bg-[#15171D] text-[#FAFBFC] p-2 rounded-xl w-[48px] h-[48px] flex items-center justify-center"
 				on:click={goBack}
 			>
 				<Icons name="back_icon" width="32" height="32" />
