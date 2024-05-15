@@ -24,7 +24,7 @@ jobs:
           - name: Mecha Connect App 
             package: mecha-connect
             artifact: mecha-connect-aarch64-unknown-linux-gnu.tar.gz
-            path: ./client/app
+            path: ./client/app/src-tauri
 
     runs-on: ubicloud-standard-2-arm
     continue-on-error: false
