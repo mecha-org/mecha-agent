@@ -87,7 +87,7 @@
 </script>
 
 <div
-	class={cn("relative ", className)}
+	class={cn("relative", className)}
 	on:mouseenter
 	on:mouseleave
 	role="region"

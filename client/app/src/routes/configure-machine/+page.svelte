@@ -4,19 +4,43 @@
 	import { machineInfo } from '$lib/stores';
 	import Layout from '../../shared/layout.svelte';
 	import { get_machine_id } from '$lib/services';
-	import { isFileServingAllowed } from 'vite';
-	
-	const get_machine_id_data = async () => {
-		try {
-			const data = await get_machine_id();
-			machineInfo.set({ id: data.machine_id });
+
+	const get_machine_id_data = new Promise(async (resolve, reject) => {
+		await get_machine_id()
+			.then((data: any) => {
+				machineInfo.set({ id: data.machine_id });
+				resolve(data);
+			})
+			.catch((error) => {
+				console.error('SHOW ERROR PAGE!!!!', error);
+				reject(error);
+			});
+	});
+
+	const checkTimeout = new Promise((resolve, reject) => {
+		setTimeout(reject, 15000, 'Timeout');
+	});
+
+	setTimeout(()=>{
+
+		Promise.race([get_machine_id_data, checkTimeout])
+		.then((value) => {
+			console.log('promise value: ', value);
 			goto('/setup-success');
-		} catch (error) {
-			console.error('SHOW ERROR PAGE!!!!', error);
-			goto("/setup-failed", { state: {error: "fetching Machine data isFileServingAllowed, Try again"} });
-		}
-	};
-	setTimeout(get_machine_id_data, 3000);
+		})
+		.catch((error) => {
+			console.log('promise error: ', error);
+			if (error == 'Timeout') {
+				goto('/timeout-service');
+			} else {
+				goto('/setup-failed', {
+					state: { error: 'Fetching machine data failed, Please try again' }
+				});
+			}
+		});
+
+	}, 3000); 
+	
 </script>
 
 <Layout>
@@ -25,13 +49,14 @@
 			<div>
 				<img class="" alt="searching info" src={SearchingMachine} />
 			</div>
-			<div class="flex justify-center text-lg">
+			<div class="flex justify-center text-base">
 				<span> Fetching Machine Information ... </span>
 			</div>
 		</div>
 	</div>
 
-	<footer slot="footer" class="h-full w-full bg-[#05070A73] backdrop-blur-3xl backdrop-filter">
-	</footer>
-	
+	<footer
+		slot="footer"
+		class="h-full w-full bg-[#05070A73] backdrop-blur-3xl backdrop-filter"
+	></footer>
 </Layout>

@@ -24,7 +24,7 @@
 	{variant}
 	{size}
 	class={cn(
-		"h-8 w-8 touch-manipulation rounded-md bg-[#15171D] border-none",
+		"absolute h-8 w-8 touch-manipulation rounded-full",
 		$orientation === "horizontal"
 			? "-left-12 top-1/2 -translate-y-1/2"
 			: "-top-12 left-1/2 -translate-x-1/2 rotate-90",

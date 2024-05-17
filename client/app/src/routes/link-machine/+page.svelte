@@ -1,15 +1,15 @@
 <script lang="ts">
-	import Header from '$lib/custom-components/Header.svelte';
+	import Header from '../../shared/Header.svelte';
 	import { Progress } from '$lib/components/ui/progress';
 	import { onDestroy, onMount } from 'svelte';
 	import { invoke } from '@tauri-apps/api';
 	import { goto } from '$app/navigation';
 	import Layout from '../../shared/layout.svelte';
-	import Icons from '../../Icons.svelte';
-	import SubHeader from '$lib/custom-components/SubHeader.svelte';
+	import Icons from '../../shared/Icons.svelte';
+	import SubHeader from '../../shared/SubHeader.svelte';
 	import { generate_code, provision_by_code } from '$lib/services';
 
-	let provision_code: string = ' ';
+	let provision_code: string = '';
 	let is_code_generated: boolean = false;
 	let is_code_provision: boolean = false;
 
@@ -29,7 +29,6 @@
 				provision_code = data?.code;
 				is_code_generated = true;
 			} catch (error: any) {
-				// show toast OR ERROR PAGE !?
 				console.error('Error: generate code : ', error);
 				is_error = true;
 				error_message = 'Something went wrong! Try again!'; // check
@@ -103,28 +102,26 @@
 <Layout>
 	<div class="flex flex-col">
 		<Header title={'Link Your Machine'} />
-		<!-- <SubHeader text = {"Use this below code to connect this machine to your Mecha account"}> -->
+		<SubHeader text = {"Use the below code to onnect this machine to your mech.so account"}/>
 
-		<div class="relative flex-grow flex-col gap-2">
-			<div
-				class="rounded border border-solid border-zinc-600 p-2 text-2xl leading-loose tracking-widest"
-			>
+		<div class="mt-1.5 h-12 relative flex-grow flex-col rounded-xl border-2 border-solid border-zinc-600 " style="background-color: #15171D;">
+			<div class="text-2xl leading-loose tracking-widest px-4">
 				{provision_code}
 			</div>
-			<Progress value={timeout} max={60} />
 		</div>
+		<Progress value={timeout} max={60} class="-mt-0.5 mb-1"/>
 
-		<div class="mt-4 flex flex-col gap-4 text-base font-medium">
-			<div class="mb-2 flex flex-row gap-x-4">
-				<div class="h-min rounded-full bg-blue-600 px-2">1</div>
+		<div class="mt-4 flex flex-col gap-4 text-sm font-medium">
+			<div class="mb-2 flex flex-row gap-x-2">
+				<div class="h-min rounded-md border px-1.5">1</div>
 				<p>Create a new account on Mecha, if not signed up eardiver.</p>
 			</div>
-			<div class="mb-2 flex flex-row gap-x-4">
-				<div class="h-min rounded-full bg-blue-600 px-2">2</div>
+			<div class="mb-2 flex flex-row gap-x-2">
+				<div class="h-min rounded-md border px-1.5">2</div>
 				<p>Navigate to Machines &gt; Add Machine</p>
 			</div>
-			<div class="mb-2 flex flex-row gap-x-4">
-				<div class="h-min rounded-full bg-blue-600 px-2">3</div>
+			<div class="mb-2 flex flex-row gap-x-2">
+				<div class="h-min rounded-md border px-1.5">3</div>
 				<p>Enter the code shown above when asked</p>
 			</div>
 		</div>
@@ -133,7 +130,7 @@
 	<footer slot="footer" class="h-full w-full bg-[#05070A73] backdrop-blur-3xl backdrop-filter">
 		<div class="flex h-full w-full flex-row items-center justify-between px-4 py-3">
 			<button
-				class="flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-[#15171D] p-2 text-[#FAFBFC]"
+				class="flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-[#2A2A2C] p-2 text-[#FAFBFC]"
 				on:click={goBack}
 			>
 				<Icons name="back_icon" width="32" height="32" />

@@ -1,7 +1,7 @@
 <script lang="ts">
 	export let name: keyof typeof icons;
-	export let width = '1rem';
-	export let height = '1rem';
+	export let width = '16px';
+	export let height = '16px';
 	export let focusable: string | number | null | undefined = undefined;
 	let icons = {
 		virtual_network_icon: {
@@ -112,10 +112,39 @@
 </filter>
 </defs>`
 		},
-		add_square: {
-			box: 33,
-			svg: `<rect x="31.15" y="31.15" width="29.3" height="29.3" rx="7.79286" transform="rotate(-180 31.15 31.15)" stroke="#2D8AFF" stroke-width="2.7"/><path d="M24.0439 16.0429L9.41538 16.0429M16.7297 8.72861L16.7297 23.3572" stroke="#2D8AFF" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>`
-		}
+		attention: {
+			box: 50,
+			svg: `<g clip-path="url(#clip0_4769_524)">
+<rect width="50" height="50" rx="10" fill="#F33742"/>
+<rect x="25.002" y="31.6699" width="0.0236111" height="0.0236111" stroke="white" stroke-width="4.16667" stroke-linejoin="round"/>
+<path d="M25.0003 24.9974L25.0003 17.59M41.667 24.9974C41.667 34.2021 34.2051 41.6641 25.0003 41.6641C15.7956 41.6641 8.33366 34.2021 8.33366 24.9974C8.33366 15.7926 15.7956 8.33073 25.0003 8.33073C34.2051 8.33073 41.667 15.7926 41.667 24.9974Z" stroke="white" stroke-width="4.16667" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<defs>
+<clipPath id="clip0_4769_524">
+<rect width="50" height="50" rx="10" fill="white"/>
+</clipPath>
+</defs>`
+		},
+		info: {
+			box: 50,
+			svg: `<g clip-path="url(#clip0_4776_877)">
+<rect width="50" height="50" rx="10" fill="#0071EB"/>
+<g clip-path="url(#clip1_4776_877)">
+<path d="M9 9H41V36.8333C41 39.1345 39.1345 41 36.8333 41H13.1667C10.8655 41 9 39.1345 9 36.8333V9Z" stroke="white" stroke-width="4.16667" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="25" y="17.666" width="0.0208333" height="0.0208333" stroke="white" stroke-width="5" stroke-linejoin="round"/>
+<path d="M25 25V33.3333" stroke="white" stroke-width="4.16667" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+<defs>
+<clipPath id="clip0_4776_877">
+<rect width="50" height="50" rx="10" fill="white"/>
+</clipPath>
+<clipPath id="clip1_4776_877">
+<rect width="50" height="50" fill="white"/>
+</clipPath>
+</defs>`
+		},
+	
 	} as const;
 	let displayIcon = icons[name];
 </script>

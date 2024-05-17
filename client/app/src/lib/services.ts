@@ -29,9 +29,10 @@ const get_machine_id = async () => {
 
 const get_machine_info = async() => {
     try {
+        let machine_id_data : any = await invoke('get_machine_id');
         let machine_name_data : any = await invoke('get_machine_info', {key: "identity.machine.name"});
         let machine_icon_data : any = await invoke('get_machine_info', {key: "identity.machine.icon_url"});
-        return { name : machine_name_data.value, icon: machine_icon_data.value};
+        return { id: machine_id_data.value, name : machine_name_data.value, icon: machine_icon_data.value};
     } catch (error) {
         throw error;
     }
