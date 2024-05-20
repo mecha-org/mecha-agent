@@ -1,0 +1,101 @@
+<script lang="ts">
+	import * as Carousel from '$lib/components/ui/carousel';
+	import Header from '../shared/Header.svelte';
+	import { goto } from '$app/navigation';
+	import { invoke } from '@tauri-apps/api';
+	import Layout from '../shared/layout.svelte';
+	import Icons from '../shared/Icons.svelte';
+	import SubHeader from '../shared/SubHeader.svelte';
+	import Autoplay from 'embla-carousel-autoplay';
+	import { check_machine_provision_status, get_machine_id } from '$lib/services';
+	import { machineInfo } from '$lib/stores';
+
+	const goNext = async () => {
+		try {
+			const data = await check_machine_provision_status();
+
+			if (data.status) {
+				console.log('is_machine_provisioned ');
+				try {
+					const data = await get_machine_id();
+					machineInfo.set({ id: data.machine_id });
+					goto('/machine-info');
+				} catch (error) {
+					console.error('Error: Check machine id : ', error);
+					goto('/setup-failed', { state: { error: error } });
+				}
+			} else {
+				goto('../check-internet');
+			}
+		} catch (error: any) {
+			console.error('Error: Check machine provision : ', error);
+			goto('/setup-failed', { state: { error: error } });
+		}
+	};
+
+	const goBack = () => {
+		invoke('exit_app');
+	};
+</script>
+
+<Layout>
+	<div class="flex flex-col">
+		<Header title={'Connect to Mecha'} />
+
+		<SubHeader text={'Please sign up on mecha.so before getting started.'} />
+
+		<div class="flex flex-grow flex-col">
+			<Carousel.Root
+				class="mx-auto w-full flex-grow "
+				plugins={[
+					Autoplay({
+						delay: 3000
+					})
+				]}
+			>
+				<Carousel.Content>
+					<Carousel.Item>
+						<div class="flex h-full w-full flex-col items-center rounded-md bg-[#15171D] p-10">
+							<Icons name="virtual_network_icon" class="w-80 h-20" />
+							<p class="mt-8 text-center text-base font-medium">
+								Mesh Networking to enable global connectivity between your machines
+							</p>
+						</div>
+					</Carousel.Item>
+					<Carousel.Item>
+						<div class="flex h-full w-full flex-col items-center rounded-md bg-[#15171D] p-10">
+							<Icons name="real_time_icon" class="w-80 h-20" />
+							<p class="mt-8 text-center text-base font-medium">
+								Integrated metrics and logs collection, compatible with OpenTelemetry
+							</p>
+						</div>
+					</Carousel.Item>
+					<Carousel.Item>
+						<div class="flex h-full w-full flex-col items-center rounded-md bg-[#15171D] p-10">
+							<Icons name="encypt_icon" class="w-80 h-20" />
+							<p class="mt-8 text-center text-base font-medium">
+								Identity management using secure x.509 certificates
+							</p>
+						</div>
+					</Carousel.Item>
+				</Carousel.Content>
+			</Carousel.Root>
+		</div>
+	</div>
+	<footer slot="footer" class="h-full w-full bg-[#05070A73] backdrop-blur-3xl backdrop-filter">
+		<div class="flex h-full w-full flex-row items-center justify-between px-4 py-3">
+			<button
+				class="flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-[#2A2A2C] p-2 text-[#FAFBFC]"
+				on:click={goBack}
+			>
+				<Icons name="back_icon" width="32" height="32" />
+			</button>
+			<button
+				class="flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-[#2A2A2C] p-2 text-[#FAFBFC]"
+				on:click={goNext}
+			>
+				<Icons name="next_icon" width="32" height="32" />
+			</button>
+		</div>
+	</footer>
+</Layout>

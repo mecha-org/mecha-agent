@@ -1,9 +1,0 @@
-pub mod check_internet;
-pub mod configure_machine;
-pub mod link_machine;
-pub mod machine_info;
-pub mod no_internet;
-pub mod setup_failed;
-pub mod setup_success;
-pub mod start_screen;
-pub mod timeout_screen;

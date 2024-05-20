@@ -24,7 +24,7 @@ jobs:
           - name: Mecha Connect App 
             package: mecha-connect
             artifact: mecha-connect-aarch64-unknown-linux-gnu.tar.gz
-            path: ./client/app
+            path: ./client
 
     runs-on: ubicloud-standard-2-arm
     continue-on-error: false
@@ -53,25 +53,17 @@ jobs:
           protobuf-compiler \
           libprotobuf-dev
 
-      - name: Build [${{ matrix.package }}]
-        run: |
-          cd ${{ matrix.path }}
-          cargo --config net.git-fetch-with-cli=true fetch
-          cargo build --release
-          ls -la
-
       - name: Package deb [${{ matrix.package }}]
         continue-on-error: true
         run: |
           cd ${{ matrix.path }}
-          cargo deb --no-build
+          cargo tauri build --bundles deb
           ls -la
 
       - name: Prepare artifacts [${{ matrix.package }}]
         run: |
           mkdir build
-          cp ./target/release/${{ matrix.package }} ./build
-          cp ./target/debian/*.deb ./build
+          cp ../target/release/bundle/deb/${{ matrix.package }} ./build
     
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
