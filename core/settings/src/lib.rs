@@ -19,7 +19,6 @@ pub mod telemetry;
 /// Agent Settings - Struct corresponding to the settings.yml schema
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AgentSettings {
-    pub sentry: SentrySettings,
     pub server: ServerSettings,
     pub logging: LoggingSettings,
     pub provisioning: ProvisioningSettings,
@@ -33,7 +32,6 @@ pub struct AgentSettings {
 impl Default for AgentSettings {
     fn default() -> Self {
         Self {
-            sentry: SentrySettings::default(),
             server: ServerSettings::default(),
             logging: LoggingSettings::default(),
             provisioning: ProvisioningSettings::default(),
@@ -44,13 +42,6 @@ impl Default for AgentSettings {
             telemetry: TelemetrySettings::default(),
         }
     }
-}
-
-/// SentrySettings - Settings parameter for configuring the sentry client
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct SentrySettings {
-    pub enabled: bool,
-    pub dsn: Option<String>,
 }
 
 impl Default for SentrySettings {

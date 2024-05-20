@@ -143,7 +143,6 @@ impl MessagingHandler {
                                     bail!(MessagingError::new(
                                         MessagingErrorCodes::EventSendError,
                                         format!("error sending messaging service disconnected - {}", e),
-                                        true
                                     ));
                                 }
                             };

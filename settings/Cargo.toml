@@ -22,7 +22,6 @@ services = { path = "../core/services" }
 kv-store = { path = "../commons/kv-store" }
 crypto = { path = "../commons/crypto" }
 anyhow = { workspace = true }
-sentry-anyhow= { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tonic = { workspace = true }

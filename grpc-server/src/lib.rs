@@ -102,7 +102,6 @@ pub async fn start_grpc_service(opt: GrpcServerOptions) -> Result<()> {
             bail!(AgentServerError::new(
                 AgentServerErrorCodes::InitGRPCServerError,
                 format!("error initializing grpc server - {}", e),
-                true
             ))
         }
     };

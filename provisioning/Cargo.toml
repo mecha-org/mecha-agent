@@ -24,7 +24,7 @@ async-trait = { workspace = true }
 reqwest = { workspace = true }
 sentry = { workspace = true }
 sentry-tracing = { workspace = true }
-sentry-anyhow = { workspace = true }
+
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

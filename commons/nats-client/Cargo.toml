@@ -13,7 +13,7 @@ homepage.workspace = true
 crypto = { path = "../crypto" }
 events = { path = "../../core/events" }
 anyhow = { workspace = true }
-sentry-anyhow = { workspace = true }
+
 tokio = { workspace = true }
 async-nats = { workspace = true }
 tracing = { workspace = true }

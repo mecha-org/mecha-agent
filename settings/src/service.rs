@@ -61,7 +61,6 @@ pub async fn create_pull_consumer(
                     "error sending init jetstream message - {:?}",
                     err.to_string()
                 ),
-                true
             ))
         }
     }
@@ -78,7 +77,6 @@ pub async fn create_pull_consumer(
             bail!(DeviceSettingError::new(
                 DeviceSettingErrorCodes::ChannelReceiveMessageError,
                 format!("error receiving init jetstream message - {:?}", err),
-                true
             ))
         }
     };
@@ -116,7 +114,6 @@ pub async fn create_pull_consumer(
                     "error sending get machine id message - {:?}",
                     err.to_string()
                 ),
-                true
             ))
         }
     }
@@ -132,7 +129,6 @@ pub async fn create_pull_consumer(
             bail!(DeviceSettingError::new(
                 DeviceSettingErrorCodes::ChannelReceiveMessageError,
                 format!("error receiving get machine id message - {:?}", err),
-                true
             ))
         }
     };
@@ -183,7 +179,6 @@ pub async fn sync_settings(
             bail!(DeviceSettingError::new(
                 DeviceSettingErrorCodes::PullMessagesError,
                 format!("pull messages error - {:?} - {}", e.kind(), e.to_string()),
-                true
             ))
         }
     };
@@ -233,7 +228,6 @@ pub async fn sync_settings(
                     "error sending settings synced event - {:?}",
                     err.to_string()
                 ),
-                true
             ))
         }
     }
@@ -262,7 +256,6 @@ pub async fn await_settings_message(
             bail!(DeviceSettingError::new(
                 DeviceSettingErrorCodes::PullMessagesError,
                 format!("pull messages error - {:?} - {}", e.kind(), e.to_string()),
-                true
             ))
         }
     };
@@ -393,7 +386,6 @@ pub async fn set_settings(
                     "error sending settings updated event - {:?}",
                     err.to_string()
                 ),
-                true
             ))
         }
     }
@@ -476,7 +468,7 @@ async fn process_message(
             bail!(DeviceSettingError::new(
                 DeviceSettingErrorCodes::MessageHeaderEmptyError,
                 format!("message doesn't contain any headers"),
-                false
+
             ))
         }
     };
@@ -507,7 +499,7 @@ async fn process_message(
                 bail!(DeviceSettingError::new(
                     DeviceSettingErrorCodes::ChannelSendMessageError,
                     format!("error sending ack message - {:?}", err.to_string()),
-                    true
+
                 ))
             }
         }
@@ -520,7 +512,6 @@ async fn process_message(
         bail!(DeviceSettingError::new(
             DeviceSettingErrorCodes::AckHeaderNotFoundError,
             format!("ack header not found"),
-            false
         ));
     }
     info!(
@@ -550,7 +541,6 @@ fn parse_message_payload(payload: Bytes) -> Result<AddTaskRequestPayload> {
             bail!(DeviceSettingError::new(
                 DeviceSettingErrorCodes::ExtractAddTaskPayloadError,
                 format!("error parsing message payload - {}", e),
-                true
             ))
         }
     };
@@ -566,7 +556,6 @@ fn parse_message_payload(payload: Bytes) -> Result<AddTaskRequestPayload> {
             bail!(DeviceSettingError::new(
                 DeviceSettingErrorCodes::ExtractAddTaskPayloadError,
                 format!("error converting payload to AddTaskRequestPayload - {}", e),
-                true
             ))
         }
     };

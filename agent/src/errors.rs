@@ -1,4 +1,3 @@
-use sentry_anyhow::capture_anyhow;
 use std::fmt;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -53,11 +52,6 @@ impl std::fmt::Display for AgentError {
 
 impl AgentError {
     pub fn new(code: AgentErrorCodes, message: String, capture_error: bool) -> Self {
-        if capture_error {
-            let error = &anyhow::anyhow!(code)
-                .context(format!("error: (code: {:?}, message: {})", code, message));
-            capture_anyhow(error);
-        }
         Self { code, message }
     }
 }

@@ -107,7 +107,7 @@ pub async fn get_networking_subscriber(
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::ChannelSendMessageError,
                     format!("error sending subscriber message - {}", e),
-                    true
+
                 ));
             }
         }
@@ -131,7 +131,7 @@ pub async fn get_networking_subscriber(
                         "error get networking subscriber - {:?}, error - {}",
                         &subject, e
                     ),
-                    true
+
                 ));
             }
         };
@@ -167,7 +167,6 @@ pub async fn configure_wireguard(settings_tx: Sender<SettingMessage>) -> Result<
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::GenerateKeyPairError,
                 format!("error generating key pair - {}", e),
-                true
             ))
         }
     };
@@ -208,7 +207,6 @@ pub async fn configure_wireguard(settings_tx: Sender<SettingMessage>) -> Result<
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::SettingUpWireguardError,
                 format!("error setting up wireguard interface - {}", e),
-                true
             ))
         }
     }
@@ -286,7 +284,6 @@ pub async fn publish_networking_channel(
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::UnknownError,
                 format!("error sending message to messaging - {}", e),
-                true
             ))
         }
     };
@@ -313,7 +310,6 @@ pub async fn await_consumer_message(
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::PullMessagesError,
                 format!("pull messages error - {:?} - {}", e.kind(), e.to_string()),
-                true
             ))
         }
     };
@@ -383,7 +379,6 @@ async fn process_consumer_message(
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ExtractMessagePayloadError,
                 format!("error converting payload to string - {}", e),
-                true
             ))
         }
     };
@@ -392,7 +387,6 @@ async fn process_consumer_message(
         Err(e) => bail!(NetworkingError::new(
             NetworkingErrorCodes::PayloadDeserializationError,
             format!("error while deserializing message payload {}", e),
-            true
         )),
     };
     //Do not process message if it is from same channel
@@ -442,7 +436,6 @@ async fn process_consumer_message(
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ChannelSendMessageError,
                 format!("error sending subscriber message - {}", e),
-                true
             ));
         }
     }
@@ -460,7 +453,6 @@ async fn process_consumer_message(
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::MessageAcknowledgeError,
                 format!("error acknowledging message - {:?}", e),
-                true
             ))
         }
     }
@@ -509,7 +501,6 @@ pub async fn create_channel_sync_consumer(
                     "error sending init jetstream message - {:?}",
                     err.to_string()
                 ),
-                true
             ))
         }
     }
@@ -526,7 +517,6 @@ pub async fn create_channel_sync_consumer(
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ChannelReceiveMessageError,
                 format!("error receiving init jetstream message - {:?}", err),
-                true
             ))
         }
     };
@@ -616,7 +606,6 @@ pub async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Resul
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ChannelSendMessageError,
                 format!("error sending get machine id message - {}", e),
-                true
             ));
         }
     }
@@ -632,7 +621,6 @@ pub async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Resul
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ChannelReceiveMessageError,
                 format!("error receiving get machine id message - {}", e),
-                true
             ));
         }
     };
@@ -665,7 +653,6 @@ async fn get_settings_by_key(setting_tx: Sender<SettingMessage>, key: String) ->
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ChannelSendMessageError,
                 format!("failed to send message - {}", e),
-                true
             ))
         }
     }
@@ -705,7 +692,6 @@ async fn get_ip_address(settings_tx: mpsc::Sender<SettingMessage>) -> Result<Str
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ChannelSendMessageError,
                 format!("error sending get ip address message - {}", e),
-                true
             ));
         }
     }
@@ -721,7 +707,6 @@ async fn get_ip_address(settings_tx: mpsc::Sender<SettingMessage>) -> Result<Str
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ChannelReceiveMessageError,
                 format!("error receiving get ip address message - {}", e),
-                true
             ));
         }
     };
@@ -774,7 +759,6 @@ pub async fn reconnect_messaging_service(
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ChannelSendMessageError,
                 format!("error sending reconnect message - {}", e),
-                true
             ));
         }
     }
@@ -790,7 +774,6 @@ pub async fn reconnect_messaging_service(
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ChannelReceiveMessageError,
                 format!("error receiving reconnect message - {}", e),
-                true
             ));
         }
     };

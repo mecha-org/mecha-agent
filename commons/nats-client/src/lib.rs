@@ -89,7 +89,6 @@ impl NatsClient {
                         e.kind(),
                         e.to_string()
                     ),
-                    true
                 ))
             }
         };
@@ -113,7 +112,6 @@ impl NatsClient {
                 bail!(NatsClientError::new(
                     NatsClientErrorCodes::ClientUninitializedError,
                     format!("nats client uninitialized"),
-                    false
                 ))
             }
         };
@@ -128,7 +126,6 @@ impl NatsClient {
                 bail!(NatsClientError::new(
                     NatsClientErrorCodes::ClientNotConnectedError,
                     format!("nats client is not connected, not ready to send or receive messages"),
-                    true
                 ))
             }
             async_nats::connection::State::Disconnected => {
@@ -140,7 +137,6 @@ impl NatsClient {
                 bail!(NatsClientError::new(
                 NatsClientErrorCodes::ClientDisconnectedError,
                 format!("nats client state is disconnected, reconnect to continue sending, receiving messages"),
-                false
             ))
             }
         };
@@ -213,7 +209,6 @@ impl NatsClient {
                         "error publishing message to sub - {}, error - {}",
                         subject, e
                     ),
-                    true
                 ))
             }
         }
@@ -256,7 +251,6 @@ impl NatsClient {
                         "error requesting message to sub - {}, error - {}",
                         subject, e
                     ),
-                    true
                 ))
             }
         };
@@ -296,7 +290,6 @@ impl NatsClient {
                 bail!(NatsClientError::new(
                     NatsClientErrorCodes::SubscribeError,
                     format!("error subscriber to sub - {}, error - {}", subject, e),
-                    true
                 ))
             }
         };

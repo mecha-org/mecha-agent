@@ -25,7 +25,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 sentry-tracing = {version= "0.32.1"}
 sentry = { version = "0.32.1",features = ["backtrace", "anyhow"] }
 init-tracing-opentelemetry = { version = "0.12.0", features = ["otlp", "tracing_subscriber_ext"] }
-sentry-anyhow = { version= "0.32.1", features = ["backtrace"]}
 anyhow = { version= "1.0.71", features = ["backtrace"]}
 opentelemetry = "0.21.0"
 tokio-util = "0.7.10"

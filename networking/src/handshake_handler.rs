@@ -281,7 +281,6 @@ async fn process_handshake_request(
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ExtractMessagePayloadError,
                 format!("error converting payload to string - {}", e),
-                true
             ))
         }
     };
@@ -305,7 +304,7 @@ async fn process_handshake_request(
                 Err(e) => bail!(NetworkingError::new(
                     NetworkingErrorCodes::PayloadDeserializationError,
                     format!("error while deserializing message payload {}", e),
-                    true
+
                 )),
             };
             info!(
@@ -332,7 +331,7 @@ async fn process_handshake_request(
                 Err(e) => bail!(NetworkingError::new(
                     NetworkingErrorCodes::PayloadDeserializationError,
                     format!("error while deserializing message payload {}", e),
-                    true
+
                 )),
             };
             println!("manifest received: {:?}", reply_payload);
@@ -362,7 +361,6 @@ fn get_header_by_key(headers: Option<HeaderMap>, header_key: String) -> Result<S
             bail!(NetworkingError::new(
                 NetworkingErrorCodes::ExtractMessageHeadersError,
                 String::from("no headers found in message"),
-                false
             ))
         }
     };

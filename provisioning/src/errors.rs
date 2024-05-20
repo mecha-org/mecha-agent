@@ -1,4 +1,3 @@
-use sentry_anyhow::capture_anyhow;
 use std::fmt;
 use tonic::Status;
 
@@ -108,14 +107,7 @@ impl std::fmt::Display for ProvisioningError {
 }
 
 impl ProvisioningError {
-    pub fn new(code: ProvisioningErrorCodes, message: String, capture_error: bool) -> Self {
-        if capture_error {
-            let error = &anyhow::anyhow!(code).context(format!(
-                "error: (code: {:?}, message: {}, package: {})",
-                code, message, PACKAGE_NAME
-            ));
-            capture_anyhow(error);
-        }
+    pub fn new(code: ProvisioningErrorCodes, message: String) -> Self {
         Self { code, message }
     }
 }
