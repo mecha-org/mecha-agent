@@ -1,7 +1,4 @@
 version: 1.0
-sentry:
-  enabled: true
-  dsn:
 logging:
   enabled: true
   path:

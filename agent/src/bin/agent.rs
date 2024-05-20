@@ -27,18 +27,6 @@ async fn main() -> Result<()> {
         }
     };
 
-    // enable error tracking on sentry
-    let _guard = sentry::init((
-        settings.sentry.dsn,
-        sentry::ClientOptions {
-            release: sentry::release_name!(),
-            attach_stacktrace: true,
-            send_default_pii: false,
-            server_name: Some("mecha-agent".to_string().into()),
-            ..Default::default()
-        },
-    ));
-
     // configure the global logger to use our opentelemetry logger
     let _ = init_logs_config();
     let logger_provider = opentelemetry::global::logger_provider();
