@@ -44,15 +44,6 @@ impl Default for AgentSettings {
     }
 }
 
-impl Default for SentrySettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            dsn: None,
-        }
-    }
-}
-
 /// ServerSettings - Settings parameter for configuring the agent's grpc server settings
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ServerSettings {
