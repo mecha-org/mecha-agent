@@ -66,7 +66,6 @@ pub fn safe_write_to_path(path: &str, content: &[u8]) -> Result<bool> {
                             "failed to create file path - {:?}, error - {}",
                             &actual_path, err
                         ),
-                        true
                     ));
                 }
             };
@@ -83,8 +82,7 @@ pub fn safe_write_to_path(path: &str, content: &[u8]) -> Result<bool> {
                     );
                     bail!(FsError::new(
                         FsErrorCodes::FileWriteError,
-                        format!("failed to write to file - {}", file_name_str),
-                        true
+                        format!("failed to write to file - {}", file_name_str)
                     ));
                 }
             }
@@ -98,7 +96,6 @@ pub fn safe_write_to_path(path: &str, content: &[u8]) -> Result<bool> {
             bail!(FsError::new(
                 FsErrorCodes::InvalidFileNameError,
                 "invalid file name".to_string(),
-                true
             ));
         }
     } else {
@@ -111,7 +108,6 @@ pub fn safe_write_to_path(path: &str, content: &[u8]) -> Result<bool> {
         bail!(FsError::new(
             FsErrorCodes::InvalidFilePathError,
             "invalid file path".to_string(),
-            true
         ));
     }
 }
@@ -144,7 +140,7 @@ pub fn remove_files(paths: Vec<&str>) -> Result<()> {
                 bail!(FsError::new(
                     FsErrorCodes::FileRemoveError,
                     format!("failed to remove file - {}", path),
-                    true
+
                 ));
             }
         };
@@ -187,7 +183,6 @@ pub fn safe_open_file(path: &str) -> Result<File> {
             bail!(FsError::new(
                 FsErrorCodes::FileOpenError,
                 format!("failed to open file - {}, error - {}", path, err),
-                true
             ));
         }
     };
@@ -220,7 +215,7 @@ pub fn construct_dir_path(path: &str) -> Result<PathBuf> {
                     bail!(FsError::new(
                         FsErrorCodes::JoinPathError,
                         format!("failed to strip prefix - {}, error - {}", path, e),
-                        true
+    
                     ));
                 }
             };

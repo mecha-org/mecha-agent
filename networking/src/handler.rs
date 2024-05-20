@@ -163,7 +163,6 @@ impl NetworkingHandler {
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::CreateConsumerError,
                     format!("create consumer error - {:?} ", e.to_string()),
-                    true
                 ))
             }
         };
@@ -256,7 +255,6 @@ impl NetworkingHandler {
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::NetworkingInitError,
                     format!("error starting disco server - {:?}", e),
-                    true
                 ));
             }
         };
@@ -287,7 +285,7 @@ impl NetworkingHandler {
                             bail!(NetworkingError::new(
                                 NetworkingErrorCodes::NetworkingInitError, //todo: handshakeRunError
                                 format!("error init/run handshake service: {:?}", e),
-                                true
+        
                             ));
                         }
                     }

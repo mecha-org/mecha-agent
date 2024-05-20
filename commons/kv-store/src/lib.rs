@@ -47,7 +47,6 @@ impl KeyValueStoreClient {
                     bail!(KeyValueStoreError::new(
                         KeyValueStoreErrorCodes::DbAcquireLockError,
                         format!("error acquiring lock on set - {}", e),
-                        true
                     ))
                 }
             };
@@ -72,7 +71,7 @@ impl KeyValueStoreClient {
                         bail!(KeyValueStoreError::new(
                             KeyValueStoreErrorCodes::InsertError,
                             format!("error inserting value into db - {}", e),
-                            true
+
                         ))
                     }
                 };
@@ -102,7 +101,6 @@ impl KeyValueStoreClient {
                     bail!(KeyValueStoreError::new(
                         KeyValueStoreErrorCodes::DbAcquireLockError,
                         format!("error acquiring lock on set - {}", e),
-                        true
                     ))
                 }
             };
@@ -123,7 +121,6 @@ impl KeyValueStoreClient {
                         "Error retrieving value from db key - {}, error - {}",
                         key, e
                     ),
-                    true
                 )),
             }
         }
@@ -144,7 +141,6 @@ impl KeyValueStoreClient {
                     bail!(KeyValueStoreError::new(
                         KeyValueStoreErrorCodes::DbAcquireLockError,
                         format!("error acquiring lock on set - {}", e),
-                        true
                     ))
                 }
             };
@@ -168,7 +164,6 @@ impl KeyValueStoreClient {
                     bail!(KeyValueStoreError::new(
                         KeyValueStoreErrorCodes::UnknownError,
                         format!("error resetting database connection - {}", e),
-                        true
                     ))
                 }
             }
@@ -176,7 +171,6 @@ impl KeyValueStoreClient {
             bail!(KeyValueStoreError::new(
                 KeyValueStoreErrorCodes::DbNotInitialized,
                 "database not initialized".to_string(),
-                true
             ))
         }
     }

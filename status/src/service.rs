@@ -85,7 +85,6 @@ pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
             bail!(StatusError::new(
                 StatusErrorCodes::FetchMachineIdError,
                 format!("error getting machine id - {}", err),
-                false
             ));
         }
     };
@@ -105,7 +104,6 @@ pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
             bail!(StatusError::new(
                 StatusErrorCodes::FetchUptimeError,
                 format!("error getting uptime - {}", err),
-                false
             ));
         }
     };
@@ -126,7 +124,6 @@ pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
             bail!(StatusError::new(
                 StatusErrorCodes::FetchLoadAverageError,
                 format!("error getting load average - {}", err),
-                false
             ));
         }
     };
@@ -171,7 +168,6 @@ pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
             bail!(StatusError::new(
                 StatusErrorCodes::ChannelSendMessageError,
                 "error send status message".to_string(),
-                false
             ));
         }
     }
@@ -187,7 +183,6 @@ pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
             bail!(StatusError::new(
                 StatusErrorCodes::ChannelRecvTimeoutError,
                 format!("error receiving message: {}", err),
-                false
             ));
         }
     }
@@ -217,7 +212,6 @@ pub async fn machine_platform_info(
             bail!(StatusError::new(
                 StatusErrorCodes::FetchPlatformInfoError,
                 format!("error getting hostname - {}", err),
-                false
             ));
         }
     };
@@ -233,7 +227,6 @@ pub async fn machine_platform_info(
             bail!(StatusError::new(
                 StatusErrorCodes::FetchPlatformInfoError,
                 format!("error getting platform release - {}", err),
-                false
             ));
         }
     };
@@ -256,7 +249,6 @@ pub async fn machine_platform_info(
             bail!(StatusError::new(
                 StatusErrorCodes::FetchPlatformInfoError,
                 format!("error getting machine id - {}", err),
-                false
             ));
         }
     };
@@ -373,7 +365,6 @@ pub async fn get_machine_id(identity_tx: Sender<IdentityMessage>) -> Result<Stri
                     "error send get machine id message to identity service - {}",
                     err
                 ),
-                false
             ));
         }
     }

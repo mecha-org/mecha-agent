@@ -1,4 +1,3 @@
-use sentry_anyhow::capture_anyhow;
 use std::fmt;
 
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
@@ -83,14 +82,7 @@ impl std::fmt::Display for NetworkingError {
 }
 
 impl NetworkingError {
-    pub fn new(code: NetworkingErrorCodes, message: String, capture_error: bool) -> Self {
-        if capture_error {
-            let error = &anyhow::anyhow!(code).context(format!(
-                "error: (code: {:?}, message: {}, package: {})",
-                code, message, PACKAGE_NAME
-            ));
-            capture_anyhow(error);
-        }
+    pub fn new(code: NetworkingErrorCodes, message: String) -> Self {
         Self { code, message }
     }
 }

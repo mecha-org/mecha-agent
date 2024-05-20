@@ -82,7 +82,6 @@ pub fn generate_rsa_private_key(file_path: &str) -> Result<bool> {
             bail!(CryptoError::new(
                 CryptoErrorCodes::FilePathError,
                 format!("invalid file path - {}", file_path),
-                false
             ))
         }
     };
@@ -103,7 +102,6 @@ pub fn generate_rsa_private_key(file_path: &str) -> Result<bool> {
             bail!(CryptoError::new(
                 CryptoErrorCodes::WritePrivateKeyError,
                 format!("failed to write private key file - {}", e),
-                true
             ))
         }
     }
@@ -138,7 +136,6 @@ pub fn generate_csr(
             bail!(CryptoError::new(
                 CryptoErrorCodes::ReadPrivateKeyError,
                 format!("failed to open private key file - {}", e),
-                true
             ))
         }
     };
@@ -148,7 +145,6 @@ pub fn generate_csr(
         Err(e) => bail!(CryptoError::new(
             CryptoErrorCodes::ReadPrivateKeyError,
             format!("failed to read private key file - {}", e),
-            true
         )),
     };
     let key_pair = match KeyPair::from_pem(&private_key_str) {
@@ -163,7 +159,6 @@ pub fn generate_csr(
             bail!(CryptoError::new(
                 CryptoErrorCodes::ReadPrivateKeyError,
                 format!("failed to read private key file - {}", e),
-                true
             ))
         }
     };
@@ -186,7 +181,6 @@ pub fn generate_csr(
             bail!(CryptoError::new(
                 CryptoErrorCodes::GenerateCSRError,
                 format!("failed to serialize csr - {}", e),
-                true
             ))
         }
     };
@@ -203,7 +197,6 @@ pub fn generate_csr(
             bail!(CryptoError::new(
                 CryptoErrorCodes::WritePrivateKeyError,
                 format!("failed to write csr file - {}", e),
-                true
             ))
         }
     }
@@ -236,7 +229,6 @@ pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<
             bail!(CryptoError::new(
                 CryptoErrorCodes::FilePathError,
                 format!("failed to convert path to string - {:?}", e),
-                true
             ))
         }
     };
@@ -254,7 +246,6 @@ pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<
             bail!(CryptoError::new(
                 CryptoErrorCodes::ReadPrivateKeyError,
                 format!("failed to open private key file - {}", e),
-                true
             ))
         }
     };
@@ -271,7 +262,6 @@ pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<
             bail!(CryptoError::new(
                 CryptoErrorCodes::ReadPrivateKeyError,
                 format!("failed to read private key file - {}", e),
-                true
             ))
         }
     };
@@ -289,7 +279,6 @@ pub fn sign_with_private_key(private_key_path: &str, data: &[u8]) -> Result<Vec<
             bail!(CryptoError::new(
                 CryptoErrorCodes::ReadPrivateKeyError,
                 format!("failed to load private key from file - {}", e),
-                true
             ))
         }
     };
@@ -356,7 +345,6 @@ pub fn read_public_key(file_path: &str) -> Result<CapturedX509Certificate> {
             bail!(CryptoError::new(
                 CryptoErrorCodes::ReadPrivateKeyError,
                 format!("failed to open private key file - {}", e),
-                true
             ))
         }
     };
@@ -373,7 +361,6 @@ pub fn read_public_key(file_path: &str) -> Result<CapturedX509Certificate> {
             bail!(CryptoError::new(
                 CryptoErrorCodes::ReadPrivateKeyError,
                 format!("failed to read private key file - {}", e),
-                true
             ))
         }
     };
@@ -389,7 +376,6 @@ pub fn read_public_key(file_path: &str) -> Result<CapturedX509Certificate> {
             bail!(CryptoError::new(
                 CryptoErrorCodes::PemDeserializeError,
                 format!("error deserializing pem",),
-                true
             ))
         }
     };

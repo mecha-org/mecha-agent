@@ -115,7 +115,6 @@ impl Messaging {
             bail!(MessagingError::new(
                 MessagingErrorCodes::NatsClientNotInitialized,
                 format!("messaging service initialized without nats client"),
-                false
             ))
         }
 
@@ -188,7 +187,6 @@ impl Messaging {
                 bail!(MessagingError::new(
                     MessagingErrorCodes::EventSendError,
                     format!("error sending messaging service event - {}", e),
-                    true
                 ));
             }
         }
@@ -221,7 +219,6 @@ impl Messaging {
             bail!(MessagingError::new(
                 MessagingErrorCodes::NatsClientNotInitialized,
                 format!("messaging service initialized without nats client"),
-                true,
             ))
         }
 
@@ -258,7 +255,6 @@ impl Messaging {
             bail!(MessagingError::new(
                 MessagingErrorCodes::NatsClientNotInitialized,
                 format!("messaging service initialized without nats client"),
-                false
             ))
         }
 
@@ -293,7 +289,6 @@ impl Messaging {
             bail!(MessagingError::new(
                 MessagingErrorCodes::NatsClientNotInitialized,
                 format!("messaging service initialized without nats client"),
-                false
             ))
         }
         let nats_client = self.nats_client.as_ref().unwrap();
@@ -323,7 +318,6 @@ impl Messaging {
             bail!(MessagingError::new(
                 MessagingErrorCodes::NatsClientNotInitialized,
                 format!("messaging service initialized without nats client"),
-                false
             ))
         }
 
@@ -477,7 +471,6 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
                 bail!(MessagingError::new(
                     MessagingErrorCodes::GetAuthNonceServerError,
                     format!("get auth nonce returned internal server error - {}", e),
-                    true
                 ))
             }
             Some(StatusCode::BAD_REQUEST) => {
@@ -490,7 +483,6 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
                 bail!(MessagingError::new(
                     MessagingErrorCodes::GetAuthNonceBadRequestError,
                     format!("get auth nonce returned bad request - {}", e),
-                    true
                 ))
             }
             Some(StatusCode::NOT_FOUND) => {
@@ -503,7 +495,6 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
                 bail!(MessagingError::new(
                     MessagingErrorCodes::GetAuthNonceNotFoundError,
                     format!("get auth nonce not found - {}", e),
-                    true
                 ))
             }
             Some(_) => {
@@ -516,7 +507,6 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
                 bail!(MessagingError::new(
                     MessagingErrorCodes::UnknownError,
                     format!("get auth nonce returned unknown error - {}", e),
-                    true
                 ))
             }
 
@@ -530,7 +520,6 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
                 bail!(MessagingError::new(
                     MessagingErrorCodes::UnknownError,
                     format!("get auth nonce returned error unmatched - {}", e),
-                    true
                 ))
             }
         },
@@ -552,7 +541,6 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
             bail!(MessagingError::new(
                 MessagingErrorCodes::AuthNonceResponseParseError,
                 format!("error parsing nonce response - {}", e),
-                true
             ))
         }
     };
@@ -616,7 +604,6 @@ async fn get_auth_token(
                 bail!(MessagingError::new(
                     MessagingErrorCodes::GetAuthTokenServerError,
                     format!("get auth token returned internal server error - {}", e),
-                    true
                 ))
             }
             Some(StatusCode::BAD_REQUEST) => {
@@ -629,7 +616,6 @@ async fn get_auth_token(
                 bail!(MessagingError::new(
                     MessagingErrorCodes::GetAuthTokenBadRequestError,
                     format!("get auth token returned bad request error - {}", e),
-                    true
                 ))
             }
             Some(StatusCode::NOT_FOUND) => {
@@ -642,7 +628,6 @@ async fn get_auth_token(
                 bail!(MessagingError::new(
                     MessagingErrorCodes::GetAuthTokenNotFoundError,
                     format!("get auth token returned not found error - {}", e),
-                    true
                 ))
             }
             Some(_) => {
@@ -655,7 +640,6 @@ async fn get_auth_token(
                 bail!(MessagingError::new(
                     MessagingErrorCodes::UnknownError,
                     format!("get auth token returned unknown error - {}", e),
-                    true
                 ))
             }
 
@@ -669,7 +653,6 @@ async fn get_auth_token(
                 bail!(MessagingError::new(
                     MessagingErrorCodes::UnknownError,
                     format!("get auth token returned error unmatched - {}", e),
-                    true
                 ))
             }
         },
@@ -691,7 +674,6 @@ async fn get_auth_token(
             bail!(MessagingError::new(
                 MessagingErrorCodes::AuthTokenResponseParseError,
                 format!("error while parsing auth token response - {}", e),
-                true
             ))
         }
     };
@@ -721,7 +703,6 @@ pub async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Resul
             bail!(MessagingError::new(
                 MessagingErrorCodes::ChannelSendMessageError,
                 format!("error sending get machine id message - {}", e),
-                true
             ));
         }
     }
@@ -737,7 +718,6 @@ pub async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Resul
             bail!(MessagingError::new(
                 MessagingErrorCodes::ChannelReceiveMessageError,
                 format!("error receiving get machine id message - {}", e),
-                true
             ));
         }
     };

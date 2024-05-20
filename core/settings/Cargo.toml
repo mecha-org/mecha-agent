@@ -16,5 +16,5 @@ tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
-sentry-anyhow = { workspace = true }
+
 dotenv = { workspace = true }

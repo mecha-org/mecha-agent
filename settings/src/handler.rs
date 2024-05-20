@@ -79,7 +79,6 @@ impl SettingHandler {
                     bail!(DeviceSettingError::new(
                         DeviceSettingErrorCodes::CreateConsumerError,
                         format!("create consumer error - {:?} ", e.to_string()),
-                        true
                     ))
                 }
             };
@@ -134,7 +133,6 @@ impl SettingHandler {
                     bail!(DeviceSettingError::new(
                         DeviceSettingErrorCodes::CreateConsumerError,
                         format!("create consumer error - {:?} ", e.to_string()),
-                        true
                     ))
                 }
             };

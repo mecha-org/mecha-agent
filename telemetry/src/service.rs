@@ -119,7 +119,6 @@ pub async fn process_metrics(
                 bail!(TelemetryError::new(
                     TelemetryErrorCodes::MetricsSerializeFailed,
                     format!("failed to serialize metrics - {}", e),
-                    true
                 ))
             }
         };
@@ -148,7 +147,7 @@ pub async fn process_metrics(
                     bail!(TelemetryError::new(
                         TelemetryErrorCodes::ChannelSendMessageError,
                         format!("failed to send metrics message - {}", e),
-                        true
+
                     ))
                 }
             }
@@ -164,7 +163,7 @@ pub async fn process_metrics(
                     bail!(TelemetryError::new(
                         TelemetryErrorCodes::ChannelReceiveMessageError,
                         format!("failed to receive message - {}", e),
-                        true
+
                     ))
                 }
             }
@@ -253,7 +252,6 @@ pub async fn process_logs(
                 bail!(TelemetryError::new(
                     TelemetryErrorCodes::LogsSeralizeFailed,
                     format!("failed to serialize logs - {}", e),
-                    true
                 ))
             }
         };
@@ -282,7 +280,7 @@ pub async fn process_logs(
                     bail!(TelemetryError::new(
                         TelemetryErrorCodes::ChannelSendMessageError,
                         format!("failed to send logs message - {}", e),
-                        true
+
                     ))
                 }
             }
@@ -299,7 +297,7 @@ pub async fn process_logs(
                     bail!(TelemetryError::new(
                         TelemetryErrorCodes::ChannelReceiveMessageError,
                         format!("failed to receive message - {}", e),
-                        true
+
                     ))
                 }
             }
@@ -325,7 +323,6 @@ async fn get_machine_id(identity_tx: Sender<IdentityMessage>) -> Result<String> 
             bail!(TelemetryError::new(
                 TelemetryErrorCodes::ChannelSendMessageError,
                 format!("failed to send message - {}", e),
-                true
             ))
         }
     }
@@ -366,7 +363,6 @@ async fn get_settings_by_key(setting_tx: Sender<SettingMessage>, key: String) ->
             bail!(TelemetryError::new(
                 TelemetryErrorCodes::ChannelSendMessageError,
                 format!("failed to send message - {}", e),
-                true
             ))
         }
     }
@@ -402,7 +398,6 @@ pub async fn device_provision_status(identity_tx: Sender<IdentityMessage>) -> Re
             bail!(TelemetryError::new(
                 TelemetryErrorCodes::ChannelSendMessageError,
                 format!("failed to send message - {}", e),
-                true
             ))
         }
     }

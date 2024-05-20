@@ -24,7 +24,6 @@ impl JetStreamClient {
                 bail!(NatsClientError::new(
                     NatsClientErrorCodes::GetStreamError,
                     format!("get stream error {:?}", e),
-                    true
                 ))
             }
         };
@@ -48,7 +47,6 @@ impl JetStreamClient {
             Err(e) => bail!(NatsClientError::new(
                 NatsClientErrorCodes::CreateConsumerError,
                 format!("error creating consumer - {}", e),
-                true
             )),
         };
         Ok(consumer)

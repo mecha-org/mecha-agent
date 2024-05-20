@@ -162,7 +162,6 @@ pub async fn subscribe_to_nats(
                 bail!(ProvisioningError::new(
                     ProvisioningErrorCodes::ChannelSendMessageError,
                     format!("error sending subscriber message - {}", e),
-                    true
                 ));
             }
         }
@@ -189,7 +188,6 @@ pub async fn subscribe_to_nats(
                         "error get networking subscriber - {:?}, error - {}",
                         &subject, e
                     ),
-                    true
                 ));
             }
         };
@@ -245,7 +243,7 @@ pub async fn ping() -> Result<PingResponse> {
                         bail!(ProvisioningError::new(
                             ProvisioningErrorCodes::UnauthorizedError,
                             format!("ping call returned unauthorized error num - {}", 1002,),
-                            true
+    
                         ))
                     }
                     StatusCode::NOT_FOUND => {
@@ -258,7 +256,7 @@ pub async fn ping() -> Result<PingResponse> {
                         bail!(ProvisioningError::new(
                             ProvisioningErrorCodes::NotFoundError,
                             format!("ping call returned not found error num - {}", 1003,),
-                            true
+    
                         ))
                     }
                     StatusCode::BAD_REQUEST => {
@@ -271,7 +269,7 @@ pub async fn ping() -> Result<PingResponse> {
                         bail!(ProvisioningError::new(
                             ProvisioningErrorCodes::BadRequestError,
                             format!("ping call returned bad request num - {}", 1004,),
-                            true
+    
                         ))
                     }
                     StatusCode::INTERNAL_SERVER_ERROR => {
@@ -284,7 +282,7 @@ pub async fn ping() -> Result<PingResponse> {
                         bail!(ProvisioningError::new(
                             ProvisioningErrorCodes::InternalServerError,
                             format!("ping call returned internal server error num - {}", 1005,),
-                            true
+    
                         ))
                     }
                     _ => {
@@ -297,7 +295,7 @@ pub async fn ping() -> Result<PingResponse> {
                         bail!(ProvisioningError::new(
                             ProvisioningErrorCodes::UnknownError,
                             format!("ping call returned unknown error num - {}", 1006,),
-                            true
+    
                         ))
                     }
                 }
@@ -314,7 +312,6 @@ pub async fn ping() -> Result<PingResponse> {
             bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::UnreachableError,
                 format!("ping call returned error num - {}, error - {}", 1007, e,),
-                true
             ))
         }
     };
@@ -426,7 +423,6 @@ pub async fn provision_by_code(code: String, event_tx: Sender<Event>) -> Result<
                     "error sending provisioning event, code: {}, error - {}",
                     1001, e
                 ),
-                true
             ));
         }
     }
@@ -615,7 +611,6 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
                     "error sending de provisioning event, code:{}, error - {}",
                     1001, e
                 ),
-                true
             ));
         }
     }
@@ -642,7 +637,6 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
                     "error constructing db path - {} - {}",
                     &settings.settings.storage.path, e
                 ),
-                true
             ))
         }
     };
@@ -688,7 +682,6 @@ pub fn de_provision(event_tx: Sender<Event>) -> Result<bool> {
             bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::SettingsDatabaseDeleteError,
                 format!("error deleting db, code: {}, error - {}", 1001, e),
-                true
             ));
         }
     }
@@ -735,7 +728,6 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
                 bail!(ProvisioningError::new(
                     ProvisioningErrorCodes::InternalServerError,
                     format!("manifest find endpoint url returned server error - {}", e),
-                    true
                 ))
             }
             Some(StatusCode::BAD_REQUEST) => {
@@ -748,7 +740,6 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
                 bail!(ProvisioningError::new(
                     ProvisioningErrorCodes::BadRequestError,
                     format!("manifest find endpoint url returned bad request - {}", e),
-                    true
                 ))
             }
             Some(StatusCode::NOT_FOUND) => {
@@ -761,7 +752,6 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
                 bail!(ProvisioningError::new(
                     ProvisioningErrorCodes::NotFoundError,
                     format!("manifest find endpoint url not found - {}", e),
-                    true
                 ))
             }
             Some(_) => {
@@ -774,7 +764,6 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
                 bail!(ProvisioningError::new(
                     ProvisioningErrorCodes::UnknownError,
                     format!("manifest find endpoint url returned unknown error - {}", e),
-                    true
                 ))
             }
             None => {
@@ -790,7 +779,6 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
                         "manifest find endpoint url returned unmatched error - {}",
                         e
                     ),
-                    true
                 ))
             }
         },
@@ -820,7 +808,6 @@ async fn lookup_manifest(settings: &AgentSettings, code: &str) -> Result<Provisi
             bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::ParseResponseError,
                 format!("error parsing manifest lookup response - {}", e),
-                true
             ))
         }
     };
@@ -870,7 +857,6 @@ fn write_certificates_to_path(
                     "error saving machine certificate in path - {} - {}",
                     &certificate_paths.machine.cert, e
                 ),
-                true
             ))
         }
     }
@@ -897,7 +883,6 @@ fn write_certificates_to_path(
                     "error saving ca_bundle certificate in path - {} - {}",
                     &certificate_paths.ca_bundle.cert, e
                 ),
-                true
             ))
         }
     }
@@ -924,7 +909,6 @@ fn write_certificates_to_path(
                     "error saving root certificate in path - {} - {}",
                     &certificate_paths.root.cert, e
                 ),
-                true
             ))
         }
     }
@@ -974,7 +958,6 @@ async fn sign_csr(
             bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::CSRSignReadFileError,
                 format!("error opening csr in path - {} - {}", csr_path, e),
-                true
             ))
         }
     };
@@ -998,7 +981,6 @@ async fn sign_csr(
             bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::CSRSignReadFileError,
                 format!("error reading csr in path - {} - {}", csr_path, e),
-                true
             ))
         }
     };
@@ -1040,7 +1022,6 @@ async fn sign_csr(
                 bail!(ProvisioningError::new(
                     ProvisioningErrorCodes::InternalServerError,
                     format!("csr sign url returned server error - {}", e),
-                    true
                 ))
             }
             Some(StatusCode::BAD_REQUEST) => {
@@ -1053,7 +1034,6 @@ async fn sign_csr(
                 bail!(ProvisioningError::new(
                     ProvisioningErrorCodes::BadRequestError,
                     format!("csr sign url returned bad request - {}", e),
-                    true
                 ))
             }
             Some(StatusCode::NOT_FOUND) => {
@@ -1066,7 +1046,6 @@ async fn sign_csr(
                 bail!(ProvisioningError::new(
                     ProvisioningErrorCodes::NotFoundError,
                     format!("csr sign url not found - {}", e),
-                    true
                 ))
             }
             Some(_) => {
@@ -1079,13 +1058,11 @@ async fn sign_csr(
                 bail!(ProvisioningError::new(
                     ProvisioningErrorCodes::UnknownError,
                     format!("csr sign url returned unknown error - {}", e),
-                    true
                 ))
             }
             None => bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::UnknownError,
                 format!("csr sign url returned unmatched error - {}", e),
-                true
             )),
         },
     };
@@ -1102,7 +1079,6 @@ async fn sign_csr(
                 bail!(ProvisioningError::new(
                     ProvisioningErrorCodes::ParseResponseError,
                     format!("error parsing csr sign response - {}", e),
-                    true
                 ));
             }
         };
@@ -1133,7 +1109,6 @@ async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Result<St
             bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::ChannelSendMessageError,
                 format!("error sending get machine id message - {}", e),
-                true
             ));
         }
     }
@@ -1149,7 +1124,6 @@ async fn get_machine_id(identity_tx: mpsc::Sender<IdentityMessage>) -> Result<St
             bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::ChannelReceiveMessageError,
                 format!("error receiving get machine id message - {}", e),
-                true
             ));
         }
     };
@@ -1174,7 +1148,6 @@ fn parse_message_payload(payload: Bytes) -> Result<DeprovisionRequest> {
             bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::ExtractMessagePayloadError,
                 format!("Error converting payload to string - {}", e),
-                true
             ))
         }
     };
@@ -1184,7 +1157,6 @@ fn parse_message_payload(payload: Bytes) -> Result<DeprovisionRequest> {
             bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::ExtractMessagePayloadError,
                 format!("Error converting payload to AddTaskRequestPayload - {}", e),
-                true
             ))
         }
     };
@@ -1313,7 +1285,6 @@ async fn process_re_issue_certificate_request(subject: String, payload: Bytes) -
             bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::ExtractMessagePayloadError,
                 format!("error converting payload to string - {}", e),
-                true
             ))
         }
     };
@@ -1337,7 +1308,6 @@ async fn process_re_issue_certificate_request(subject: String, payload: Bytes) -
             bail!(ProvisioningError::new(
                 ProvisioningErrorCodes::PayloadDeserializationError,
                 format!("error while deserializing message payload {}", e),
-                true
             ))
         }
     };
@@ -1350,7 +1320,6 @@ async fn process_re_issue_certificate_request(subject: String, payload: Bytes) -
                 "invalid machine id in request - req_machine_id: {} ",
                 request_payload.machine_id
             ),
-            true
         ));
     };
     match perform_cryptography_operation(

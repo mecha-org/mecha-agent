@@ -64,7 +64,6 @@ pub fn get_machine_id() -> Result<String> {
             bail!(CryptoError::new(
                 CryptoErrorCodes::ExtractSubjectNameError,
                 "failed to get common name from certificate".to_string(),
-                true
             ))
         }
     }
@@ -152,7 +151,6 @@ pub fn get_machine_cert() -> Result<MachineCert> {
             bail!(CryptoError::new(
                 CryptoErrorCodes::GenerateFingerprintError,
                 format!("failed to generate fingerprint - {}", e),
-                true
             ))
         }
     };
@@ -231,7 +229,6 @@ fn read_file_to_string(file_path: &str) -> Result<String> {
             bail!(CryptoError::new(
                 CryptoErrorCodes::ReadCertFileError,
                 format!("failed to open file on path - {}, error - {}", file_path, e),
-                true
             ))
         }
     };
