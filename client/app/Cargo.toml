@@ -30,8 +30,6 @@ tokio-util = "0.7.10"
 reqwest = "0.11"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-sentry-tracing = {version= "0.32.1"}
-sentry = { version = "0.32.1",features = ["backtrace", "anyhow"] }
 init-tracing-opentelemetry = { version = "0.12.0", features = ["otlp", "tracing_subscriber_ext"] }
 opentelemetry-appender-tracing = "0.2.0"
 simple-base64 = "0.23.2"

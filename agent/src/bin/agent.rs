@@ -7,7 +7,6 @@ use init_tracing_opentelemetry::tracing_subscriber_ext::{
 use mecha_agent::init::init_services;
 use opentelemetry::global;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
-use sentry_tracing::EventFilter;
 use telemetry::config::init_logs_config;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -35,7 +34,6 @@ async fn main() -> Result<()> {
 
     let subscriber = tracing_subscriber::registry()
         .with(tracing_bridge_layer)
-        .with(sentry_tracing::layer().event_filter(|_| EventFilter::Ignore))
         .with(build_loglevel_filter_layer()) //temp for terminal log
         .with(build_logger_text()) //temp for terminal log
         .with(build_otel_layer().unwrap());

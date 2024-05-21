@@ -20,7 +20,6 @@ channel = { path = "../commons/channel" }
 agent-settings = { path = "../core/settings" }
 crypto = { path = "../commons/crypto" }
 anyhow = { workspace = true }
-sentry = { workspace = true }
 
 serde_json = { workspace = true }
 serde = { workspace = true }
