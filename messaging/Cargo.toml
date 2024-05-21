@@ -23,7 +23,6 @@ tonic = { workspace = true }
 tonic-types = { workspace = true }
 tracing = { workspace = true }
 reqwest = { workspace = true }
-sentry-tracing = { workspace = true }
 
 serde = { workspace = true }
 sha256 = { workspace = true }

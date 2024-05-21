@@ -19,7 +19,6 @@ telemetry = { path = "../telemetry" }
 tokio = { version = "1.27.0", features = ["full"] }
 serde = { version  = "1.0.159", features = ["derive"]}
 tracing = "0.1"
-sentry = { version = "0.32.1",features = ["backtrace", "anyhow"] }
 anyhow = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }
