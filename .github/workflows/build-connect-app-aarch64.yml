@@ -21,6 +21,7 @@ env:
 jobs:
   build:
     name: Mecha connect app build
+    environment: dev
     strategy:
       fail-fast: true
       matrix:

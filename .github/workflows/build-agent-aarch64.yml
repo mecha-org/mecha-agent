@@ -20,6 +20,7 @@ env:
 
 jobs:
   build:
+    environment: dev
     name: ${{ matrix.name }}
     strategy:
       fail-fast: true
