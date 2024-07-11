@@ -12,40 +12,46 @@ env:
   RUST_BACKTRACE: short
   RUSTUP_MAX_RETRIES: 10
   MACOSX_DEPLOYMENT_TARGET: 10.7
-  CARGO_NET_GIT_FETCH_WITH_CLI: true
+  CARGO_NET_GIT_FETCH_WITH_CLI: true 
+  MECHANIX_APTLY_SERVER_ENDPOINT: ${{ vars.MECHANIX_APTLY_SERVER_ENDPOINT }}
+  MECHANIX_APTLY_DEB_REPOSITORY_DISTRO: ${{ vars.MECHANIX_APTLY_DEB_REPOSITORY_DISTRO }}
+  MECHANIX_APTLY_DEB_REPOSITORY_NAME: ${{ vars.MECHANIX_APTLY_DEB_REPOSITORY_NAME }} 
+  MECHANIX_APTLY_S3_PUBLISH_ENDPOINT: ${{ vars.MECHANIX_APTLY_S3_PUBLISH_ENDPOINT }}
 
 jobs:
   build:
-    name: ${{ matrix.name }}
+    name: Mecha connect app build
     strategy:
       fail-fast: true
       matrix:
         include:
-          - name: Mecha Connect App 
+          - name: Mecha Connect App
             package: mecha-connect
             artifact: mecha-connect-aarch64-unknown-linux-gnu.tar.gz
-            path: ./client
+            path: ./client/app
 
-    runs-on: ubicloud-standard-2-arm
+    runs-on: ubuntu-latest
     continue-on-error: false
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust 1.75.0
+      - name: install dependencies (ubuntu only)
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          rustup default 1.75.0
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
 
-      - name: Update apt
-        run: sudo apt update
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
         run: |
-          sudo apt install \
+          sudo apt install -y \
           libwayland-dev \
           libglib2.0-dev \
           libgtk-4-dev \
@@ -53,20 +59,80 @@ jobs:
           protobuf-compiler \
           libprotobuf-dev
 
-      - name: Package deb [${{ matrix.package }}]
-        continue-on-error: true
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli
+
+      - name: Vite Build
         run: |
-          cd ${{ matrix.path }}
-          cargo tauri build --bundles deb
+          cd ./client/app
+          npm install
+          npm run build
+
+      - name: Build Bundle
+        run: |
+          cd ./client/app
+          source $HOME/.cargo/env
+          cargo tauri build
+
+      - name: Extract package details
+        id: package_details
+        run: |
+          PACKAGE_NAME=$(ls ./target/release/bundle/deb/*.deb | xargs basename)
+          FOLDER_NAME=$(echo $PACKAGE_NAME | sed -r 's/_[0-9]+\.[0-9]+\.[0-9]+.*$//')
+          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "folder_name=$FOLDER_NAME" >> $GITHUB_OUTPUT
+          echo "Package Name: $PACKAGE_NAME"
+          echo "Folder Name: $FOLDER_NAME"
+
+      - name: Upload package to Aptly
+        run: |
+          cd ./target/release/bundle/deb/
           ls -la
+          echo "Uploading package: ${{ steps.package_details.outputs.package_name }}"
+          echo "To folder: ${{ steps.package_details.outputs.folder_name }}"
+          curl -X POST -F file=@${{ steps.package_details.outputs.package_name }} ${{ env.MECHANIX_APTLY_SERVER_ENDPOINT }}/api/files/${{ steps.package_details.outputs.folder_name }}
+      
+      - name: Add package to local repo
+        run: |
+          echo "Adding package from folder: ${{ steps.package_details.outputs.folder_name }}"
+          curl -X POST ${{ env.MECHANIX_APTLY_SERVER_ENDPOINT }}/api/repos/${{ env.MECHANIX_APTLY_DEB_REPOSITORY_NAME }}/file/${{ steps.package_details.outputs.folder_name }}
+      
+      - name: Update local published repo
+        run: |
+          echo "Updating local published repo for MECHANIX_APTLY_DEB_REPOSITORY_DISTRO: ${{ env.MECHANIX_APTLY_DEB_REPOSITORY_DISTRO }}"
+          curl -X PUT -H 'Content-Type: application/json' --data '{
+            "Architectures": ["arm64", "amd64"],
+            "Signing": {"Skip": true}
+          }' ${{ env.MECHANIX_APTLY_SERVER_ENDPOINT }}/api/publish/:./${{ env.MECHANIX_APTLY_DEB_REPOSITORY_DISTRO }}
+      
+      - name: Update S3 published repo
+        run: |
+          echo "Updating S3 published repo for MECHANIX_APTLY_DEB_REPOSITORY_DISTRO: ${{ env.MECHANIX_APTLY_DEB_REPOSITORY_DISTRO }}"
+          curl -X PUT -H 'Content-Type: application/json' --data '{
+            "Sources": [{"Name": "${{ env.MECHANIX_APTLY_DEB_REPOSITORY_NAME }}"}],
+            "Architectures": ["arm64", "amd64"],
+            "Signing": {"Skip": true}
+          }' ${{ env.MECHANIX_APTLY_SERVER_ENDPOINT }}/api/publish/s3:${{env.MECHANIX_APTLY_S3_PUBLISH_ENDPOINT}}:/${{ env.MECHANIX_APTLY_DEB_REPOSITORY_DISTRO }}      
+
+      - name: List Artifacts
+        run: |
+          echo "Listing artifacts"        
+          ls -la ./target/release/bundle
 
       - name: Prepare artifacts [${{ matrix.package }}]
         run: |
           mkdir build
-          cp ../target/release/bundle/deb/${{ matrix.package }} ./build
-    
+          cp -r ./target/release/bundle/deb/* ./build
+          cp -r ./target/release/bundle/rpm/* ./build
+          cp -r ./target/release/bundle/appimage/* ./build
+
+      - name: list artifacts
+        run: |
+          echo "Listing artifacts"
+          ls -la ./build
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: Mecha Connect App
           path: ./build/*
