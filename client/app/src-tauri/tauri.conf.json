@@ -60,7 +60,8 @@
         "resizable": true,
         "title": "Mecha Connect",
         "width": 800,
-        "decorations": false
+        "decorations": false,
+        "transparent": true
       }
     ]
   }
