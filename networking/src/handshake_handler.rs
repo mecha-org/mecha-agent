@@ -16,7 +16,7 @@ use serde_json::json;
 use tokio::net::UdpSocket;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 
 use crate::errors::{NetworkingError, NetworkingErrorCodes};
 use crate::service::ChannelDetails;
@@ -97,7 +97,7 @@ impl HandshakeChannelHandler {
         sock: &mut UdpSocket,
         message_rx: &mut mpsc::Receiver<HandshakeMessage>,
     ) -> Result<()> {
-        info!(func = "run", package = PACKAGE_NAME, "init");
+        trace!(func = "run", package = PACKAGE_NAME, "init");
         let mut buf = [0; 1024];
         loop {
             select! {
@@ -304,7 +304,6 @@ async fn process_handshake_request(
                 Err(e) => bail!(NetworkingError::new(
                     NetworkingErrorCodes::PayloadDeserializationError,
                     format!("error while deserializing message payload {}", e),
-
                 )),
             };
             info!(
@@ -331,7 +330,6 @@ async fn process_handshake_request(
                 Err(e) => bail!(NetworkingError::new(
                     NetworkingErrorCodes::PayloadDeserializationError,
                     format!("error while deserializing message payload {}", e),
-
                 )),
             };
             println!("manifest received: {:?}", reply_payload);
