@@ -14,6 +14,7 @@ path = "src/bin/agent.rs"
 [dependencies]
 events = { path = "../core/events" }
 agent-settings = { path = "../core/settings" }
+app-services = { path = "../app-services" }
 grpc-server = { path = "../grpc-server" }
 status = { path = "../status" }
 identity = { path = "../identity" }
