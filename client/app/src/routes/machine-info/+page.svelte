@@ -49,7 +49,7 @@
 		} catch (error) {
 			is_active = false;
 			is_error = true;
-			error_message = 'Machine agent not running or there is no internet connectivity';
+			error_message = 'Machine agent not running or internet connectivity';
 			console.error('Error: checking ping for status : ', error);
 		}
 	};
@@ -77,8 +77,11 @@
 </script>
 
 <Layout>
-	<div class="flex h-full w-full flex-col justify-center" style="height:-webkit-fill-available">
-		<div class="relative mx-2 flex flex-col items-center justify-center">
+	<div
+		class="flex h-full w-full flex-col justify-items-start"
+		style="height:-webkit-fill-available"
+	>
+		<div class="relative m-4 flex flex-col items-start justify-start">
 			<div class="">
 				<img
 					class="rounded-md"
@@ -89,7 +92,7 @@
 				/>
 			</div>
 
-			<div class="flex flex-row items-center gap-1">
+			<div class="flex flex-row items-center gap-1 text-xl">
 				<p>{$machineInfo.name}</p>
 
 				{#if is_active}
@@ -101,7 +104,7 @@
 		</div>
 
 		<div
-			class="mx-2 my-2 flex flex-row justify-between rounded border border-solid border-zinc-600 p-4 text-base capitalize tracking-widest"
+			class="my-2 flex flex-row justify-between border-y border-solid border-[#535353] p-4 text-base capitalize tracking-widest"
 		>
 			<div>MACHINE ID</div>
 			<div>{$machineInfo.id}</div>
@@ -111,56 +114,64 @@
 			You can unlink your machine from your Mecha account
 		</div>
 		<Dialog.Root bind:open={is_error}>
-			<Dialog.Content class="w-[90%] bg-[#15171D;] border-0 rounded-lg">
+			<Dialog.Content class="w-[90%] bg-[#1D1D1D] border-y-[#848484] border-x-0">
 				<Dialog.Header>
-					<Dialog.Title class="flex justify-center">
-						<Icons name="attention" width="32" height="32" />
+					<Dialog.Title class="flex justify-start">
+						<Icons name="attention" width="40" height="40" />
 					</Dialog.Title>
-					<Dialog.Description class="text-white">
+					<Dialog.Description class="text-white flex justify-start">
 						{error_message}
 					</Dialog.Description>
 				</Dialog.Header>
-				<Dialog.Footer class="flex justify-center border-0">
+				<Dialog.Footer class="border-t border-[#848484]">
 					<Button
-						class="bg-[#202431;] border-0 outline-none"
+						class="bg-[#1D1D1D] border-0 outline-none flex justify-end gap-1"
 						type="button"
 						on:click={() => {
 							is_loading = false;
-						}}>Okay</Button
+						}}
 					>
+						<Icons name="close_icon" width="20" height="20" />
+						Close
+					</Button>
 				</Dialog.Footer>
 			</Dialog.Content>
 		</Dialog.Root>
 
 		<Dialog.Root bind:open={is_loading}>
-			<Dialog.Content class="w-[90%] bg-[#15171D;] border-0 rounded-lg">
+			<Dialog.Content class="w-[90%] bg-[#1D1D1D] border-y-[#848484] border-x-0">
 				<Dialog.Header>
-					<Dialog.Title class="flex justify-center">
-						<Icons name="info" width="32" height="32" />
+					<Dialog.Title class="flex justify-start">
+						<Icons name="info" width="40" height="40" />
 					</Dialog.Title>
-					<Dialog.Description class="text-white flex justify-center">
+					<Dialog.Description class="text-white flex justify-start">
 						Fetching machine information...
 					</Dialog.Description>
 				</Dialog.Header>
-				<Dialog.Footer class="flex justify-center border-0">
+				<Dialog.Footer class="border-t border-[#848484]">
 					<Button
-						class="bg-[#202431;] border-0 outline-none"
+						class="bg-[#1D1D1D] border-0 outline-none flex justify-end"
 						type="button"
 						on:click={() => {
 							is_loading = false;
-						}}>Okay</Button
+						}}
+					>
+						<Icons name="close_icon" width="20" height="20" />
+						Close</Button
 					>
 				</Dialog.Footer>
 			</Dialog.Content>
 		</Dialog.Root>
 	</div>
 	<footer slot="footer" class="h-full w-full bg-[#05070A73] backdrop-blur-3xl backdrop-filter">
-		<div class="flex h-full w-full flex-row items-center justify-end px-4 py-3">
+		<div
+			class="border-silver-gray flex h-full w-full flex-row items-center justify-end border-t-2 px-4 py-3"
+		>
 			<button
-				class="flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-[#2A2A2C] p-2 text-[#FAFBFC]"
+				class="flex h-[60px] w-[60px] items-center justify-center rounded-lg p-2 text-[#FAFBFC]"
 				on:click={exitApp}
 			>
-				<Icons name="exit_icon" width="32" height="32" />
+				<Icons name="exit_icon" width="60" height="60" />
 			</button>
 		</div>
 	</footer>

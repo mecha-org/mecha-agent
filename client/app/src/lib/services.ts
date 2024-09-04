@@ -1,5 +1,9 @@
 import { invoke } from "@tauri-apps/api";
 
+const goBack = () => {
+    history.back();
+};
+
 const check_ping_status = async() => {
     try {
         let response = await invoke('get_ping_status');
@@ -57,6 +61,7 @@ const provision_by_code = async(code: string) => {
 };
 
 export {
+    goBack,
     check_ping_status,
     check_machine_provision_status,
     get_machine_id,
