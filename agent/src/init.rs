@@ -1,5 +1,6 @@
 use crate::errors::{AgentError, AgentErrorCodes};
 use anyhow::{bail, Result};
+use app_services::handler::{AppServiceHandler, AppServiceMessage, AppServiceOptions};
 use grpc_server::GrpcServerOptions;
 use identity::handler::{IdentityHandler, IdentityMessage, IdentityOptions};
 use messaging::handler::{MessagingHandler, MessagingMessage, MessagingOptions};
@@ -36,7 +37,7 @@ pub async fn init_services() -> Result<bool> {
     })
     .await;
 
-    let (status_t, status_tx) = init_status_service(StatusOptions {
+    let (status_t, _status_tx) = init_status_service(StatusOptions {
         event_tx: event_tx.clone(),
         messaging_tx: messaging_tx.clone(),
         identity_tx: identity_tx.clone(),
@@ -49,7 +50,7 @@ pub async fn init_services() -> Result<bool> {
         identity_tx: identity_tx.clone(),
     })
     .await;
-    let (networking_t, networking_tx) = init_networking_service(NetworkingOptions {
+    let (networking_t, _networking_tx) = init_networking_service(NetworkingOptions {
         event_tx: event_tx.clone(),
         messaging_tx: messaging_tx.clone(),
         identity_tx: identity_tx.clone(),
@@ -62,6 +63,12 @@ pub async fn init_services() -> Result<bool> {
         messaging_tx: messaging_tx.clone(),
         identity_tx: identity_tx.clone(),
         settings_tx: setting_tx.clone(),
+    })
+    .await;
+
+    let (app_service_t, _app_service_tx) = init_app_service(AppServiceOptions {
+        event_tx: event_tx.clone(),
+        messaging_tx: messaging_tx.clone(),
     })
     .await;
 
@@ -89,6 +96,7 @@ pub async fn init_services() -> Result<bool> {
     setting_t.await.unwrap();
     networking_t.await.unwrap();
     telemetry_t.await.unwrap();
+    app_service_t.await.unwrap();
     grpc_t.await.unwrap();
 
     Ok(true)
@@ -292,6 +300,37 @@ async fn init_telemetry_service(
     });
 
     (telemetry_t, telemetry_tx)
+}
+
+async fn init_app_service(
+    opt: AppServiceOptions,
+) -> (
+    task::JoinHandle<Result<()>>,
+    mpsc::Sender<AppServiceMessage>,
+) {
+    let (app_service_tx, app_service_rx) = mpsc::channel(CHANNEL_SIZE);
+
+    let app_service_t = tokio::spawn(async move {
+        match AppServiceHandler::new(opt).run(app_service_rx).await {
+            Ok(_) => (),
+            Err(e) => {
+                error!(
+                    func = "init_app_service",
+                    package = PACKAGE_NAME,
+                    "error init/run app service: {:?}",
+                    e
+                );
+                bail!(AgentError::new(
+                    AgentErrorCodes::AppServiceInitError,
+                    format!("error init/run app service: {:?}", e),
+                    true
+                ));
+            }
+        }
+        Ok(())
+    });
+
+    (app_service_t, app_service_tx)
 }
 
 async fn init_grpc_server(
