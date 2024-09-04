@@ -2,12 +2,11 @@
 	import Header from '../../shared/Header.svelte';
 	import { Progress } from '$lib/components/ui/progress';
 	import { onDestroy, onMount } from 'svelte';
-	import { invoke } from '@tauri-apps/api';
 	import { goto } from '$app/navigation';
 	import Layout from '../../shared/layout.svelte';
 	import Icons from '../../shared/Icons.svelte';
 	import SubHeader from '../../shared/SubHeader.svelte';
-	import { generate_code, provision_by_code } from '$lib/services';
+	import { generate_code, goBack, provision_by_code } from '$lib/services';
 
 	let provision_code: string = '';
 	let is_code_generated: boolean = false;
@@ -93,23 +92,22 @@
 	onDestroy(() => {
 		clearIntervalProcess();
 	});
-
-	const goBack = () => {
-		history.back();
-	};
 </script>
 
 <Layout>
 	<div class="flex flex-col">
 		<Header title={'Link Your Machine'} />
-		<SubHeader text = {"Use the below code to onnect this machine to your mech.so account"}/>
+		<SubHeader text={'Use the below code to onnect this machine to your mech.so account'} />
 
-		<div class="mt-1.5 h-12 relative flex-grow flex-col rounded-xl border-2 border-solid border-zinc-600 " style="background-color: #15171D;">
+		<div
+			class="mt-1.5 h-12 relative flex-grow flex-col rounded-xl border-2 border-solid border-zinc-600"
+			style="background-color: #15171D;"
+		>
 			<div class="text-2xl leading-loose tracking-widest px-4">
 				{provision_code}
 			</div>
 		</div>
-		<Progress value={timeout} max={60} class="-mt-0.5 mb-1"/>
+		<Progress value={timeout} max={60} class="-mt-0.5 mb-1" />
 
 		<div class="mt-4 flex flex-col gap-4 text-sm font-medium">
 			<div class="mb-2 flex flex-row gap-x-2">
@@ -128,12 +126,14 @@
 	</div>
 
 	<footer slot="footer" class="h-full w-full bg-[#05070A73] backdrop-blur-3xl backdrop-filter">
-		<div class="flex h-full w-full flex-row items-center justify-between px-4 py-3">
+		<div
+			class="border-silver-gray flex h-full w-full flex-row items-center justify-between border-t-2 px-4 py-3"
+		>
 			<button
-				class="flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-[#2A2A2C] p-2 text-[#FAFBFC]"
+				class="flex h-[60px] w-[60px] items-center justify-center rounded-lg p-1 text-[#FAFBFC]"
 				on:click={goBack}
 			>
-				<Icons name="back_icon" width="32" height="32" />
+				<Icons name="left_arrow" width="60" height="60" />
 			</button>
 		</div>
 	</footer>

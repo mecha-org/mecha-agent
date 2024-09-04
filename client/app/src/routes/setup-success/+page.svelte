@@ -3,13 +3,10 @@
 	import Layout from '../../shared/layout.svelte';
 	import Icons from '../../shared/Icons.svelte';
 	import { goto } from '$app/navigation';
+	import { goBack } from '$lib/services';
 
 	const goNext = () => {
 		goto('/machine-info');
-	};
-
-	const goBack = () => {
-		history.back();
 	};
 </script>
 
@@ -19,23 +16,28 @@
 			<div class="m-6">
 				<img alt="check internet" src={Success} />
 			</div>
-			<div class="flex justify-center text-lg">Machine is now connected to your Mecha account</div>
+			<div class="flex justify-center text-2xl">
+				<!-- Machine is now connected to your Mecha account -->
+				Setup complete!
+			</div>
 		</div>
 	</div>
 
 	<footer slot="footer" class="h-full w-full bg-[#05070A73] backdrop-blur-3xl backdrop-filter">
-		<div class="flex h-full w-full flex-row items-center justify-between px-4 py-3">
+		<div
+			class="border-silver-gray flex h-full w-full flex-row items-center justify-between border-t-2 px-4 py-3"
+		>
 			<button
-				class="flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-[#2A2A2C] p-2 text-[#FAFBFC]"
+				class="flex h-[60px] w-[60px] items-center justify-center rounded-lg p-1 text-[#FAFBFC]"
 				on:click={goBack}
 			>
-				<Icons name="back_icon" width="32" height="32" />
+				<Icons name="left_arrow" width="60" height="60" />
 			</button>
 			<button
-				class="flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-[#2A2A2C] p-2 text-[#FAFBFC]"
+				class="flex h-[60px] w-[60px] items-center justify-center rounded-lg p-2 text-[#FAFBFC]"
 				on:click={goNext}
 			>
-				<Icons name="next_icon" width="32" height="32" />
+				<Icons name="right_arrow" width="60" height="60" />
 			</button>
 		</div>
 	</footer>

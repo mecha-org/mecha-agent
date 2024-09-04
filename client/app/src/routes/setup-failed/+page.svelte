@@ -3,12 +3,10 @@
 	import { page } from '$app/stores';
 	import Layout from '../../shared/layout.svelte';
 	import Icons from '../../shared/Icons.svelte';
+	import { goBack } from '$lib/services';
 
 	const state: any = $page.state;
 	const error: any = state.error;
-	const goBack = () => {
-		history.back();
-	};
 </script>
 
 <Layout>
@@ -18,29 +16,30 @@
 				<img alt="setup failed" class="h-[230px] w-[230px]" src={Failure} />
 			</div>
 			<div class="flex flex-col items-center justify-center">
-				<div class="text-lg">Error connecting to service</div>
+				<div class="text-2xl">Error connecting to service</div>
 				<div
-					class="mt-2 rounded-md bg-gray-600 px-2 py-1 text-base font-bold capitalize text-red-500"
+					class="mt-2 border-y-2 border-[#848484] bg-[#1C1C1C] px-2 py-1 text-base font-bold capitalize text-red-500"
 				>
 					Error : {error}
 				</div>
 			</div>
 		</div>
 	</div>
-
 	<footer slot="footer" class="h-full w-full bg-[#05070A73] backdrop-blur-3xl backdrop-filter">
-		<div class="flex h-full w-full flex-row items-center justify-between px-4 py-3">
+		<div
+			class="border-silver-gray flex h-full w-full flex-row items-center justify-between border-t-2 px-4 py-3"
+		>
 			<button
-				class="flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-[#2A2A2C] p-2 text-[#FAFBFC]"
+				class="flex h-[60px] w-[60px] items-center justify-center rounded-lg p-1 text-[#FAFBFC]"
 				on:click={goBack}
 			>
-				<Icons name="back_icon" width="32" height="32" />
+				<Icons name="left_arrow" width="60" height="60" />
 			</button>
 			<button
-				class="flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-[#2A2A2C] p-2 text-[#FAFBFC]"
+				class="flex h-[48px] w-[48px] items-center justify-center rounded-lg p-2 text-[#FAFBFC]"
 				on:click={goBack}
 			>
-				<Icons name="refresh_icon" width="32" height="32" />
+				<Icons name="refresh_icon" width="60" height="60" />
 			</button>
 		</div>
 	</footer>

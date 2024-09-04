@@ -56,10 +56,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 600,
+        "height": 480,
         "resizable": true,
         "title": "Mecha Connect",
-        "width": 800,
+        "width": 480,
         "decorations": false,
         "transparent": true
       }
