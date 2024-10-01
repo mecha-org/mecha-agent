@@ -1,50 +1,31 @@
-version: 1.0
+grpc:
+  enabled: false
+  addr: 0.0.0.0
+  port: 3001 # we can change to 7776
+  tls: false
 logging:
   enabled: true
-  path:
-server:
-  url: 0.0.0.0
-  port: 3001
-  tls: false
-provisioning: 
-  server_url:  http://localhost:3000
-  paths:
-    device:
-      private_key: /home/user/.mecha/agent/.keys/device.key
-      csr: /home/user/.mecha/agent/certs/device.csr
-      cert: /home/user/.mecha/agent/certs/device.pem
-    server:
-      cert: /home/user/.mecha/agent/certs/server.pem
-    intermediate:
-      cert: /home/user/.mecha/agent/certs/intermediate.pem
-    root:
-      cert: /home/user/.mecha/agent/certs/root.pem
-messaging:
-  system:
-    enabled: true
-    url: nats://127.0.0.1:4222
-  user:
-    enabled: true
-    url:  nats://127.0.0.1:4222
-  service_urls:
-    base_url:  http://localhost:3000
-    get_nonce: /v1/messaging/get_nonce
-    issue_auth_token: /v1/messaging/issue_token
-settings:
-  storage:
-    type: file
-    path: /home/user/.mecha/agent/db/settings.bin
+  path: /var/log/mecha-agent.log
+  level: info
+backend:
+  service: 
+  messaging: 
+data:
+  dir: ~/.mecha
 status:
-  time_interval_sec: 60
+  enabled: true
+  interval: 60
 networking:
   enabled: true
-  disco_port: 15150
+  discovery:
+    addr: 0.0.0.0
+    port: 7774
   wireguard:
-    tun: wg0
-    port: 51820
+    tun: mecha0
+    port: 7775
     userspace: linux
+    dns:
+      enabled: true
+      port: 53
 telemetry:
   enabled: true
-  collect:
-    system: true
-    user: true
