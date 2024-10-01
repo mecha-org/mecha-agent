@@ -1,21 +1,30 @@
 use crate::service::{get_machine_cert, get_machine_id, get_provision_status};
 use anyhow::Result;
-use crypto::MachineCert;
+use crypto::MachineCertDetails;
 use events::Event;
-use services::{ServiceHandler, ServiceStatus};
 use tokio::{
     select,
     sync::{broadcast, mpsc, oneshot},
 };
-use tonic::async_trait;
 use tracing::info;
 
+#[derive()]
+pub struct Settings {
+    pub data_dir: String,
+}
+pub struct MachineCertPaths {
+    pub machine_cert: String,
+    pub machine_private_key: String,
+    pub ca_bundle: String,
+    pub root_cert: String,
+}
 pub struct IdentityHandler {
-    event_tx: broadcast::Sender<Event>,
-    status: ServiceStatus,
+    _event_tx: broadcast::Sender<Event>,
+    settings: Settings,
 }
 pub struct IdentityOptions {
     pub event_tx: broadcast::Sender<Event>,
+    pub settings: Settings,
 }
 
 pub enum IdentityMessage {
@@ -26,15 +35,15 @@ pub enum IdentityMessage {
         reply_to: oneshot::Sender<Result<bool>>,
     },
     GetMachineCert {
-        reply_to: oneshot::Sender<Result<MachineCert>>,
+        reply_to: oneshot::Sender<Result<MachineCertDetails>>,
     },
 }
 
 impl IdentityHandler {
     pub fn new(options: IdentityOptions) -> Self {
         Self {
-            event_tx: options.event_tx,
-            status: ServiceStatus::INACTIVE,
+            _event_tx: options.event_tx,
+            settings: options.settings,
         }
     }
     pub async fn run(&mut self, mut message_rx: mpsc::Receiver<IdentityMessage>) -> Result<()> {
@@ -43,8 +52,7 @@ impl IdentityHandler {
             package = env!("CARGO_PKG_NAME"),
             "identity service initiated"
         );
-        // Start the service
-        let _ = &self.start().await;
+
         loop {
             select! {
                 msg = message_rx.recv() => {
@@ -54,45 +62,20 @@ impl IdentityHandler {
 
                     match msg.unwrap() {
                         IdentityMessage::GetMachineId { reply_to } => {
-                            let machine_id_result = get_machine_id();
+                            let machine_id_result = get_machine_id(&self.settings.data_dir);
                             let _ = reply_to.send(machine_id_result);
                         }
                         IdentityMessage::GetProvisionStatus { reply_to } => {
-                            let provision_status = get_provision_status();
+                            let provision_status = get_provision_status(&self.settings.data_dir);
                             let _ = reply_to.send(provision_status);
                         }
                         IdentityMessage::GetMachineCert { reply_to } => {
-                            let cert = get_machine_cert();
+                            let cert = get_machine_cert(&self.settings.data_dir);
                             let _ = reply_to.send(cert);
                         }
                     };
                 }
             }
         }
-    }
-}
-
-#[async_trait]
-impl ServiceHandler for IdentityHandler {
-    async fn start(&mut self) -> Result<bool> {
-        self.status = ServiceStatus::STARTED;
-        Ok(true)
-    }
-
-    async fn stop(&mut self) -> Result<bool> {
-        self.status = ServiceStatus::STOPPED;
-        Ok(true)
-    }
-
-    fn get_status(&self) -> anyhow::Result<ServiceStatus> {
-        Ok(self.status)
-    }
-
-    fn is_stopped(&self) -> Result<bool> {
-        Ok(self.status == ServiceStatus::STOPPED)
-    }
-
-    fn is_started(&self) -> Result<bool> {
-        Ok(self.status == ServiceStatus::STARTED)
     }
 }

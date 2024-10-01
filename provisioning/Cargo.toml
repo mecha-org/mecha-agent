@@ -16,7 +16,6 @@ identity = { path = "../identity" }
 crypto = { path = "../commons/crypto" }
 services = { path = "../core/services" }
 channel = { path = "../commons/channel" }
-kv-store = { path = "../commons/kv-store" }
 agent-settings = { path = "../core/settings" }
 fs = { path = "../commons/fs" }
 anyhow = { workspace = true }

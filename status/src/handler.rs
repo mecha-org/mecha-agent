@@ -14,29 +14,35 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::service::{get_time_interval, machine_platform_info, send_status, SendStatusOptions};
-
-pub struct StatusHandler {
-    event_tx: broadcast::Sender<Event>,
-    messaging_tx: Sender<MessagingMessage>,
-    identity_tx: Sender<IdentityMessage>,
-    timer_token: Option<CancellationToken>,
-}
+use crate::service::{machine_platform_info, send_status, SendStatusOptions};
 
 pub enum StatusMessage {
     Send {
         reply_to: oneshot::Sender<Result<bool>>,
     },
 }
+pub struct Settings {
+    pub is_enabled: bool,
+    pub interval: u64,
+}
 pub struct StatusOptions {
+    pub settings: Settings,
     pub event_tx: broadcast::Sender<Event>,
     pub messaging_tx: Sender<MessagingMessage>,
     pub identity_tx: Sender<IdentityMessage>,
 }
 
+pub struct StatusHandler {
+    settings: Settings,
+    event_tx: broadcast::Sender<Event>,
+    messaging_tx: Sender<MessagingMessage>,
+    identity_tx: Sender<IdentityMessage>,
+    timer_token: Option<CancellationToken>,
+}
 impl StatusHandler {
     pub fn new(options: StatusOptions) -> Self {
         Self {
+            settings: options.settings,
             event_tx: options.event_tx,
             messaging_tx: options.messaging_tx,
             identity_tx: options.identity_tx,
@@ -57,21 +63,24 @@ impl StatusHandler {
         let timer_token_cloned = timer_token.clone();
         let messaging_tx = self.messaging_tx.clone();
         let identity_tx = self.identity_tx.clone();
-
+        let interval = self.settings.interval;
+        let is_enabled = self.settings.is_enabled;
         // create spawn for timer
         let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {
-            let interval_in_secs: u64 = get_time_interval();
-            let mut timer = tokio::time::interval(std::time::Duration::from_secs(interval_in_secs));
+            let mut timer = tokio::time::interval(std::time::Duration::from_secs(interval));
             loop {
                 select! {
                         _ = timer_token.cancelled() => {
                             return Ok(());
                         },
                         _ = timer.tick() => {
+                            // publish status only if enabled from settings
+                            if is_enabled {
                             let _ = send_status(SendStatusOptions {
                                 messaging_tx: messaging_tx.clone(),
                                 identity_tx: identity_tx.clone(),
                             }).await;
+                        }
                     }
                 }
             }

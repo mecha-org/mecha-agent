@@ -1,6 +1,3 @@
-use std::env;
-
-use agent_settings::{read_settings_yml, AgentSettings};
 use anyhow::{bail, Result};
 use channel::recv_with_timeout;
 use chrono::Duration;
@@ -9,9 +6,10 @@ use messaging::handler::MessagingMessage;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha256::digest;
+use std::env;
 use sys_info::hostname;
 use tokio::sync::mpsc::Sender;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, trace};
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 use crate::errors::{StatusError, StatusErrorCodes};
 #[derive(Serialize, Deserialize, Debug)]
@@ -39,27 +37,6 @@ pub struct PlatformInfo {
     pub arch: String,
     pub agent_version: String,
     pub agent_name: String,
-}
-pub fn get_time_interval() -> u64 {
-    let settings = match read_settings_yml() {
-        Ok(settings) => settings,
-        Err(err) => {
-            warn!(
-                func = "get_time_interval",
-                package = PACKAGE_NAME,
-                "failed to get machine id: {:?}",
-                err
-            );
-            AgentSettings::default()
-        }
-    };
-    debug!(
-        func = "get_time_interval",
-        package = PACKAGE_NAME,
-        "time_interval_sec: {}",
-        settings.status.time_interval_sec
-    );
-    settings.status.time_interval_sec
 }
 pub async fn send_status(status_options: SendStatusOptions) -> Result<bool> {
     let fn_name = "send_status";

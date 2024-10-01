@@ -1,7 +1,4 @@
-use std::collections::HashMap;
-
-use agent_settings::read_settings_yml;
-use agent_settings::{messaging::MessagingSettings, AgentSettings};
+use agent_settings::constants;
 use anyhow::{bail, Result};
 use channel::recv_with_timeout;
 use crypto::base64::b64_encode;
@@ -13,10 +10,12 @@ use nats_client::{Bytes, NatsClient, Subscriber};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use sha256::digest;
+use std::collections::HashMap;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, error, info, trace};
 
 use crate::errors::{MessagingError, MessagingErrorCodes};
+use crate::handler::Settings;
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -73,23 +72,19 @@ pub struct AuthNonceRequest {
 }
 #[derive(Clone)]
 pub struct Messaging {
-    settings: AgentSettings,
     nats_client: Option<NatsClient>,
+    settings: Settings,
 }
 impl Messaging {
-    pub fn new(initialize_client: bool) -> Self {
-        let settings = match read_settings_yml() {
-            Ok(settings) => settings,
-            Err(_) => AgentSettings::default(),
-        };
-        let nats_url = settings.messaging.system.url.clone();
+    pub fn new(initialize_client: bool, settings: Settings) -> Self {
+        let nats_url = settings.messaging_url.clone();
         let nats_client = match initialize_client {
             true => Some(NatsClient::new(&nats_url)),
             false => None,
         };
         Self {
-            settings,
             nats_client,
+            settings,
         }
     }
     /**
@@ -137,10 +132,13 @@ impl Messaging {
             "machine id - {}",
             machine_id
         );
+        let data_dir = self.settings.data_dir.clone();
+        let private_key_path = data_dir.to_owned() + constants::PRIVATE_KEY_PATH;
         let auth_token = match authenticate(
-            &self.settings,
+            &self.settings.service_url,
             &machine_id,
             &self.nats_client.as_ref().unwrap().user_public_key,
+            &private_key_path,
         )
         .await
         {
@@ -350,13 +348,15 @@ impl Messaging {
  * 3. Requests the token from the server
  */
 pub async fn authenticate(
-    settings: &AgentSettings,
-    machine_id: &String,
-    nats_client_public_key: &String,
+    service_url: &str,
+    machine_id: &str,
+    nats_client_public_key: &str,
+    private_key_path: &str,
 ) -> Result<String> {
     let fn_name = "authenticate";
+    let nonce_url = format!("{}{}", service_url, constants::NONCE_URL_QUERY_PATH);
     // Step 2: Get Nonce from Server
-    let nonce = match get_auth_nonce(&settings.messaging).await {
+    let nonce = match get_auth_nonce(&nonce_url).await {
         Ok(n) => n,
         Err(e) => {
             error!(
@@ -370,7 +370,7 @@ pub async fn authenticate(
     };
     debug!(func = fn_name, package = PACKAGE_NAME, "nonce - {}", nonce);
     // Step 3: Sign the nonce
-    let signed_nonce = match sign_nonce(&settings.provisioning.paths.machine.private_key, &nonce) {
+    let signed_nonce = match sign_nonce(private_key_path, &nonce) {
         Ok(n) => n,
         Err(e) => {
             error!(
@@ -384,12 +384,12 @@ pub async fn authenticate(
     };
 
     let token = match get_auth_token(
+        service_url,
         MessagingScope::User,
         &machine_id,
         &nonce,
         &signed_nonce,
         &nats_client_public_key,
-        &settings.messaging,
     )
     .await
     {
@@ -413,7 +413,7 @@ pub async fn authenticate(
     Ok(token)
 }
 
-fn sign_nonce(private_key_path: &String, nonce: &str) -> Result<String> {
+fn sign_nonce(private_key_path: &str, nonce: &str) -> Result<String> {
     let signed_nonce = match sign_with_private_key(&private_key_path, nonce.as_bytes()) {
         Ok(s) => s,
         Err(e) => {
@@ -437,14 +437,14 @@ fn sign_nonce(private_key_path: &String, nonce: &str) -> Result<String> {
     Ok(encoded_signed_nonce)
 }
 
-async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
+async fn get_auth_nonce(nonce_url: &str) -> Result<String> {
     let fn_name = "get_auth_nonce";
-    let url = format!(
-        "{}{}",
-        &settings.service_urls.base_url, &settings.service_urls.get_nonce
+    debug!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "url - {}",
+        nonce_url
     );
-
-    debug!(func = fn_name, package = PACKAGE_NAME, "url - {}", url);
     // Construct request body
     let request_body: AuthNonceRequest = AuthNonceRequest {
         agent_name: "mecha_agent".to_string(),
@@ -452,7 +452,7 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
     };
     let client = reqwest::Client::new();
     let nonce_result = client
-        .post(url)
+        .post(nonce_url)
         .json(&request_body)
         .header("CONTENT_TYPE", "application/json")
         .send()
@@ -553,12 +553,12 @@ async fn get_auth_nonce(settings: &MessagingSettings) -> Result<String> {
 }
 
 async fn get_auth_token(
+    service_url: &str,
     scope: MessagingScope,
     machine_id: &str,
     nonce: &str,
     signed_nonce: &str,
     nats_user_public_key: &str,
-    settings: &MessagingSettings,
 ) -> Result<String> {
     let fn_name = "get_auth_token";
     let request_body = GetAuthTokenRequest {
@@ -571,10 +571,7 @@ async fn get_auth_token(
     };
 
     // Format the url to get the auth token
-    let url = format!(
-        "{}{}",
-        &settings.service_urls.base_url, &settings.service_urls.issue_auth_token
-    );
+    let url = format!("{}{}", service_url, constants::ISSUE_TOKEN_URL_QUERY_PATH);
     debug!(
         func = fn_name,
         package = PACKAGE_NAME,

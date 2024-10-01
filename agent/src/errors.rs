@@ -15,6 +15,7 @@ pub enum AgentErrorCodes {
     GlobalSubscriberInitError,
     InitGRPCError,
     ChannelReceiveMessageError,
+    InitLoggerError,
 }
 
 impl fmt::Display for AgentErrorCodes {
@@ -32,6 +33,7 @@ impl fmt::Display for AgentErrorCodes {
             AgentErrorCodes::GlobalSubscriberInitError => write!(f, "GlobalSubscriberInitError"),
             AgentErrorCodes::ChannelReceiveMessageError => write!(f, "ChannelReceiveMessageError"),
             AgentErrorCodes::AppServiceInitError => write!(f, "AppServiceInitError"),
+            AgentErrorCodes::InitLoggerError => write!(f, "InitLoggerError"),
         }
     }
 }
@@ -53,7 +55,7 @@ impl std::fmt::Display for AgentError {
 }
 
 impl AgentError {
-    pub fn new(code: AgentErrorCodes, message: String, _capture_error: bool) -> Self {
+    pub fn new(code: AgentErrorCodes, message: String) -> Self {
         Self { code, message }
     }
 }

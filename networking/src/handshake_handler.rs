@@ -1,10 +1,5 @@
-use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::str::FromStr;
-
-use agent_settings::{read_settings_yml, AgentSettings};
+use agent_settings::networking::DiscoverySettings;
 use anyhow::{bail, Result};
-use chrono::format;
 use crypto::random::generate_random_alphanumeric;
 use futures::StreamExt;
 use local_ip_address::list_afinet_netifas;
@@ -13,6 +8,9 @@ use messaging::handler::MessagingMessage;
 use messaging::Subscriber as NatsSubscriber;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::HashMap;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::str::FromStr;
 use tokio::net::UdpSocket;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
@@ -57,6 +55,7 @@ pub enum TransactionStatus {
 
 #[derive(Clone)]
 pub struct HandshakeChannelHandler {
+    settings: DiscoverySettings,
     pub channel_id: String,
     messaging_tx: mpsc::Sender<MessagingMessage>,
     pub handshake_tx: mpsc::Sender<HandshakeMessage>,
@@ -64,11 +63,13 @@ pub struct HandshakeChannelHandler {
 }
 impl HandshakeChannelHandler {
     pub fn new(
+        settings: DiscoverySettings,
         messaging_tx: mpsc::Sender<MessagingMessage>,
         handshake_tx: mpsc::Sender<HandshakeMessage>,
     ) -> Self {
         let channel_id: String = generate_random_alphanumeric(32);
         Self {
+            settings,
             channel_id,
             messaging_tx,
             handshake_tx,
@@ -128,17 +129,7 @@ impl HandshakeChannelHandler {
         println!("handshake request received");
         let fn_name = "send_handshake_manifest";
         info!(func = fn_name, package = PACKAGE_NAME, "init");
-        let settings: AgentSettings = match read_settings_yml() {
-            Ok(settings) => settings,
-            Err(_) => {
-                warn!(
-                    func = fn_name,
-                    package = PACKAGE_NAME,
-                    "settings.yml not found, using default settings"
-                );
-                AgentSettings::default()
-            }
-        };
+
         // generate a txn ID, save it with machine_id
         let txn_id = generate_random_alphanumeric(32);
         let txn = TransactionStatus::TxnState {
@@ -159,18 +150,19 @@ impl HandshakeChannelHandler {
                 bail!(e)
             }
         };
-        let addr: SocketAddr = match settings.networking.disco_addr.parse() {
-            Ok(addr) => addr,
-            Err(e) => {
-                warn!(
-                    func = fn_name,
-                    package = PACKAGE_NAME,
-                    "failed to parse disco address: {}",
-                    e
-                );
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8080)
-            }
-        };
+        let addr: SocketAddr =
+            match format!("{}:{}", self.settings.addr, self.settings.port).parse() {
+                Ok(addr) => addr,
+                Err(e) => {
+                    warn!(
+                        func = fn_name,
+                        package = PACKAGE_NAME,
+                        "failed to parse disco address: {}",
+                        e
+                    );
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 7774)
+                }
+            };
         //1. Ge stun candidates
         //2. Create Manifest
         let local_candidates: Vec<Candidate> = endpoints

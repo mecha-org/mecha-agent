@@ -46,23 +46,30 @@ pub enum MessagingMessage {
     },
 }
 pub struct MessagingOptions {
+    pub settings: Settings,
     pub event_tx: broadcast::Sender<Event>,
     pub identity_tx: mpsc::Sender<IdentityMessage>,
 }
 
+#[derive(Clone)]
+pub struct Settings {
+    pub data_dir: String,
+    pub service_url: String,
+    pub messaging_url: String,
+}
 pub struct MessagingHandler {
-    event_tx: broadcast::Sender<Event>,
     status: ServiceStatus,
     messaging_client: Messaging,
+    event_tx: broadcast::Sender<Event>,
     identity_tx: mpsc::Sender<IdentityMessage>,
 }
 
 impl MessagingHandler {
     pub fn new(options: MessagingOptions) -> Self {
         Self {
-            event_tx: options.event_tx,
             status: ServiceStatus::STARTED,
-            messaging_client: Messaging::new(true),
+            messaging_client: Messaging::new(true, options.settings),
+            event_tx: options.event_tx,
             identity_tx: options.identity_tx,
         }
     }
