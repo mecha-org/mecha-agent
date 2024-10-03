@@ -48,3 +48,25 @@ $ docker build -t mecha-org/mecha-agent .
 ```sh
 $ docker run -p 3001:3001 mecha-org/mecha-agent
 ```
+
+## Logging
+
+To enable logs in the console, set the environment variable:
+
+```sh
+RUST_LOG=info
+```
+
+For logging only in a specific service (e.g., provisioning), modify the variable as follows:
+```sh
+RUST_LOG=provisioning=info
+```
+
+To write logs in file we have to configure settings in settings.yml
+```sh
+logging:
+  enabled: true
+  path: /var/log/mecha-agent.log # File path to store logs based on level filter
+  level: info
+
+```

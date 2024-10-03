@@ -1,20 +1,19 @@
 use std::sync::RwLock;
 
 use anyhow::{bail, Result};
-use messaging::async_nats::error;
 use opentelemetry::{
     global,
     metrics::{Meter, Unit},
     Key,
 };
-use sysinfo::{CpuRefreshKind, Disks, Networks, RefreshKind, System};
+use sysinfo::{Disks, Networks, System};
 use tracing::{error, info};
 
 use crate::config::init_otlp_configuration;
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
-pub async fn initialize_metrics() -> Result<bool> {
+pub async fn initialize_metrics(otlp_endpoint_addr: String) -> Result<bool> {
     let fn_name = "initialize_custom_metrics";
-    let _meter_provider = match init_otlp_configuration() {
+    let _meter_provider = match init_otlp_configuration(otlp_endpoint_addr, 60) {
         Ok(provider) => {
             global::set_meter_provider(provider.clone());
             provider

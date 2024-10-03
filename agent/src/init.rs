@@ -1,4 +1,5 @@
 use crate::errors::{AgentError, AgentErrorCodes};
+use agent_settings::AgentSettings;
 use anyhow::{bail, Result};
 use app_services::handler::{AppServiceHandler, AppServiceMessage, AppServiceOptions};
 use grpc_server::GrpcServerOptions;
@@ -17,20 +18,32 @@ use tracing::error;
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 const CHANNEL_SIZE: usize = 32;
 
-pub async fn init_services() -> Result<bool> {
+pub async fn init_handlers(settings: AgentSettings, socket_addr: &str) -> Result<bool> {
     let (event_tx, _) = broadcast::channel(CHANNEL_SIZE);
     let (identity_t, identity_tx) = init_identity_service(IdentityOptions {
         event_tx: event_tx.clone(),
+        settings: identity::handler::Settings {
+            data_dir: settings.data.dir.clone(),
+        },
     })
     .await;
 
     let (messaging_t, messaging_tx) = init_messaging_service(MessagingOptions {
+        settings: messaging::handler::Settings {
+            data_dir: settings.data.dir.clone(),
+            service_url: settings.backend.service.clone(),
+            messaging_url: settings.backend.messaging.clone(),
+        },
         event_tx: event_tx.clone(),
         identity_tx: identity_tx.clone(),
     })
     .await;
 
     let (prov_t, prov_tx) = init_provisioning_service(ProvisioningOptions {
+        settings: provisioning::handler::Settings {
+            service_url: settings.backend.service.clone(),
+            data_dir: settings.data.dir.clone(),
+        },
         identity_tx: identity_tx.clone(),
         messaging_tx: messaging_tx.clone(),
         event_tx: event_tx.clone(),
@@ -38,6 +51,10 @@ pub async fn init_services() -> Result<bool> {
     .await;
 
     let (status_t, _status_tx) = init_status_service(StatusOptions {
+        settings: status::handler::Settings {
+            is_enabled: settings.status.enabled,
+            interval: settings.status.interval,
+        },
         event_tx: event_tx.clone(),
         messaging_tx: messaging_tx.clone(),
         identity_tx: identity_tx.clone(),
@@ -51,6 +68,7 @@ pub async fn init_services() -> Result<bool> {
     })
     .await;
     let (networking_t, _networking_tx) = init_networking_service(NetworkingOptions {
+        settings: settings.networking,
         event_tx: event_tx.clone(),
         messaging_tx: messaging_tx.clone(),
         identity_tx: identity_tx.clone(),
@@ -59,6 +77,10 @@ pub async fn init_services() -> Result<bool> {
     .await;
 
     let (telemetry_t, telemetry_tx) = init_telemetry_service(TelemetryOptions {
+        settings: telemetry::handler::Settings {
+            is_enabled: settings.telemetry.enabled,
+            otlp_addr: socket_addr.to_string(),
+        },
         event_tx: event_tx.clone(),
         messaging_tx: messaging_tx.clone(),
         identity_tx: identity_tx.clone(),
@@ -89,15 +111,15 @@ pub async fn init_services() -> Result<bool> {
     // });
 
     // wait on all join handles
-    identity_t.await.unwrap();
-    messaging_t.await.unwrap();
-    prov_t.await.unwrap();
-    status_t.await.unwrap();
-    setting_t.await.unwrap();
-    networking_t.await.unwrap();
-    telemetry_t.await.unwrap();
-    app_service_t.await.unwrap();
-    grpc_t.await.unwrap();
+    let _ = identity_t.await.unwrap();
+    let _ = messaging_t.await.unwrap();
+    let _ = prov_t.await.unwrap();
+    let _ = status_t.await.unwrap();
+    let _ = setting_t.await.unwrap();
+    let _ = networking_t.await.unwrap();
+    let _ = telemetry_t.await.unwrap();
+    let _ = app_service_t.await.unwrap();
+    let _ = grpc_t.await.unwrap();
 
     Ok(true)
 }
@@ -122,8 +144,7 @@ async fn init_provisioning_service(
                 );
                 bail!(AgentError::new(
                     AgentErrorCodes::ProvisioningInitError,
-                    format!("error init/run provisioning service: {:?}", e),
-                    true
+                    format!("error init/run provisioning service: {:?}", e)
                 ));
             }
         };
@@ -150,8 +171,7 @@ async fn init_identity_service(
                 );
                 bail!(AgentError::new(
                     AgentErrorCodes::IdentityInitError,
-                    format!("error init/run identity service: {:?}", e),
-                    true
+                    format!("error init/run identity service: {:?}", e)
                 ));
             }
         }
@@ -178,8 +198,7 @@ async fn init_messaging_service(
                 );
                 bail!(AgentError::new(
                     AgentErrorCodes::MessagingInitError,
-                    format!("error init/run messaging service: {:?}", e),
-                    true
+                    format!("error init/run messaging service: {:?}", e)
                 ));
             }
         }
@@ -205,8 +224,7 @@ async fn init_status_service(
                 );
                 bail!(AgentError::new(
                     AgentErrorCodes::StatusInitError,
-                    format!("error init/run status service: {:?}", e),
-                    true
+                    format!("error init/run status service: {:?}", e)
                 ));
             }
         }
@@ -232,8 +250,7 @@ async fn init_setting_service(
                 );
                 bail!(AgentError::new(
                     AgentErrorCodes::SettingsInitError,
-                    format!("error init/run settings service: {:?}", e),
-                    true
+                    format!("error init/run settings service: {:?}", e)
                 ));
             }
         }
@@ -263,8 +280,7 @@ async fn init_networking_service(
                 );
                 bail!(AgentError::new(
                     AgentErrorCodes::NetworkingInitError,
-                    format!("error init/run networking service: {:?}", e),
-                    true
+                    format!("error init/run networking service: {:?}", e)
                 ));
             }
         }
@@ -291,8 +307,7 @@ async fn init_telemetry_service(
                 );
                 bail!(AgentError::new(
                     AgentErrorCodes::TelemetryInitError,
-                    format!("error init/run telemetry service: {:?}", e),
-                    true
+                    format!("error init/run telemetry service: {:?}", e)
                 ));
             }
         }
@@ -322,8 +337,7 @@ async fn init_app_service(
                 );
                 bail!(AgentError::new(
                     AgentErrorCodes::AppServiceInitError,
-                    format!("error init/run app service: {:?}", e),
-                    true
+                    format!("error init/run app service: {:?}", e)
                 ));
             }
         }

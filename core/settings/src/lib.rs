@@ -1,30 +1,24 @@
-use crate::{
-    messaging::MessagingSettings, provisioning::ProvisioningSettings, telemetry::TelemetrySettings,
-};
+use crate::telemetry::TelemetrySettings;
 use anyhow::{bail, Result};
 use dotenv::dotenv;
 use networking::NetworkingSettings;
 use serde::{Deserialize, Serialize};
-use settings::Settings;
 use status::StatusSettings;
 use std::{env, fmt, fs::File, path::PathBuf};
 use tracing::error;
-pub mod messaging;
+pub mod constants;
 pub mod networking;
-pub mod provisioning;
-pub mod settings;
 pub mod status;
 pub mod telemetry;
 
 /// Agent Settings - Struct corresponding to the settings.yml schema
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AgentSettings {
-    pub server: ServerSettings,
+    pub grpc: GrpcSettings,
     pub logging: LoggingSettings,
-    pub provisioning: ProvisioningSettings,
-    pub messaging: MessagingSettings,
+    pub backend: BackendSettings,
+    pub data: DataSettings,
     pub status: StatusSettings,
-    pub settings: Settings,
     pub networking: NetworkingSettings,
     pub telemetry: TelemetrySettings,
 }
@@ -32,12 +26,11 @@ pub struct AgentSettings {
 impl Default for AgentSettings {
     fn default() -> Self {
         Self {
-            server: ServerSettings::default(),
+            grpc: GrpcSettings::default(),
             logging: LoggingSettings::default(),
-            provisioning: ProvisioningSettings::default(),
-            messaging: MessagingSettings::default(),
+            backend: BackendSettings::default(),
+            data: DataSettings::default(),
             status: StatusSettings::default(),
-            settings: Settings::default(),
             networking: NetworkingSettings::default(),
             telemetry: TelemetrySettings::default(),
         }
@@ -46,17 +39,19 @@ impl Default for AgentSettings {
 
 /// ServerSettings - Settings parameter for configuring the agent's grpc server settings
 #[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct ServerSettings {
-    pub url: Option<String>,
-    pub port: i16,
+pub struct GrpcSettings {
+    pub enabled: bool,
+    pub addr: String,
+    pub port: u16,
     pub tls: bool,
 }
 
-impl Default for ServerSettings {
+impl Default for GrpcSettings {
     fn default() -> Self {
         Self {
-            url: Some(String::from("127.0.0.1")),
-            port: 3001,
+            enabled: false,
+            addr: String::from("0.0.0.0"),
+            port: 7776,
             tls: false,
         }
     }
@@ -65,8 +60,8 @@ impl Default for ServerSettings {
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct LoggingSettings {
     pub enabled: bool,
-    pub level: String,
     pub path: String,
+    pub level: String,
 }
 
 impl Default for LoggingSettings {
@@ -75,6 +70,34 @@ impl Default for LoggingSettings {
             enabled: false,
             level: String::from("info"),
             path: String::from(""),
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct BackendSettings {
+    pub service: String,
+    pub messaging: String,
+}
+
+impl Default for BackendSettings {
+    fn default() -> Self {
+        Self {
+            service: String::from(""),
+            messaging: String::from(""),
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct DataSettings {
+    pub dir: String,
+}
+
+impl Default for DataSettings {
+    fn default() -> Self {
+        Self {
+            dir: String::from(""),
         }
     }
 }

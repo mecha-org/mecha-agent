@@ -1,20 +1,19 @@
-use agent_settings::{read_settings_yml, AgentSettings};
+use agent_settings::networking::NetworkingSettings;
 use anyhow::{bail, Result};
 use events::Event;
 use identity::handler::IdentityMessage;
 use messaging::handler::MessagingMessage;
-use serde_json::json;
 use settings::handler::SettingMessage;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::select;
+use tokio::sync::{broadcast, mpsc};
 use tokio::task::{JoinHandle, JoinSet};
-use tokio::{select, task};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace};
 use wireguard::Wireguard;
 
 use crate::errors::{NetworkingError, NetworkingErrorCodes};
 use crate::handshake_handler::{
-    await_networking_handshake_message, HandshakeChannelHandler, HandshakeMessage, Manifest,
+    await_networking_handshake_message, HandshakeChannelHandler, HandshakeMessage,
 };
 use crate::service::{
     await_consumer_message, configure_wireguard, create_channel_sync_consumer, get_machine_id,
@@ -22,7 +21,19 @@ use crate::service::{
 };
 
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
+
+pub enum NetworkingMessage {}
+
+pub struct NetworkingOptions {
+    pub settings: NetworkingSettings,
+    pub messaging_tx: mpsc::Sender<MessagingMessage>,
+    pub identity_tx: mpsc::Sender<IdentityMessage>,
+    pub event_tx: broadcast::Sender<Event>,
+    pub setting_tx: mpsc::Sender<SettingMessage>,
+}
+
 pub struct NetworkingHandler {
+    settings: NetworkingSettings,
     identity_tx: mpsc::Sender<IdentityMessage>,
     settings_tx: mpsc::Sender<SettingMessage>,
     messaging_tx: mpsc::Sender<MessagingMessage>,
@@ -33,18 +44,10 @@ pub struct NetworkingHandler {
     handshake_handler: Option<HandshakeChannelHandler>,
 }
 
-pub enum NetworkingMessage {}
-
-pub struct NetworkingOptions {
-    pub messaging_tx: mpsc::Sender<MessagingMessage>,
-    pub identity_tx: mpsc::Sender<IdentityMessage>,
-    pub event_tx: broadcast::Sender<Event>,
-    pub setting_tx: mpsc::Sender<SettingMessage>,
-}
-
 impl NetworkingHandler {
     pub fn new(options: NetworkingOptions) -> Self {
         Self {
+            settings: options.settings,
             identity_tx: options.identity_tx,
             messaging_tx: options.messaging_tx,
             event_tx: options.event_tx,
@@ -221,29 +224,24 @@ impl NetworkingHandler {
             "networking service initiated"
         );
         let fn_name = "run";
-        // read settings from settings.yml
-        let settings: AgentSettings = match read_settings_yml() {
-            Ok(settings) => settings,
-            Err(_) => {
-                warn!(
-                    func = fn_name,
-                    package = PACKAGE_NAME,
-                    "settings.yml not found, using default settings"
-                );
-                AgentSettings::default()
-            }
-        };
 
         let (handshake_tx, mut handshake_rx) = mpsc::channel(32);
         let _ = self.init_handshake_handler(handshake_tx).await;
 
+        let disco_addr = format!(
+            "{}:{}",
+            self.settings.discovery.addr, self.settings.discovery.port
+        );
+        debug!(
+            func = fn_name,
+            package = PACKAGE_NAME,
+            "discovery address: {}",
+            disco_addr
+        );
         // start the disco server
         let handshake_handler = self.handshake_handler.as_ref().unwrap();
         let handshake_channel_id = handshake_handler.channel_id.clone();
-        let mut handshake_disco_socket = match handshake_handler
-            .start_disco(settings.networking.disco_addr)
-            .await
-        {
+        let mut handshake_disco_socket = match handshake_handler.start_disco(disco_addr).await {
             Ok(s) => s,
             Err(e) => {
                 error!(
@@ -269,7 +267,6 @@ impl NetworkingHandler {
                     }
 
                     match msg.unwrap() {
-
                     };
                 },
                 handshake_run = self.handshake_handler.as_mut().unwrap().run(&mut handshake_disco_socket, &mut handshake_rx) => {
@@ -285,7 +282,7 @@ impl NetworkingHandler {
                             bail!(NetworkingError::new(
                                 NetworkingErrorCodes::NetworkingInitError, //todo: handshakeRunError
                                 format!("error init/run handshake service: {:?}", e),
-        
+
                             ));
                         }
                     }
@@ -316,7 +313,7 @@ impl NetworkingHandler {
                                     match v.as_str() {
                                         "true" => {
                                             let _ = reconnect_messaging_service(self.messaging_tx.clone(),v.to_string(), existing_settings).await;
-                                            match configure_wireguard(self.settings_tx.clone()).await {
+                                            match configure_wireguard(self.settings.wireguard.port as u32, &self.settings.wireguard.tun, self.settings_tx.clone()).await {
                                                 Ok(wireguard) => {
                                                     info!(
                                                         func = "run",
@@ -357,7 +354,11 @@ impl NetworkingHandler {
         }
     }
     async fn init_handshake_handler(&mut self, handshake_tx: mpsc::Sender<HandshakeMessage>) -> () {
-        let handler = HandshakeChannelHandler::new(self.messaging_tx.clone(), handshake_tx.clone());
+        let handler = HandshakeChannelHandler::new(
+            self.settings.discovery.clone(),
+            self.messaging_tx.clone(),
+            handshake_tx.clone(),
+        );
         self.handshake_handler = Some(handler);
     }
 }

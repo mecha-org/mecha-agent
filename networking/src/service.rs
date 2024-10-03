@@ -107,7 +107,6 @@ pub async fn get_networking_subscriber(
                 bail!(NetworkingError::new(
                     NetworkingErrorCodes::ChannelSendMessageError,
                     format!("error sending subscriber message - {}", e),
-
                 ));
             }
         }
@@ -131,7 +130,6 @@ pub async fn get_networking_subscriber(
                         "error get networking subscriber - {:?}, error - {}",
                         &subject, e
                     ),
-
                 ));
             }
         };
@@ -139,20 +137,13 @@ pub async fn get_networking_subscriber(
 
     Ok(networking_subscriber)
 }
-pub async fn configure_wireguard(settings_tx: Sender<SettingMessage>) -> Result<Wireguard> {
+pub async fn configure_wireguard(
+    wg_port: u32,
+    if_name: &str,
+    settings_tx: Sender<SettingMessage>,
+) -> Result<Wireguard> {
     let fn_name = "configure_wireguard";
-    // read settings from settings.yml
-    let settings: AgentSettings = match read_settings_yml() {
-        Ok(settings) => settings,
-        Err(_) => {
-            warn!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "settings.yml not found, using default settings"
-            );
-            AgentSettings::default()
-        }
-    };
+
     // The agent will pull the networking settings
     // Generate a wireguard private key + public key
     let keys = match wireguard::generate_new_key_pair() {
@@ -190,10 +181,10 @@ pub async fn configure_wireguard(settings_tx: Sender<SettingMessage>) -> Result<
         ip_address
     );
     // Configure a wireguard interface as per settings.yml and machine settings
-    let mut wireguard = Wireguard::new(settings.networking.wireguard.tun);
+    let mut wireguard = Wireguard::new(if_name.to_string());
     let wg_config = wireguard::WgConfig {
         ip_address: ip_address,
-        port: settings.networking.wireguard.port,
+        port: wg_port,
     };
     match wireguard.setup_wireguard(&wg_config, keys.secret_key.clone()) {
         Ok(_) => (),

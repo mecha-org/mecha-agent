@@ -59,12 +59,11 @@ pub async fn start_grpc_service(opt: GrpcServerOptions) -> Result<()> {
 
     // Construct socket address
     let ip: IpAddr = settings
-        .server
-        .url
-        .unwrap_or(String::from("127.0.0.1"))
+        .grpc
+        .addr
         .parse()
-        .unwrap();
-    let port: u16 = settings.server.port as u16;
+        .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)));
+    let port: u16 = settings.grpc.port as u16;
 
     let addr: SocketAddr = (ip, port).into();
 
