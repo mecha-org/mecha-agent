@@ -1,9 +1,8 @@
-use std::{collections::HashMap, io::Read, sync::Arc};
+use std::{collections::HashMap, io::Read, sync::Arc, time::Duration};
 
 use agent_settings::AgentSettings;
 use anyhow::{bail, Result};
 use channel::recv_with_timeout;
-use crypto::random::generate_random_alphanumeric;
 use futures::StreamExt;
 use http_body_util::BodyExt;
 
@@ -12,16 +11,16 @@ use hyper::{
     Response,
 };
 use messaging::{async_nats::HeaderMap, handler::MessagingMessage};
-use nats_client::{
-    async_nats::jetstream::consumer::{pull::Config, Consumer},
-    Bytes, Message,
-};
+use messaging::{async_nats::Message, Subscriber as NatsSubscriber};
+use nats_client::Bytes;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sha256::digest;
-use tokio::sync::{
-    mpsc::{self, Sender},
-    oneshot, Mutex,
+use tokio::{
+    sync::{
+        mpsc::{self, Sender},
+        oneshot, Mutex,
+    },
+    time::{interval, Instant},
 };
 use tokio_util::bytes::{BufMut, BytesMut};
 use tracing::{debug, error, info, trace, warn};
@@ -55,7 +54,7 @@ pub struct DeviceSettings {
     settings: AgentSettings,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct AppServiceSettings {
     pub app_id: String,
     pub app_name: String,
@@ -63,7 +62,7 @@ pub struct AppServiceSettings {
     pub port_mapping: Vec<PortMapping>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct PortMapping {
     pub local_port: String,
     pub target_port: String,
@@ -71,7 +70,7 @@ pub struct PortMapping {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ResponseBody {
+pub struct ResponseType {
     pub headers: std::collections::HashMap<String, String>,
     pub body: HyperBodyBytes,
 }
@@ -86,138 +85,105 @@ struct RequestState {
     req_body: BytesMut,
     content_length: usize,
 }
+#[derive(Debug)]
+pub enum AppServiceSubjects {
+    ServiceRequest(String),
+}
 
-pub async fn create_pull_consumer(
-    messaging_tx: Sender<MessagingMessage>,
-    dns_name: String,
-) -> Result<Consumer<Config>> {
-    let fn_name = "create_pull_consumer";
-    let (tx, rx) = oneshot::channel();
-    match messaging_tx
-        .send(MessagingMessage::InitJetStream { reply_to: tx })
-        .await
-    {
-        Ok(_) => {}
-        Err(err) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "error sending init jetstream message - {:?}",
-                err
-            );
-            bail!(AppServicesError::new(
-                AppServicesErrorCodes::ChannelSendMessageError,
-                format!(
-                    "error sending init jetstream message - {:?}",
-                    err.to_string()
-                ),
-            ))
-        }
-    }
-
-    let jet_stream_client = match recv_with_timeout(rx).await {
-        Ok(js_client) => js_client,
-        Err(err) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "error receiving init jetstream message - {:?}",
-                err
-            );
-            bail!(AppServicesError::new(
-                AppServicesErrorCodes::ChannelReceiveMessageError,
-                format!("error receiving init jetstream message - {:?}", err),
-            ))
-        }
-    };
-    println!("jet_stream client received");
-    let stream_name = "app_services";
-    let stream = match jet_stream_client.get_stream(stream_name.to_string()).await {
-        Ok(s) => s,
-        Err(e) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "error getting stream, name - {}, error -  {:?}",
-                stream_name,
-                e
-            );
-            bail!(e)
-        }
-    };
-    // Create consumer
-    let consumer_name = generate_random_alphanumeric(10);
+#[derive(Debug, Default)]
+pub struct AppServiceSubscriber {
+    pub service_request: Option<NatsSubscriber>,
+}
+pub async fn subscribe_to_nats(
+    dns_name: &str,
+    messaging_tx: mpsc::Sender<MessagingMessage>,
+) -> Result<AppServiceSubscriber> {
+    let fn_name = "subscribe_to_nats";
+    let list_of_subjects = vec![AppServiceSubjects::ServiceRequest(format!(
+        "app_services.gateway.{}.443.>",
+        sha256::digest(dns_name)
+    ))];
     debug!(
         func = fn_name,
         package = PACKAGE_NAME,
-        "consumer name generated - {}",
-        &consumer_name
+        "list of subjects - {:?}",
+        list_of_subjects
     );
-
-    // Get DNS name from settings
-    //app_services.gateway.(sha256_of_dns_name).{port).req
-    let filter_subject = format!("app_services.gateway.{}.>", digest(dns_name));
-    info!(
-        func = fn_name,
-        package = PACKAGE_NAME,
-        "creating consumer, name - {}, filter_subject - {}",
-        &consumer_name,
-        &filter_subject
-    );
-    let consumer = match jet_stream_client
-        .create_consumer(stream, filter_subject, consumer_name.clone())
-        .await
-    {
-        Ok(s) => s,
-        Err(e) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "error creating consumer, name - {}, error -  {:?}",
-                &consumer_name,
-                e
-            );
-            bail!(e)
+    let mut app_service_subscribers = AppServiceSubscriber::default();
+    // Iterate over everything.
+    for subject in list_of_subjects {
+        let (tx, rx) = oneshot::channel();
+        let subject_string = match &subject {
+            AppServiceSubjects::ServiceRequest(s) => s.to_string(),
+        };
+        match messaging_tx
+            .send(MessagingMessage::Subscriber {
+                reply_to: tx,
+                subject: subject_string,
+            })
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error sending get que subscriber for issue token- {}",
+                    e
+                );
+                bail!(AppServicesError::new(
+                    AppServicesErrorCodes::ChannelSendGetSubscriberMessageError,
+                    format!("error sending subscriber message - {}", e),
+                ));
+            }
         }
-    };
-    info!(func = fn_name, package = PACKAGE_NAME, "consumer created");
-    Ok(consumer)
+        match recv_with_timeout(rx).await {
+            Ok(subscriber) => match &subject {
+                AppServiceSubjects::ServiceRequest(_) => {
+                    app_service_subscribers.service_request = Some(subscriber)
+                }
+            },
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while get app services subscriber - {:?}, error - {}",
+                    &subject,
+                    e
+                );
+                bail!(AppServicesError::new(
+                    AppServicesErrorCodes::ChannelReceiveSubscriberMessageError,
+                    format!(
+                        "error get app services subscriber - {:?}, error - {}",
+                        &subject, e
+                    ),
+                ));
+            }
+        };
+    }
+
+    Ok(app_service_subscribers)
 }
 
 pub async fn await_app_service_message(
     dns_name: String,
     local_port: u16,
-    consumer: Consumer<Config>,
     messaging_tx: Sender<MessagingMessage>,
+    mut subscriber: NatsSubscriber,
 ) -> Result<bool> {
     let fn_name = "await_app_service_message";
     println!("awaiting app service message");
 
     // Create a HashMap wrapped in a Mutex and Arc for shared ownership
     let req_map: Arc<Mutex<HashMap<String, RequestState>>> = Arc::new(Mutex::new(HashMap::new()));
-    let mut messages = match consumer.messages().await {
-        Ok(s) => s,
-        Err(e) => {
-            error!(
-                func = fn_name,
-                package = PACKAGE_NAME,
-                "error fetching messages, error -  {:?}",
-                e
-            );
-            bail!(AppServicesError::new(
-                AppServicesErrorCodes::PullMessagesError,
-                format!("pull messages error - {:?} - {}", e.kind(), e.to_string()),
-            ))
-        }
-    };
 
-    println!("messages fetched");
-    while let Some(Ok(message)) = messages.next().await {
+    while let Some(message) = subscriber.next().await {
         println!("new message subject: {:?}", message.subject);
         let message_tx_cloned = messaging_tx.clone();
         let dns_name_cloned = dns_name.clone();
         // Spawn a task that will simulate adding new requests in a loop
         let req_map_clone = Arc::clone(&req_map);
+
         // Spawn a tokio task to serve multiple requests concurrently
         tokio::task::spawn(async move {
             match process_message(
@@ -239,22 +205,6 @@ pub async fn await_app_service_message(
                     );
                 }
             }
-            // Acknowledges a message delivery
-            match message.ack().await {
-                Ok(_res) => trace!(
-                    func = fn_name,
-                    package = PACKAGE_NAME,
-                    "message Acknowledged",
-                ),
-                Err(err) => {
-                    error!(
-                        func = fn_name,
-                        package = PACKAGE_NAME,
-                        "message acknowledge failed {}",
-                        err
-                    );
-                }
-            };
         });
     }
     Ok(true)
@@ -333,13 +283,31 @@ async fn process_message(
             content_length: content_length,
         };
         map.insert(http_incoming_request.req_id.clone(), request_state);
+
         // If content length is greater than zero it means next message will have req.data with payload
-        let client_response: Option<Response<Incoming>> = if content_length <= 0 {
+        let client_response = if content_length <= 0 {
             // Send request to local service
-            let client_response: Response<Incoming> =
+            let client_response =
                 match handle_local_request(http_incoming_request, local_port).await {
-                    Ok(s) => s,
+                    Ok(s) => {
+                        info!(
+                            func = fn_name,
+                            package = PACKAGE_NAME,
+                            "request handled successfully"
+                        );
+                        ResponseType {
+                            headers: s
+                                .headers()
+                                .iter()
+                                .map(|(k, v)| {
+                                    (k.as_str().to_string(), v.to_str().unwrap_or("").to_string())
+                                })
+                                .collect::<std::collections::HashMap<String, String>>(),
+                            body: s.into_body().collect().await.unwrap().to_bytes(),
+                        }
+                    }
                     Err(err) => {
+                        //TODO: downcast error and be specific about the error
                         error!(
                             func = fn_name,
                             package = PACKAGE_NAME,
@@ -361,15 +329,32 @@ async fn process_message(
         };
         // Lock the mutex to get a value by key
         let mut map_lock = req_map_clone.lock().await;
-        let client_response_opt = if let Some(existing_req) = map_lock.get_mut(&req_id) {
-            let response: Option<Response<Incoming>> = match handle_request_with_content(
+        let client_response = if let Some(existing_req) = map_lock.get_mut(&req_id) {
+            let response = match handle_request_with_content(
                 existing_req,
                 message.payload.clone(),
                 local_port,
             )
             .await
             {
-                Ok(s) => s,
+                Ok(s) => {
+                    info!(
+                        func = fn_name,
+                        package = PACKAGE_NAME,
+                        "request handled successfully"
+                    );
+                    let incoming_response = s.unwrap();
+                    ResponseType {
+                        headers: incoming_response
+                            .headers()
+                            .iter()
+                            .map(|(k, v)| {
+                                (k.as_str().to_string(), v.to_str().unwrap_or("").to_string())
+                            })
+                            .collect::<std::collections::HashMap<String, String>>(),
+                        body: incoming_response.collect().await.unwrap().to_bytes(),
+                    }
+                }
                 Err(err) => {
                     error!(
                         func = fn_name,
@@ -377,10 +362,26 @@ async fn process_message(
                         "error handling incoming request - {:?}",
                         err
                     );
-                    bail!(err)
+                    let error_response = match err.downcast::<AppServicesError>() {
+                        Ok(e) => match e.code {
+                            AppServicesErrorCodes::TcpStreamConnectError => ResponseType {
+                                headers: std::collections::HashMap::new(),
+                                body: HyperBodyBytes::from("error connecting to remote host"),
+                            },
+                            _ => ResponseType {
+                                headers: std::collections::HashMap::new(),
+                                body: HyperBodyBytes::from("error connecting to remote host"),
+                            },
+                        },
+                        Err(e) => ResponseType {
+                            headers: std::collections::HashMap::new(),
+                            body: HyperBodyBytes::from("internal server error"),
+                        },
+                    };
+                    error_response
                 }
             };
-            response
+            Some(response)
         } else {
             warn!(
                 func = fn_name,
@@ -390,62 +391,50 @@ async fn process_message(
             );
             None
         };
-        client_response_opt
+        client_response
     } else {
         None
     };
 
-    if client_response.is_some() {
-        let client_response = client_response.unwrap();
-        // Collect response headers
-        let headers = client_response
-            .headers()
-            .iter()
-            .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
-            .collect::<std::collections::HashMap<String, String>>();
-        info!(
-            func = fn_name,
-            package = PACKAGE_NAME,
-            "response headers - {:?}",
-            headers
-        );
-        let response_body_bytes = client_response.collect().await.unwrap().to_bytes();
-        // Specify the header name you want to retrieve
-        let ack_subject = match extract_ack_subject(message.headers.as_ref()) {
-            Ok(s) => s,
-            Err(err) => bail!(err),
-        };
-        if !ack_subject.is_empty() {
-            let response_payload = json!(ResponseBody {
-                headers: headers,
-                body: response_body_bytes,
-            });
-
-            let (tx, _rx) = oneshot::channel();
-            match messaging_tx
-                .send(MessagingMessage::Send {
-                    reply_to: tx,
-                    message: response_payload.to_string(),
-                    subject: ack_subject,
-                    headers: None,
-                })
-                .await
-            {
-                Ok(_) => {
-                    info!(
-                        func = fn_name,
-                        package = PACKAGE_NAME,
-                        "response sent to nats"
-                    );
-                }
-                Err(e) => {
-                    error!(
-                        func = fn_name,
-                        package = PACKAGE_NAME,
-                        "error sending response to nats - {:?}",
-                        e
-                    );
-                }
+    info!(
+        func = fn_name,
+        package = PACKAGE_NAME,
+        "client response - {:?}",
+        client_response
+    );
+    if client_response.is_none() {
+        return Ok(false);
+    }
+    // Specify the header name you want to retrieve
+    let ack_subject = match extract_ack_subject(message.headers.as_ref()) {
+        Ok(s) => s,
+        Err(err) => bail!(err),
+    };
+    if !ack_subject.is_empty() {
+        let (tx, _rx) = oneshot::channel();
+        match messaging_tx
+            .send(MessagingMessage::Send {
+                reply_to: tx,
+                message: json!(client_response).to_string(),
+                subject: ack_subject,
+                headers: None,
+            })
+            .await
+        {
+            Ok(_) => {
+                info!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "response sent to nats"
+                );
+            }
+            Err(e) => {
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error sending response to nats - {:?}",
+                    e
+                );
             }
         }
     }
@@ -554,7 +543,12 @@ async fn handle_request_with_content(
         {
             Ok(resp) => resp,
             Err(err) => {
-                error!(func = fn_name, package = PACKAGE_NAME, "");
+                error!(
+                    func = fn_name,
+                    package = PACKAGE_NAME,
+                    "error while making request - {:?}",
+                    err
+                );
                 bail!(err)
             }
         };
@@ -612,7 +606,15 @@ async fn handle_local_request(
     .await
     {
         Ok(resp) => resp,
-        Err(err) => bail!(err),
+        Err(err) => {
+            error!(
+                func = fn_name,
+                package = PACKAGE_NAME,
+                "error while making request - {:?}",
+                err
+            );
+            bail!(err)
+        }
     };
     Ok(response)
     // To make this streamed - fetch all data frames

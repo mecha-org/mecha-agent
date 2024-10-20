@@ -4,10 +4,6 @@ use std::fmt;
 pub enum AppServicesErrorCodes {
     #[default]
     UnknownError,
-    PullMessagesError,
-    CreateConsumerError,
-    ChannelSendMessageError,
-    ChannelReceiveMessageError,
     RequestPayloadParseError,
     SendReconnectMessagingMessageError,
     RecvReconnectMessageError,
@@ -18,6 +14,10 @@ pub enum AppServicesErrorCodes {
     MessageHeaderEmptyError,
     AckHeaderNotFoundError,
     PortParseError,
+    ChannelSendGetSubscriberMessageError,
+    ChannelReceiveSubscriberMessageError,
+    TcpStreamConnectError,
+    TcpStreamConnectTimeoutError,
 }
 
 impl fmt::Display for AppServicesErrorCodes {
@@ -32,19 +32,6 @@ impl fmt::Display for AppServicesErrorCodes {
             AppServicesErrorCodes::MessageHeaderEmptyError => {
                 write!(f, "AppServicesErrorCodes: MessageHeaderEmptyError")
             }
-            AppServicesErrorCodes::PullMessagesError => {
-                write!(f, "AppServicesErrorCodes: PullMessagesError")
-            }
-            AppServicesErrorCodes::CreateConsumerError => {
-                write!(f, "AppServicesErrorCodes: CreateConsumerError")
-            }
-            AppServicesErrorCodes::ChannelSendMessageError => {
-                write!(f, "AppServicesErrorCodes: ChannelSendMessageError",)
-            }
-            AppServicesErrorCodes::ChannelReceiveMessageError => {
-                write!(f, "AppServicesErrorCodes: ChannelReceiveMessageError")
-            }
-
             AppServicesErrorCodes::SendReconnectMessagingMessageError => {
                 write!(
                     f,
@@ -71,6 +58,24 @@ impl fmt::Display for AppServicesErrorCodes {
             }
             AppServicesErrorCodes::PortParseError => {
                 write!(f, "AppServicesErrorCodes: PortParseError")
+            }
+            AppServicesErrorCodes::ChannelSendGetSubscriberMessageError => {
+                write!(
+                    f,
+                    "AppServicesErrorCodes: ChannelSendGetSubscriberMessageError"
+                )
+            }
+            AppServicesErrorCodes::ChannelReceiveSubscriberMessageError => {
+                write!(
+                    f,
+                    "AppServicesErrorCodes: ChannelReceiveSubscriberMessageError"
+                )
+            }
+            AppServicesErrorCodes::TcpStreamConnectError => {
+                write!(f, "AppServicesErrorCodes: TcpStreamConnectError")
+            }
+            AppServicesErrorCodes::TcpStreamConnectTimeoutError => {
+                write!(f, "AppServicesErrorCodes: TcpStreamConnectTimeoutError")
             }
         }
     }

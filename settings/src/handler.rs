@@ -11,7 +11,7 @@ use tracing::{error, info};
 
 use crate::errors::{DeviceSettingError, DeviceSettingErrorCodes};
 use crate::service::{
-    await_settings_message, create_pull_consumer, get_settings_by_key, set_settings, sync_settings,
+    await_settings_message, create_pull_consumer, get_settings_by_key, set_settings,
 };
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 pub struct SettingHandler {
@@ -24,9 +24,6 @@ pub struct SettingHandler {
 
 pub enum SettingMessage {
     StartSettings {
-        reply_to: oneshot::Sender<Result<bool>>,
-    },
-    SyncSettings {
         reply_to: oneshot::Sender<Result<bool>>,
     },
     GetSettingsByKey {
@@ -54,59 +51,6 @@ impl SettingHandler {
             setting_consumer_token: None,
             sync_settings_token: None,
         }
-    }
-    async fn sync_settings(&mut self) -> Result<bool> {
-        let fn_name = "sync_settings";
-        // safety: check for existing cancel token, and cancel it
-        let exist_sync_settings_token = &self.sync_settings_token;
-        if exist_sync_settings_token.is_some() {
-            let _ = exist_sync_settings_token.as_ref().unwrap().cancel();
-        }
-        // create a new token
-        let sync_settings_token = CancellationToken::new();
-        let sync_settings_token_cloned = sync_settings_token.clone();
-        let (event_tx, messaging_tx) = (self.event_tx.clone(), self.messaging_tx.clone());
-        let consumer =
-            match create_pull_consumer(self.messaging_tx.clone(), self.identity_tx.clone()).await {
-                Ok(s) => s,
-                Err(e) => {
-                    error!(
-                        func = fn_name,
-                        package = PACKAGE_NAME,
-                        "error creating pull consumer, error -  {:?}",
-                        e
-                    );
-                    bail!(DeviceSettingError::new(
-                        DeviceSettingErrorCodes::CreateConsumerError,
-                        format!("create consumer error - {:?} ", e.to_string()),
-                    ))
-                }
-            };
-        let mut futures = JoinSet::new();
-        futures.spawn(sync_settings(consumer.clone(), event_tx, messaging_tx));
-        // create spawn for timer
-        let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {
-            loop {
-                select! {
-                        _ = sync_settings_token.cancelled() => {
-                            info!(
-                                func = fn_name,
-                                package = PACKAGE_NAME,
-                                result = "success",
-                                "sync_settings cancelled"
-                            );
-                            return Ok(());
-                    },
-                    result = futures.join_next() => {
-                        return Ok(());
-                    },
-                }
-            }
-        });
-
-        // Save to state
-        self.sync_settings_token = Some(sync_settings_token_cloned);
-        Ok(true)
     }
 
     async fn settings_consumer(&mut self) -> Result<bool> {
@@ -136,6 +80,7 @@ impl SettingHandler {
                     ))
                 }
             };
+        println!("******************* consumer**************: {:?}", consumer);
         let mut futures = JoinSet::new();
         futures.spawn(await_settings_message(
             consumer.clone(),
@@ -156,7 +101,9 @@ impl SettingHandler {
                             return Ok(());
                     },
                     result = futures.join_next() => {
-                        if result.unwrap().is_ok() {}
+                        if result.is_none() {
+                            continue;
+                        }
                     },
                 }
             }
@@ -204,10 +151,6 @@ impl SettingHandler {
                             let status = self.settings_consumer().await;
                             reply_to.send(status);
                         }
-                        SettingMessage::SyncSettings { reply_to } => {
-                            let status = self.sync_settings().await;
-                            reply_to.send(status);
-                        }
                         SettingMessage::GetSettingsByKey { reply_to, key } => {
                             let value = get_settings_by_key(key).await;
                             let _ = reply_to.send(value);
@@ -231,7 +174,17 @@ impl SettingHandler {
                                 package = PACKAGE_NAME,
                                 "connected event in settings service"
                             }
-                            let _ = self.settings_consumer().await;
+                            match self.settings_consumer().await {
+                                Ok(_res) => {},
+                                Err(e) => {
+                                    error!(
+                                        func = fn_name,
+                                        package = PACKAGE_NAME,
+                                        "error starting settings consumer: {}", e
+                                    );
+                                }
+                            }
+
                         }
                         Event::Messaging(events::MessagingEvent::Disconnected) => {
                             info!(
