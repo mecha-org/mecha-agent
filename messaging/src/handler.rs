@@ -148,6 +148,14 @@ impl MessagingHandler {
                             };
                             let _ = self.messaging_client.connect(&self.identity_tx, self.event_tx.clone(), events::MessagingEvent::Connected).await;
                         },
+                        Event::Nats(nats_client::NatsEvent::ServerError(err)) => {
+                            error!(
+                                func = "run",
+                                package = PACKAGE_NAME,
+                                "messaging service received nats server error - {}",
+                                err
+                            );
+                        },
                       _ => {}
                     }
                 }

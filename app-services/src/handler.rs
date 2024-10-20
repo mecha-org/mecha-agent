@@ -9,14 +9,14 @@ use tracing::{error, info};
 
 use crate::errors::{AppServicesError, AppServicesErrorCodes};
 use crate::service::{
-    await_app_service_message, create_pull_consumer, parse_settings_payload,
-    reconnect_messaging_service, AppServiceSettings,
+    await_app_service_message, parse_settings_payload, reconnect_messaging_service,
+    subscribe_to_nats, AppServiceSettings,
 };
 const PACKAGE_NAME: &str = env!("CARGO_CRATE_NAME");
 pub struct AppServiceHandler {
     event_tx: broadcast::Sender<Event>,
     messaging_tx: mpsc::Sender<MessagingMessage>,
-    app_services_consumer_token: Option<CancellationToken>,
+    app_services_subscriber_token: Option<CancellationToken>,
     sync_app_services_token: Option<CancellationToken>,
 }
 
@@ -32,14 +32,14 @@ impl AppServiceHandler {
         Self {
             event_tx: options.event_tx,
             messaging_tx: options.messaging_tx,
-            app_services_consumer_token: None,
+            app_services_subscriber_token: None,
             sync_app_services_token: None,
         }
     }
-    async fn app_service_consumer(&mut self, dns_name: String, local_port: u16) -> Result<bool> {
-        let fn_name = "app_service_consumer";
+    async fn app_service_subscriber(&mut self, dns_name: String, local_port: u16) -> Result<bool> {
+        let fn_name = "app_service_subscriber";
         // safety: check for existing cancel token, and cancel it
-        let exist_settings_token = &self.app_services_consumer_token;
+        let exist_settings_token = &self.app_services_subscriber_token;
         if exist_settings_token.is_some() {
             let _ = exist_settings_token.as_ref().unwrap().cancel();
         }
@@ -47,29 +47,24 @@ impl AppServiceHandler {
         let settings_token = CancellationToken::new();
         let settings_token_cloned = settings_token.clone();
         let messaging_tx = self.messaging_tx.clone();
-
-        let consumer = match create_pull_consumer(self.messaging_tx.clone(), dns_name.clone()).await
-        {
-            Ok(s) => s,
+        let subscribers = match subscribe_to_nats(&dns_name, messaging_tx.clone()).await {
+            Ok(v) => v,
             Err(e) => {
                 error!(
-                    func = fn_name,
+                    func = "subscribe_to_nats",
                     package = PACKAGE_NAME,
-                    "error creating pull consumer, error -  {:?}",
+                    "subscribe to nats error - {:?}",
                     e
                 );
-                bail!(AppServicesError::new(
-                    AppServicesErrorCodes::CreateConsumerError,
-                    format!("create consumer error - {:?} ", e.to_string()),
-                ))
+                bail!(e)
             }
         };
         let mut futures = JoinSet::new();
         futures.spawn(await_app_service_message(
             dns_name,
             local_port,
-            consumer.clone(),
             messaging_tx.clone(),
+            subscribers.service_request.unwrap(),
         ));
         // create spawn for timer
         let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {
@@ -94,11 +89,11 @@ impl AppServiceHandler {
         });
 
         // Save to state
-        self.app_services_consumer_token = Some(settings_token_cloned);
+        self.app_services_subscriber_token = Some(settings_token_cloned);
         Ok(true)
     }
     fn clear_app_services_subscriber(&self) -> Result<bool> {
-        let exist_subscriber_token = &self.app_services_consumer_token;
+        let exist_subscriber_token = &self.app_services_subscriber_token;
         if exist_subscriber_token.is_some() {
             let _ = exist_subscriber_token.as_ref().unwrap().cancel();
         } else {
@@ -165,37 +160,22 @@ impl AppServiceHandler {
                             );
                             //TODO: create function to handle settings update
                             for (key, value) in new_settings.into_iter() {
-                                println!("settings updated: {} / {}", key, value);
+                                println!("settings updated: {}", key);
                                 if key == "app_services.config" {
                                     info!(
                                         func = fn_name,
                                         package = PACKAGE_NAME,
                                         "dns_name updated event in app service: {}", value
                                     );
-                                    let app_service_settings:AppServiceSettings = match parse_settings_payload(value) {
-                                        Ok(s) => s,
-                                        Err(e) => {
-                                            error!(
-                                                func = fn_name,
-                                                package = PACKAGE_NAME,
-                                                "error extracting req_id from key, error -  {:?}",
-                                                e
-                                            );
-                                            bail!(e)
-                                        }
-                                    };
-                                    info!(
-                                        func = fn_name,
-                                        package = PACKAGE_NAME,
-                                        "dns_name updated event in app service: {} / {}", app_service_settings.dns_name, app_service_settings.app_id
-                                    );
-                                    if app_service_settings.dns_name == "" {
-                                        // If no value then clear subscription and reconnect messaging service
-                                        let _ = reconnect_messaging_service(self.messaging_tx.clone(), app_service_settings.dns_name, existing_settings.clone()).await;
+                                    println!("app_service config: {}", value);
+                                    if value.is_empty() {
+                                        println!("empty value");
+                                        // let _ = reconnect_messaging_service(self.messaging_tx.clone(), String::from(""), existing_settings.clone()).await;
                                         let _ = self.clear_app_services_subscriber();
                                         let _ = self.clear_sync_settings_subscriber();
+                                        continue;
                                     } else {
-                                        let local_port:u16 = match app_service_settings.port_mapping[0].local_port.parse::<u16>() {
+                                        let app_service_settings:AppServiceSettings = match parse_settings_payload(value) {
                                             Ok(s) => s,
                                             Err(e) => {
                                                 error!(
@@ -204,14 +184,48 @@ impl AppServiceHandler {
                                                     "error extracting req_id from key, error -  {:?}",
                                                     e
                                                 );
-                                                bail!(AppServicesError::new(
-                                                    AppServicesErrorCodes::PortParseError,
-                                                    format!("error parsing local port - {:?} ", e.to_string()),
-                                                ))
+                                                bail!(e)
                                             }
                                         };
-                                        let _ = reconnect_messaging_service(self.messaging_tx.clone(), app_service_settings.dns_name.clone(), existing_settings.clone()).await;
-                                        let _ = self.app_service_consumer(app_service_settings.dns_name, local_port).await;
+                                        info!(
+                                            func = fn_name,
+                                            package = PACKAGE_NAME,
+                                            "dns_name updated event in app service: {} / {}", app_service_settings.dns_name, app_service_settings.app_id
+                                        );
+                                            let local_port:u16 = match app_service_settings.port_mapping[0].local_port.parse::<u16>() {
+                                                Ok(s) => s,
+                                                Err(e) => {
+                                                    error!(
+                                                        func = fn_name,
+                                                        package = PACKAGE_NAME,
+                                                        "error extracting req_id from key, error -  {:?}",
+                                                        e
+                                                    );
+                                                    bail!(AppServicesError::new(
+                                                        AppServicesErrorCodes::PortParseError,
+                                                        format!("error parsing local port - {:?} ", e.to_string()),
+                                                    ))
+                                                }
+                                            };
+                                            let _ = reconnect_messaging_service(self.messaging_tx.clone(), app_service_settings.dns_name.clone(), existing_settings.clone()).await;
+                                            match self.app_service_subscriber(app_service_settings.dns_name, local_port).await {
+                                                Ok(_) => {
+                                                    info!(
+                                                        func = fn_name,
+                                                        package = PACKAGE_NAME,
+                                                        "app service subscriber started"
+                                                    );
+                                                }
+                                                Err(e) => {
+                                                    error!(
+                                                        func = fn_name,
+                                                        package = PACKAGE_NAME,
+                                                        "error starting app service subscriber - {:?}",
+                                                        e
+                                                    );
+                                                }
+                                            }
+
                                     }
                                 }
                             }
