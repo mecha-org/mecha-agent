@@ -1331,3 +1331,44 @@ async fn process_re_issue_certificate_request(
     );
     Ok(true)
 }
+
+#[cfg(test)]
+mod tests {
+    use tokio::sync::broadcast;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_generate_code() {
+        let code = generate_code();
+        assert!(code.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_ping() {
+        let service_url = "https://services.sandbox-v1.mecha.build";
+        let ping_result = ping(&service_url).await;
+        assert!(ping_result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_lookup_manifest() {
+        let service_url = "https://services.sandbox-v1.mecha.build";
+        let code = "123456";
+        let result = lookup_manifest(&service_url, &code).await;
+        println!("result - {:?}", result);
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_provision_by_code() {
+        const CHANNEL_SIZE: usize = 32;
+        let (event_tx, _) = broadcast::channel(CHANNEL_SIZE);
+        let service_url = "https://services.sandbox-v1.mecha.build";
+        let code = "123456";
+        let data_dir = "/tmp";
+        let provision_result = provision_by_code(&service_url, &data_dir, code, event_tx).await;
+        println!("{:?}", provision_result);
+        assert!(provision_result.is_ok());
+    }
+}

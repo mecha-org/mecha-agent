@@ -32,6 +32,7 @@ async fn main() -> Result<()> {
     // Configure the global logger to use our opentelemetry logger
     let socket_addr = get_exporter_endpoint(&settings.grpc);
     let otlp_collector_endpoint = format!("http://{}", socket_addr);
+    println!("otlp_collector_endpoint: {:?}", otlp_collector_endpoint);
     match init_logs_config(otlp_collector_endpoint) {
         Ok(_) => (),
         Err(e) => {
@@ -78,7 +79,7 @@ async fn main() -> Result<()> {
 
     println!("logs level: {:?}", settings.logging.level.as_str());
     let subscriber = tracing_subscriber::registry()
-        .with(tracing_bridge_layer)
+        // .with(tracing_bridge_layer)
         .with(write_to_file_layer)
         .with(console_logs_layer)
         .with(build_otel_layer().unwrap());
@@ -101,48 +102,48 @@ async fn main() -> Result<()> {
 }
 
 //TODO: discuss this with shoaib regarding lifespan
-fn _build_write_to_file_layer(
-    logging: &LoggingSettings,
-) -> Option<
-    tracing_subscriber::filter::Filtered<
-        Layer<
-            tracing_subscriber::layer::Layered<
-                OpenTelemetryTracingBridge<global::GlobalLoggerProvider, global::logs::BoxedLogger>,
-                tracing_subscriber::Registry,
-            >,
-            tracing_subscriber::fmt::format::DefaultFields,
-            tracing_subscriber::fmt::format::Format,
-            non_blocking::NonBlocking,
-        >,
-        EnvFilter,
-        tracing_subscriber::layer::Layered<
-            OpenTelemetryTracingBridge<global::GlobalLoggerProvider, global::logs::BoxedLogger>,
-            tracing_subscriber::Registry,
-        >,
-    >,
-> {
-    // Set layer for logging to a file if it enabled in settings file and correct path is provided
-    // TODO: if you put writer inside if block, it will be dropped after block ends
-    let path = Path::new(logging.path.as_str());
-    let directory = path.parent().unwrap();
-    let file_name = path.file_name().unwrap();
-    println!("directory: {:?}, file_name: {:?}", directory, file_name);
-    let file_appender = never(directory, file_name);
-    let (non_blocking_writer, _guard) = non_blocking(file_appender);
-    let write_to_file_layer_with_settings_filter = if logging.enabled && !logging.path.is_empty() {
-        let env_filter = EnvFilter::new(logging.level.as_str());
-        Some(
-            Layer::new()
-                .with_writer(non_blocking_writer)
-                .with_ansi(false)
-                .with_filter(env_filter),
-        )
-    } else {
-        None
-    };
+// fn _build_write_to_file_layer(
+//     logging: &LoggingSettings,
+// ) -> Option<
+//     tracing_subscriber::filter::Filtered<
+//         Layer<
+//             tracing_subscriber::layer::Layered<
+//                 OpenTelemetryTracingBridge<global::GlobalLoggerProvider, global::logs::BoxedLogger>,
+//                 tracing_subscriber::Registry,
+//             >,
+//             tracing_subscriber::fmt::format::DefaultFields,
+//             tracing_subscriber::fmt::format::Format,
+//             non_blocking::NonBlocking,
+//         >,
+//         EnvFilter,
+//         tracing_subscriber::layer::Layered<
+//             OpenTelemetryTracingBridge<global::GlobalLoggerProvider, global::logs::BoxedLogger>,
+//             tracing_subscriber::Registry,
+//         >,
+//     >,
+// > {
+//     // Set layer for logging to a file if it enabled in settings file and correct path is provided
+//     // TODO: if you put writer inside if block, it will be dropped after block ends
+//     let path = Path::new(logging.path.as_str());
+//     let directory = path.parent().unwrap();
+//     let file_name = path.file_name().unwrap();
+//     println!("directory: {:?}, file_name: {:?}", directory, file_name);
+//     let file_appender = never(directory, file_name);
+//     let (non_blocking_writer, _guard) = non_blocking(file_appender);
+//     let write_to_file_layer_with_settings_filter = if logging.enabled && !logging.path.is_empty() {
+//         let env_filter = EnvFilter::new(logging.level.as_str());
+//         Some(
+//             Layer::new()
+//                 .with_writer(non_blocking_writer)
+//                 .with_ansi(false)
+//                 .with_filter(env_filter),
+//         )
+//     } else {
+//         None
+//     };
 
-    write_to_file_layer_with_settings_filter
-}
+//     write_to_file_layer_with_settings_filter
+// }
 
 fn get_exporter_endpoint(server_settings: &GrpcSettings) -> SocketAddr {
     let ip: IpAddr = match server_settings.addr.parse() {
