@@ -1,6 +1,6 @@
 use crate::service::{
     await_deprovision_message, await_re_issue_cert_message, de_provision, generate_code, ping,
-    provision_by_code, subscribe_to_nats, PingResponse,
+    provision_by_code, subscribe_to_nats, PingResponse, RealFileSystem,
 };
 use anyhow::{bail, Result};
 use events::Event;
@@ -165,7 +165,8 @@ impl ProvisioningHandler {
                             let _ = reply_to.send(status);
                         }
                         ProvisioningMessage::Deprovision { reply_to } => {
-                            let status = de_provision(&self.settings.data_dir, self.event_tx.clone());
+                            let real_fs = RealFileSystem;
+                            let status = de_provision(&self.settings.data_dir, real_fs, self.event_tx.clone());
                             let _ = reply_to.send(status);
                         }
                     };

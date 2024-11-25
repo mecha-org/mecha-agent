@@ -112,9 +112,9 @@ pub fn safe_write_to_path(path: &str, content: &[u8]) -> Result<bool> {
     }
 }
 
-pub fn remove_files(paths: Vec<&str>) -> Result<()> {
+pub fn remove_files(paths: Vec<String>) -> Result<()> {
     for path in paths {
-        let path_buf = match construct_dir_path(path) {
+        let path_buf = match construct_dir_path(&path) {
             Ok(v) => v,
             Err(e) => {
                 error!(
@@ -140,7 +140,6 @@ pub fn remove_files(paths: Vec<&str>) -> Result<()> {
                 bail!(FsError::new(
                     FsErrorCodes::FileRemoveError,
                     format!("failed to remove file - {}", path),
-
                 ));
             }
         };
@@ -215,7 +214,6 @@ pub fn construct_dir_path(path: &str) -> Result<PathBuf> {
                     bail!(FsError::new(
                         FsErrorCodes::JoinPathError,
                         format!("failed to strip prefix - {}, error - {}", path, e),
-    
                     ));
                 }
             };
