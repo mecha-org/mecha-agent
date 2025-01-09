@@ -43,6 +43,7 @@ prost-types = { workspace = true }
 bincode = { workspace = true }
 opentelemetry-appender-tracing = { workspace = true }
 clap = { workspace = true }
+tracing-appender = "0.2.3"
 
 [build-dependencies]
 tonic-build = "0.10.2"

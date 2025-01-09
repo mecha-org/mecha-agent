@@ -1,3 +1,5 @@
+pub const DEFAULT_LOG_FILE_NAME: &str = "mecha-agent.log";
+pub const DEFAULT_LOG_FILE_DIR: &str = "~/.local/logs";
 pub const PRIVATE_KEY_PATH: &str = "/openssl/ecdsa/key.pem";
 pub const CSR_PATH: &str = "/openssl/ecdsa/csr.pem";
 pub const CERT_PATH: &str = "/agent/certs/machine.pem";

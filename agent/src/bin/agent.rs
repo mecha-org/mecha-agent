@@ -1,6 +1,10 @@
-use std::net::{IpAddr, SocketAddr};
+use std::{
+    ffi::OsStr,
+    net::{IpAddr, SocketAddr},
+    path::Path,
+};
 
-use agent_settings::{read_settings_yml, GrpcSettings};
+use agent_settings::{constants, read_settings_yml, GrpcSettings};
 use anyhow::{bail, Result};
 use clap::Parser;
 use init_tracing_opentelemetry::tracing_subscriber_ext::{
@@ -12,7 +16,8 @@ use mecha_agent::init::init_handlers;
 use opentelemetry::global;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use telemetry::config::init_logs_config;
-use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
+use tracing_appender::{non_blocking, rolling};
+use tracing_subscriber::{fmt::Layer, prelude::__tracing_subscriber_SubscriberExt};
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
 #[derive(Debug, Parser)]
@@ -81,11 +86,37 @@ async fn start_agent(settings_path: String, init_grpc: bool) -> Result<()> {
     let socket_addr = get_exporter_endpoint(&settings.grpc);
     let endpoint = format!("http://{}", socket_addr);
     let _ = init_logs_config(endpoint.as_str());
+    let path = Path::new(settings.logging.path.as_str());
+
+    //trying to separate a dir and file
+    let directory = match path.parent() {
+        Some(p) => p,
+        None => Path::new(constants::DEFAULT_LOG_FILE_DIR),
+    };
+    let file_name = match path.file_name() {
+        Some(f) => f,
+        None => OsStr::new(constants::DEFAULT_LOG_FILE_NAME),
+    };
+
+    let file_appender = rolling::never(directory, file_name);
+    let (non_blocking_writer, _guard) = non_blocking(file_appender);
+    // Set optional layer for logging to a file
+    let logs_to_file_layer = if settings.logging.enabled && !settings.logging.path.is_empty() {
+        Some(
+            Layer::new()
+                .with_writer(non_blocking_writer)
+                .with_ansi(false),
+        )
+    } else {
+        None
+    };
+
     let logger_provider = opentelemetry::global::logger_provider();
     let tracing_bridge_layer = OpenTelemetryTracingBridge::new(&logger_provider);
     global::set_logger_provider(logger_provider);
 
     let subscriber = tracing_subscriber::registry()
+        .with(logs_to_file_layer)
         .with(tracing_bridge_layer)
         .with(build_loglevel_filter_layer()) //temp for terminal log
         .with(build_logger_text()) //temp for terminal log

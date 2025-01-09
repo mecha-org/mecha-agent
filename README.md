@@ -84,3 +84,10 @@ $ mecha-agent whoami
 ```bash
 $ mecha-agent reset
 ```
+
+To write logs in file we have to configure settings in settings.yml
+```sh
+logging:
+  enabled: true
+  path: /var/log/mecha-agent.log # File path to store logs based on level filter
+  level: info
