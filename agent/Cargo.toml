@@ -1,7 +1,7 @@
 [package]
 name = "mecha-agent"
 description = "Mecha Agent on the device for provisioning, messaging and more"
-version.workspace = true
+version = "0.1.0"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true

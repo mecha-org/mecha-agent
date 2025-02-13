@@ -3,8 +3,15 @@ default-members = ["agent"]
 members = ["agent", "app-services", "cli", "core/services", "core/events", "core/settings", "provisioning", "messaging", "identity", "status", "settings", "grpc-server", "networking","telemetry","commons/crypto", "commons/kv-store", "commons/fs", "client/app/src-tauri", "commons/wireguard"]
 resolver = "2"
 
+[package]
+name = "agent"
+version = "0.1.0"
+
+[[bin]]
+name = "agent"
+path = "src/bin/agent.rs"
+
 [workspace.package]
-version = "1.0.1"
 authors = ["Minesh Purohit <mineshp@mechasystems.com", "Shoaib Merchant <shoaibm@mechasystems.com>"]
 description = "Mecha Agent on the device for provisioning, messaging and more"
 documentation = "https://docs.mecha.so"
