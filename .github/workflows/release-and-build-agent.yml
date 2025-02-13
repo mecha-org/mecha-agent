@@ -1,0 +1,120 @@
+name: Release and Build Mecha Agent
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTUP_MAX_RETRIES: 10
+  MACOSX_DEPLOYMENT_TARGET: 10.7
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      release_created: ${{ steps.release.outputs.release_created }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+      - name: Print release outputs for debugging
+        continue-on-error: true
+        env:
+          RELEASE_OUTPUTS: ${{ toJson(steps.release.outputs) }} 
+        run: |
+          echo "Release outputs: $RELEASE_OUTPUTS"
+  build:
+    environment: dev
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: Mecha Agent (arm64)
+            package: mecha-agent
+            artifact: mecha-agent-linux-arm64.tar.gz
+            path: .
+            arch: arm64
+            runs_on: ubicloud-standard-2-arm
+
+          - name: Mecha Agent (amd64)
+            package: mecha-agent
+            artifact: mecha-agent-linux-amd64.tar.gz
+            path: .
+            arch: amd64
+            runs_on: ubuntu-latest
+
+    runs-on: ${{ matrix.runs_on }}
+    continue-on-error: false
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust 1.75.0
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          rustup default 1.75.0
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Update apt
+        run: sudo apt update
+
+      - name: Install dependencies
+        run: |
+          sudo apt install \
+          libssl-dev \
+          protobuf-compiler \
+          libprotobuf-dev
+
+      - name: Build [${{ matrix.package }}]
+        run: |
+          cd ${{ matrix.path }}
+          cargo --config net.git-fetch-with-cli=true fetch
+          cargo build --release --package ${{ matrix.package }}
+          ls -la
+
+      - name: Package deb [${{ matrix.package }}]
+        continue-on-error: true
+        run: |
+          cd ${{ matrix.path }}
+          cargo deb --no-build --package ${{ matrix.package }}
+          ls -la
+
+      - name: Extract package details
+        id: package_details
+        run: |
+          cd ${{ matrix.path }}
+          PACKAGE_NAME=$(ls target/debian/*.deb | xargs basename)
+          FOLDER_NAME=$(echo $PACKAGE_NAME | sed -r 's/_[0-9]+\.[0-9]+\.[0-9]+-[0-9]+.*$//')
+          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "folder_name=$FOLDER_NAME" >> $GITHUB_OUTPUT
+          echo "Package Name: $PACKAGE_NAME"
+          echo "Folder Name: $FOLDER_NAME"
+
+      - name: Prepare artifacts [${{ matrix.package }}]
+        run: |
+          mkdir build
+          cp ./target/release/${{ matrix.package }} ./build
+          cp ./target/debian/*.deb ./build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ./build/*
