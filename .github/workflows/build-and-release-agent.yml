@@ -113,30 +113,10 @@ jobs:
           mkdir build
           cp ./target/release/${{ matrix.package }} ./build
           cp ./target/debian/*.deb ./build
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: ./build/*
-
-  upload_artifacts:
-    name: Add Build Artifacts to Release
-    needs: [release_please, build]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Setup | Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          
-      - name: Setup | Publish Release
-        run: gh release edit ${{ needs.release_please.outputs.tag_name }} --draft=false --repo=mecha-org/mecha-agent
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tar -czvf ${{ matrix.artifact }} ./build
 
       - name: Build | Add Artifacts to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ./build/*.deb, ./build/*.tar.gz
+          files: ${{ matrix.artifact }}  # No need for ./build/ here
           tag_name: ${{ needs.release_please.outputs.tag_name }}
