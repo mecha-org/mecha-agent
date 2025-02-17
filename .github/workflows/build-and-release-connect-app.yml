@@ -31,8 +31,8 @@ jobs:
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          config-file: client/release-please-config.json
-          manifest-file: client/.release-please-manifest.json
+          config-file: client/connect-app-release-config.json
+          manifest-file: client/.connect-app-release-manifest.json
       - name: Print release outputs for debugging
         continue-on-error: true
         env:
