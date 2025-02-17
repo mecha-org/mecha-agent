@@ -1,4 +1,4 @@
-name: Connect - Build aarch64
+name: Build and Release Connect App
 on:
   push:
     branches:
@@ -24,15 +24,15 @@ jobs:
   release_please:
     runs-on: ubuntu-latest
     outputs:
-      tag_name: ${{ steps.release.outputs.tag_name }}
+      tag_name: ${{ steps.release.outputs['client/app--tag_name'] }}
       release_created: ${{ steps.release.outputs.releases_created }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          config-file: client/connect-app-release-config.json
-          manifest-file: client/.connect-app-release-manifest.json
+          config-file: client/app/connect-app-release-config.json
+          manifest-file: client/app/.connect-app-release-manifest.json
       - name: Print release outputs for debugging
         continue-on-error: true
         env:
@@ -42,7 +42,7 @@ jobs:
           echo "release created: $release_created"
   
   build:
-    name: Mecha connect app build
+    name: ${{ matrix.name }}
     needs: release_please
     if: ${{ needs.release_please.outputs.release_created == 'true' }}
     strategy:
@@ -68,6 +68,10 @@ jobs:
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@v4
+
+      - name: Print all release outputs
+        run: |
+           echo "Release outputs: ${{ toJson(needs.release_please.outputs) }}"
 
       - name: install dependencies (ubuntu only)
         run: |
@@ -151,6 +155,7 @@ jobs:
             "Architectures": ["arm64", "amd64"],
             "Signing": {"Skip": true}
           }' ${{ env.MECHANIX_APTLY_SERVER_ENDPOINT }}/api/publish/s3:${{env.MECHANIX_APTLY_S3_PUBLISH_ENDPOINT}}:/${{ env.MECHANIX_APTLY_DEB_REPOSITORY_DISTRO }}
+      
       - name: Prepare artifacts [${{ matrix.package }}]
         run: |
           mkdir build
