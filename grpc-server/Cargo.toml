@@ -16,7 +16,7 @@ identity = { path = "../identity" }
 provisioning = { path = "../provisioning" }
 settings = { path = "../settings" }
 telemetry = { path = "../telemetry" }
-tokio = { version = "1.27.0", features = ["full"] }
+tokio = { version = "1.43.1", features = ["full"] }
 serde = { version  = "1.0.159", features = ["derive"]}
 tracing = "0.1"
 anyhow = { workspace = true }
